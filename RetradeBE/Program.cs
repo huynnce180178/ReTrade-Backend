@@ -19,6 +19,22 @@ namespace RetradeBE
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
 
+            // Lấy đường dẫn Frontend từ appsettings.json
+            var frontendUrl = builder.Configuration.GetValue<string>("FrontendUrl") ?? "http://localhost:5173";
+
+            // Thêm CORS để Frontend có thể gọi API (ví dụ: React, Vue, Angular chạy ở port khác)
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AllowFrontend",
+                    policy =>
+                    {
+                        policy.WithOrigins(frontendUrl)
+                              .AllowAnyHeader()
+                              .AllowAnyMethod()
+                              .AllowCredentials();
+                    });
+            });
+
             var app = builder.Build();
 
             // Configure the HTTP request pipeline.
@@ -29,6 +45,9 @@ namespace RetradeBE
             }
 
             app.UseHttpsRedirection();
+
+            // Kích hoạt CORS (Phải đặt trước UseAuthorization)
+            app.UseCors("AllowFrontend");
 
             app.UseAuthorization();
 
