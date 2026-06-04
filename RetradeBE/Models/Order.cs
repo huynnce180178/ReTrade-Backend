@@ -11,7 +11,25 @@ public partial class Order
 
     public string? UserId { get; set; }
 
+    public string? SellerId { get; set; }
+
+    public string? ProductId { get; set; }
+
+    public int? Quantity { get; set; }
+
+    public decimal? UnitPrice { get; set; }
+
+    public string? VoucherId { get; set; }
+
     public string? AddressSnapshot { get; set; }
+
+    public string? AuctionId { get; set; }
+
+    public string? OfferId { get; set; }
+
+    public string? TrackingCode { get; set; }
+
+    public string? ShippingProvider { get; set; }
 
     public decimal? TotalAmount { get; set; }
 
@@ -29,11 +47,21 @@ public partial class Order
 
     public DateTime? UpdatedAt { get; set; }
 
-    public virtual ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
+    public virtual Auction? Auction { get; set; }
 
-    public virtual ICollection<Payment> Payments { get; set; } = new List<Payment>();
+    public virtual Offer? Offer { get; set; }
 
-    public virtual ICollection<Review> Reviews { get; set; } = new List<Review>();
+    public virtual ICollection<Payment> Payment { get; set; } = new List<Payment>();
+
+    public virtual Product? Product { get; set; }
+
+    public virtual ICollection<RefundRequest> RefundRequest { get; set; } = new List<RefundRequest>();
+
+    public virtual ICollection<Review> Review { get; set; } = new List<Review>();
+
+    public virtual User? Seller { get; set; }
 
     public virtual User? User { get; set; }
+
+    public virtual Voucher? Voucher { get; set; }
 }

@@ -16,85 +16,84 @@ public partial class AppDbContext : DbContext
     {
     }
 
-    public virtual DbSet<Account> Accounts { get; set; }
+    public virtual DbSet<Account> Account { get; set; }
 
-    public virtual DbSet<AccountRole> AccountRoles { get; set; }
+    public virtual DbSet<AccountRole> AccountRole { get; set; }
 
-    public virtual DbSet<Address> Addresses { get; set; }
+    public virtual DbSet<Address> Address { get; set; }
 
-    public virtual DbSet<Models.Attribute> Attributes { get; set; }
+    public virtual DbSet<Attributes> Attributes { get; set; }
 
-    public virtual DbSet<Auction> Auctions { get; set; }
+    public virtual DbSet<Auction> Auction { get; set; }
 
-    public virtual DbSet<AuctionDeposit> AuctionDeposits { get; set; }
+    public virtual DbSet<AuctionDeposit> AuctionDeposit { get; set; }
 
-    public virtual DbSet<Banner> Banners { get; set; }
+    public virtual DbSet<Banner> Banner { get; set; }
 
-    public virtual DbSet<Bid> Bids { get; set; }
+    public virtual DbSet<Bid> Bid { get; set; }
 
-    public virtual DbSet<Category> Categories { get; set; }
+    public virtual DbSet<Category> Category { get; set; }
 
-    public virtual DbSet<CategoryImage> CategoryImages { get; set; }
+    public virtual DbSet<CategoryImage> CategoryImage { get; set; }
 
-    public virtual DbSet<Chat> Chats { get; set; }
+    public virtual DbSet<Chat> Chat { get; set; }
 
-    public virtual DbSet<ChatRoom> ChatRooms { get; set; }
+    public virtual DbSet<ChatRoom> ChatRoom { get; set; }
 
-    public virtual DbSet<Image> Images { get; set; }
+    public virtual DbSet<Image> Image { get; set; }
 
-    public virtual DbSet<MyService> MyServices { get; set; }
+    public virtual DbSet<MyService> MyService { get; set; }
 
-    public virtual DbSet<MyVoucher> MyVouchers { get; set; }
+    public virtual DbSet<MyVoucher> MyVoucher { get; set; }
 
-    public virtual DbSet<Notification> Notifications { get; set; }
+    public virtual DbSet<Notification> Notification { get; set; }
 
-    public virtual DbSet<Offer> Offers { get; set; }
+    public virtual DbSet<Offer> Offer { get; set; }
 
-    public virtual DbSet<Order> Orders { get; set; }
+    public virtual DbSet<Order> Order { get; set; }
 
-    public virtual DbSet<OrderItem> OrderItems { get; set; }
+    public virtual DbSet<Payment> Payment { get; set; }
 
-    public virtual DbSet<Payment> Payments { get; set; }
+    public virtual DbSet<Product> Product { get; set; }
 
-    public virtual DbSet<Product> Products { get; set; }
+    public virtual DbSet<ProductAttribute> ProductAttribute { get; set; }
 
-    public virtual DbSet<ProductAttribute> ProductAttributes { get; set; }
+    public virtual DbSet<ProductImage> ProductImage { get; set; }
 
-    public virtual DbSet<ProductImage> ProductImages { get; set; }
+    public virtual DbSet<RefundRequest> RefundRequest { get; set; }
 
-    public virtual DbSet<RefundRequest> RefundRequests { get; set; }
+    public virtual DbSet<Review> Review { get; set; }
 
-    public virtual DbSet<Review> Reviews { get; set; }
+    public virtual DbSet<Role> Role { get; set; }
 
-    public virtual DbSet<Role> Roles { get; set; }
+    public virtual DbSet<ServiceSubscription> ServiceSubscription { get; set; }
 
-    public virtual DbSet<ServiceSubscription> ServiceSubscriptions { get; set; }
+    public virtual DbSet<User> User { get; set; }
 
-    public virtual DbSet<User> Users { get; set; }
+    public virtual DbSet<UserFavorite> UserFavorite { get; set; }
 
-    public virtual DbSet<UserFavorite> UserFavorites { get; set; }
+    public virtual DbSet<UserFollow> UserFollow { get; set; }
 
-    public virtual DbSet<UserFollow> UserFollows { get; set; }
+    public virtual DbSet<UserReport> UserReport { get; set; }
 
-    public virtual DbSet<UserSearch> UserSearches { get; set; }
+    public virtual DbSet<UserSearch> UserSearch { get; set; }
 
-    public virtual DbSet<Voucher> Vouchers { get; set; }
+    public virtual DbSet<Voucher> Voucher { get; set; }
 
-    public virtual DbSet<Wishlist> Wishlists { get; set; }
+    public virtual DbSet<Wishlist> Wishlist { get; set; }
 
-    public virtual DbSet<WishlistItem> WishlistItems { get; set; }
+    public virtual DbSet<WishlistItem> WishlistItem { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseNpgsql("Host=localhost;Port=5432;Database=RetradeDB;Username=postgres;Password=123456");
+        => optionsBuilder.UseNpgsql("Name=ConnectionStrings:DefaultConnection");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Account>(entity =>
         {
-            entity.HasKey(e => e.AccountId).HasName("Account_pkey");
+            entity.HasKey(e => e.AccountId).HasName("account_pkey");
 
-            entity.ToTable("Account");
+            entity.ToTable("account");
 
             entity.Property(e => e.AccountId)
                 .HasMaxLength(100)
@@ -106,6 +105,9 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.LastLoginAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("last_login_at");
+            entity.Property(e => e.MustChangePassword)
+                .HasDefaultValue(false)
+                .HasColumnName("must_change_password");
             entity.Property(e => e.PasswordHash).HasColumnName("password_hash");
             entity.Property(e => e.Provider)
                 .HasMaxLength(30)
@@ -126,16 +128,16 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(50)
                 .HasColumnName("username");
 
-            entity.HasOne(d => d.User).WithMany(p => p.Accounts)
+            entity.HasOne(d => d.User).WithMany(p => p.Account)
                 .HasForeignKey(d => d.UserId)
                 .HasConstraintName("fk_account_user");
         });
 
         modelBuilder.Entity<AccountRole>(entity =>
         {
-            entity.HasKey(e => new { e.AccountId, e.RoleId }).HasName("Account_Role_pkey");
+            entity.HasKey(e => new { e.AccountId, e.RoleId }).HasName("account_role_pkey");
 
-            entity.ToTable("Account_Role");
+            entity.ToTable("account_role");
 
             entity.Property(e => e.AccountId)
                 .HasMaxLength(100)
@@ -147,22 +149,22 @@ public partial class AppDbContext : DbContext
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
 
-            entity.HasOne(d => d.Account).WithMany(p => p.AccountRoles)
+            entity.HasOne(d => d.Account).WithMany(p => p.AccountRole)
                 .HasForeignKey(d => d.AccountId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("fk_acc_role_account");
+                .HasConstraintName("fk_ar_account");
 
-            entity.HasOne(d => d.Role).WithMany(p => p.AccountRoles)
+            entity.HasOne(d => d.Role).WithMany(p => p.AccountRole)
                 .HasForeignKey(d => d.RoleId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("fk_acc_role_role");
+                .HasConstraintName("fk_ar_role");
         });
 
         modelBuilder.Entity<Address>(entity =>
         {
-            entity.HasKey(e => e.AddressId).HasName("Address_pkey");
+            entity.HasKey(e => e.AddressId).HasName("address_pkey");
 
-            entity.ToTable("Address");
+            entity.ToTable("address");
 
             entity.Property(e => e.AddressId)
                 .HasMaxLength(100)
@@ -174,6 +176,12 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.IsDefault).HasColumnName("is_default");
             entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
             entity.Property(e => e.ProvinceId).HasColumnName("province_id");
+            entity.Property(e => e.ReceiverName)
+                .HasMaxLength(100)
+                .HasColumnName("receiver_name");
+            entity.Property(e => e.ReceiverPhone)
+                .HasMaxLength(30)
+                .HasColumnName("receiver_phone");
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
                 .HasColumnName("status");
@@ -190,16 +198,16 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(50)
                 .HasColumnName("ward_code");
 
-            entity.HasOne(d => d.User).WithMany(p => p.Addresses)
+            entity.HasOne(d => d.User).WithMany(p => p.Address)
                 .HasForeignKey(d => d.UserId)
                 .HasConstraintName("fk_address_user");
         });
 
-        modelBuilder.Entity<Models.Attribute>(entity =>
+        modelBuilder.Entity<Attributes>(entity =>
         {
-            entity.HasKey(e => e.AttributeId).HasName("Attribute_pkey");
+            entity.HasKey(e => e.AttributeId).HasName("attributes_pkey");
 
-            entity.ToTable("Attribute");
+            entity.ToTable("attributes");
 
             entity.Property(e => e.AttributeId)
                 .HasMaxLength(100)
@@ -224,14 +232,14 @@ public partial class AppDbContext : DbContext
 
             entity.HasOne(d => d.Category).WithMany(p => p.Attributes)
                 .HasForeignKey(d => d.CategoryId)
-                .HasConstraintName("fk_attribute_category");
+                .HasConstraintName("fk_attr_category");
         });
 
         modelBuilder.Entity<Auction>(entity =>
         {
-            entity.HasKey(e => e.AuctionId).HasName("Auction_pkey");
+            entity.HasKey(e => e.AuctionId).HasName("auction_pkey");
 
-            entity.ToTable("Auction");
+            entity.ToTable("auction");
 
             entity.Property(e => e.AuctionId)
                 .HasMaxLength(100)
@@ -276,24 +284,24 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(100)
                 .HasColumnName("winner_id");
 
-            entity.HasOne(d => d.Product).WithMany(p => p.Auctions)
+            entity.HasOne(d => d.Product).WithMany(p => p.Auction)
                 .HasForeignKey(d => d.ProductId)
                 .HasConstraintName("fk_auction_product");
 
-            entity.HasOne(d => d.Seller).WithMany(p => p.AuctionSellers)
+            entity.HasOne(d => d.Seller).WithMany(p => p.AuctionSeller)
                 .HasForeignKey(d => d.SellerId)
                 .HasConstraintName("fk_auction_seller");
 
-            entity.HasOne(d => d.Winner).WithMany(p => p.AuctionWinners)
+            entity.HasOne(d => d.Winner).WithMany(p => p.AuctionWinner)
                 .HasForeignKey(d => d.WinnerId)
                 .HasConstraintName("fk_auction_winner");
         });
 
         modelBuilder.Entity<AuctionDeposit>(entity =>
         {
-            entity.HasKey(e => e.AuctionDepositId).HasName("Auction_Deposit_pkey");
+            entity.HasKey(e => e.AuctionDepositId).HasName("auction_deposit_pkey");
 
-            entity.ToTable("Auction_Deposit");
+            entity.ToTable("auction_deposit");
 
             entity.Property(e => e.AuctionDepositId)
                 .HasMaxLength(100)
@@ -315,20 +323,20 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(100)
                 .HasColumnName("user_id");
 
-            entity.HasOne(d => d.Auction).WithMany(p => p.AuctionDeposits)
+            entity.HasOne(d => d.Auction).WithMany(p => p.AuctionDeposit)
                 .HasForeignKey(d => d.AuctionId)
-                .HasConstraintName("fk_deposit_auction");
+                .HasConstraintName("fk_ad_auction");
 
-            entity.HasOne(d => d.User).WithMany(p => p.AuctionDeposits)
+            entity.HasOne(d => d.User).WithMany(p => p.AuctionDeposit)
                 .HasForeignKey(d => d.UserId)
-                .HasConstraintName("fk_deposit_user");
+                .HasConstraintName("fk_ad_user");
         });
 
         modelBuilder.Entity<Banner>(entity =>
         {
-            entity.HasKey(e => e.BannerId).HasName("Banner_pkey");
+            entity.HasKey(e => e.BannerId).HasName("banner_pkey");
 
-            entity.ToTable("Banner");
+            entity.ToTable("banner");
 
             entity.Property(e => e.BannerId)
                 .HasMaxLength(100)
@@ -348,9 +356,9 @@ public partial class AppDbContext : DbContext
 
         modelBuilder.Entity<Bid>(entity =>
         {
-            entity.HasKey(e => e.BidId).HasName("Bid_pkey");
+            entity.HasKey(e => e.BidId).HasName("bid_pkey");
 
-            entity.ToTable("Bid");
+            entity.ToTable("bid");
 
             entity.Property(e => e.BidId)
                 .HasMaxLength(100)
@@ -371,20 +379,20 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(100)
                 .HasColumnName("user_id");
 
-            entity.HasOne(d => d.Auction).WithMany(p => p.Bids)
+            entity.HasOne(d => d.Auction).WithMany(p => p.Bid)
                 .HasForeignKey(d => d.AuctionId)
                 .HasConstraintName("fk_bid_auction");
 
-            entity.HasOne(d => d.User).WithMany(p => p.Bids)
+            entity.HasOne(d => d.User).WithMany(p => p.Bid)
                 .HasForeignKey(d => d.UserId)
                 .HasConstraintName("fk_bid_user");
         });
 
         modelBuilder.Entity<Category>(entity =>
         {
-            entity.HasKey(e => e.CategoryId).HasName("Category_pkey");
+            entity.HasKey(e => e.CategoryId).HasName("category_pkey");
 
-            entity.ToTable("Category");
+            entity.ToTable("category");
 
             entity.Property(e => e.CategoryId)
                 .HasMaxLength(100)
@@ -396,19 +404,26 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Name)
                 .HasMaxLength(100)
                 .HasColumnName("name");
+            entity.Property(e => e.ParentId)
+                .HasMaxLength(100)
+                .HasColumnName("parent_id");
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
                 .HasColumnName("status");
             entity.Property(e => e.UpdatedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("updated_at");
+
+            entity.HasOne(d => d.Parent).WithMany(p => p.InverseParent)
+                .HasForeignKey(d => d.ParentId)
+                .HasConstraintName("fk_category_parent");
         });
 
         modelBuilder.Entity<CategoryImage>(entity =>
         {
-            entity.HasKey(e => new { e.CategoryId, e.ImageId }).HasName("Category_Image_pkey");
+            entity.HasKey(e => new { e.CategoryId, e.ImageId }).HasName("category_image_pkey");
 
-            entity.ToTable("Category_Image");
+            entity.ToTable("category_image");
 
             entity.Property(e => e.CategoryId)
                 .HasMaxLength(100)
@@ -420,22 +435,22 @@ public partial class AppDbContext : DbContext
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
 
-            entity.HasOne(d => d.Category).WithMany(p => p.CategoryImages)
+            entity.HasOne(d => d.Category).WithMany(p => p.CategoryImage)
                 .HasForeignKey(d => d.CategoryId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("fk_catimg_category");
+                .HasConstraintName("fk_ci_category");
 
-            entity.HasOne(d => d.Image).WithMany(p => p.CategoryImages)
+            entity.HasOne(d => d.Image).WithMany(p => p.CategoryImage)
                 .HasForeignKey(d => d.ImageId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("fk_catimg_image");
+                .HasConstraintName("fk_ci_image");
         });
 
         modelBuilder.Entity<Chat>(entity =>
         {
-            entity.HasKey(e => e.ChatId).HasName("Chat_pkey");
+            entity.HasKey(e => e.ChatId).HasName("chat_pkey");
 
-            entity.ToTable("Chat");
+            entity.ToTable("chat");
 
             entity.Property(e => e.ChatId)
                 .HasMaxLength(100)
@@ -462,20 +477,20 @@ public partial class AppDbContext : DbContext
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("updated_at");
 
-            entity.HasOne(d => d.Room).WithMany(p => p.Chats)
+            entity.HasOne(d => d.Room).WithMany(p => p.Chat)
                 .HasForeignKey(d => d.RoomId)
                 .HasConstraintName("fk_chat_room");
 
-            entity.HasOne(d => d.Sender).WithMany(p => p.Chats)
+            entity.HasOne(d => d.Sender).WithMany(p => p.Chat)
                 .HasForeignKey(d => d.SenderId)
                 .HasConstraintName("fk_chat_sender");
         });
 
         modelBuilder.Entity<ChatRoom>(entity =>
         {
-            entity.HasKey(e => e.RoomId).HasName("Chat_Room_pkey");
+            entity.HasKey(e => e.RoomId).HasName("chat_room_pkey");
 
-            entity.ToTable("Chat_Room");
+            entity.ToTable("chat_room");
 
             entity.Property(e => e.RoomId)
                 .HasMaxLength(100)
@@ -497,24 +512,24 @@ public partial class AppDbContext : DbContext
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("updated_at");
 
-            entity.HasOne(d => d.Buyer).WithMany(p => p.ChatRoomBuyers)
+            entity.HasOne(d => d.Buyer).WithMany(p => p.ChatRoomBuyer)
                 .HasForeignKey(d => d.BuyerId)
-                .HasConstraintName("fk_chatroom_buyer");
+                .HasConstraintName("fk_cr_buyer");
 
-            entity.HasOne(d => d.Product).WithMany(p => p.ChatRooms)
+            entity.HasOne(d => d.Product).WithMany(p => p.ChatRoom)
                 .HasForeignKey(d => d.ProductId)
-                .HasConstraintName("fk_chatroom_product");
+                .HasConstraintName("fk_cr_product");
 
-            entity.HasOne(d => d.Seller).WithMany(p => p.ChatRoomSellers)
+            entity.HasOne(d => d.Seller).WithMany(p => p.ChatRoomSeller)
                 .HasForeignKey(d => d.SellerId)
-                .HasConstraintName("fk_chatroom_seller");
+                .HasConstraintName("fk_cr_seller");
         });
 
         modelBuilder.Entity<Image>(entity =>
         {
-            entity.HasKey(e => e.ImageId).HasName("Image_pkey");
+            entity.HasKey(e => e.ImageId).HasName("image_pkey");
 
-            entity.ToTable("Image");
+            entity.ToTable("image");
 
             entity.Property(e => e.ImageId)
                 .HasMaxLength(100)
@@ -530,9 +545,9 @@ public partial class AppDbContext : DbContext
 
         modelBuilder.Entity<MyService>(entity =>
         {
-            entity.HasKey(e => e.UserSubId).HasName("My_Service_pkey");
+            entity.HasKey(e => e.UserSubId).HasName("my_service_pkey");
 
-            entity.ToTable("My_Service");
+            entity.ToTable("my_service");
 
             entity.Property(e => e.UserSubId)
                 .HasMaxLength(100)
@@ -559,20 +574,20 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(100)
                 .HasColumnName("user_id");
 
-            entity.HasOne(d => d.Service).WithMany(p => p.MyServices)
+            entity.HasOne(d => d.Service).WithMany(p => p.MyService)
                 .HasForeignKey(d => d.ServiceId)
-                .HasConstraintName("fk_myservice_service");
+                .HasConstraintName("fk_ms_service");
 
-            entity.HasOne(d => d.User).WithMany(p => p.MyServices)
+            entity.HasOne(d => d.User).WithMany(p => p.MyService)
                 .HasForeignKey(d => d.UserId)
-                .HasConstraintName("fk_myservice_user");
+                .HasConstraintName("fk_ms_user");
         });
 
         modelBuilder.Entity<MyVoucher>(entity =>
         {
-            entity.HasKey(e => e.UserVoucherId).HasName("My_Voucher_pkey");
+            entity.HasKey(e => e.UserVoucherId).HasName("my_voucher_pkey");
 
-            entity.ToTable("My_Voucher");
+            entity.ToTable("my_voucher");
 
             entity.Property(e => e.UserVoucherId)
                 .HasMaxLength(100)
@@ -596,20 +611,20 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(100)
                 .HasColumnName("voucher_id");
 
-            entity.HasOne(d => d.User).WithMany(p => p.MyVouchers)
+            entity.HasOne(d => d.User).WithMany(p => p.MyVoucher)
                 .HasForeignKey(d => d.UserId)
-                .HasConstraintName("fk_myvoucher_user");
+                .HasConstraintName("fk_mv_user");
 
-            entity.HasOne(d => d.Voucher).WithMany(p => p.MyVouchers)
+            entity.HasOne(d => d.Voucher).WithMany(p => p.MyVoucher)
                 .HasForeignKey(d => d.VoucherId)
-                .HasConstraintName("fk_myvoucher_voucher");
+                .HasConstraintName("fk_mv_voucher");
         });
 
         modelBuilder.Entity<Notification>(entity =>
         {
-            entity.HasKey(e => e.NotificationId).HasName("Notification_pkey");
+            entity.HasKey(e => e.NotificationId).HasName("notification_pkey");
 
-            entity.ToTable("Notification");
+            entity.ToTable("notification");
 
             entity.Property(e => e.NotificationId)
                 .HasMaxLength(100)
@@ -636,16 +651,16 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(100)
                 .HasColumnName("user_id");
 
-            entity.HasOne(d => d.User).WithMany(p => p.Notifications)
+            entity.HasOne(d => d.User).WithMany(p => p.Notification)
                 .HasForeignKey(d => d.UserId)
-                .HasConstraintName("fk_notification_user");
+                .HasConstraintName("fk_notify_user");
         });
 
         modelBuilder.Entity<Offer>(entity =>
         {
-            entity.HasKey(e => e.OfferId).HasName("Offer_pkey");
+            entity.HasKey(e => e.OfferId).HasName("offer_pkey");
 
-            entity.ToTable("Offer");
+            entity.ToTable("offer");
 
             entity.Property(e => e.OfferId)
                 .HasMaxLength(100)
@@ -670,11 +685,11 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(20)
                 .HasColumnName("status");
 
-            entity.HasOne(d => d.Buyer).WithMany(p => p.Offers)
+            entity.HasOne(d => d.Buyer).WithMany(p => p.Offer)
                 .HasForeignKey(d => d.BuyerId)
                 .HasConstraintName("fk_offer_buyer");
 
-            entity.HasOne(d => d.Product).WithMany(p => p.Offers)
+            entity.HasOne(d => d.Product).WithMany(p => p.Offer)
                 .HasForeignKey(d => d.ProductId)
                 .HasConstraintName("fk_offer_product");
         });
@@ -683,12 +698,13 @@ public partial class AppDbContext : DbContext
         {
             entity.HasKey(e => e.OrderId).HasName("Order_pkey");
 
-            entity.ToTable("Order");
-
             entity.Property(e => e.OrderId)
                 .HasMaxLength(100)
                 .HasColumnName("order_id");
             entity.Property(e => e.AddressSnapshot).HasColumnName("address_snapshot");
+            entity.Property(e => e.AuctionId)
+                .HasMaxLength(100)
+                .HasColumnName("auction_id");
             entity.Property(e => e.CreatedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
@@ -701,67 +717,77 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.FinalAmount)
                 .HasPrecision(18, 2)
                 .HasColumnName("final_amount");
+            entity.Property(e => e.OfferId)
+                .HasMaxLength(100)
+                .HasColumnName("offer_id");
             entity.Property(e => e.OrderCode)
                 .HasMaxLength(50)
                 .HasColumnName("order_code");
+            entity.Property(e => e.ProductId)
+                .HasMaxLength(100)
+                .HasColumnName("product_id");
+            entity.Property(e => e.Quantity).HasColumnName("quantity");
+            entity.Property(e => e.SellerId)
+                .HasMaxLength(100)
+                .HasColumnName("seller_id");
             entity.Property(e => e.ShippingFee)
                 .HasPrecision(18, 2)
                 .HasColumnName("shipping_fee");
+            entity.Property(e => e.ShippingProvider)
+                .HasMaxLength(100)
+                .HasColumnName("shipping_provider");
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
                 .HasColumnName("status");
             entity.Property(e => e.TotalAmount)
                 .HasPrecision(18, 2)
                 .HasColumnName("total_amount");
+            entity.Property(e => e.TrackingCode)
+                .HasMaxLength(100)
+                .HasColumnName("tracking_code");
+            entity.Property(e => e.UnitPrice)
+                .HasPrecision(18, 2)
+                .HasColumnName("unit_price");
             entity.Property(e => e.UpdatedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("updated_at");
             entity.Property(e => e.UserId)
                 .HasMaxLength(100)
                 .HasColumnName("user_id");
+            entity.Property(e => e.VoucherId)
+                .HasMaxLength(100)
+                .HasColumnName("voucher_id");
 
-            entity.HasOne(d => d.User).WithMany(p => p.Orders)
+            entity.HasOne(d => d.Auction).WithMany(p => p.Order)
+                .HasForeignKey(d => d.AuctionId)
+                .HasConstraintName("fk_order_auction");
+
+            entity.HasOne(d => d.Offer).WithMany(p => p.Order)
+                .HasForeignKey(d => d.OfferId)
+                .HasConstraintName("fk_order_offer");
+
+            entity.HasOne(d => d.Product).WithMany(p => p.Order)
+                .HasForeignKey(d => d.ProductId)
+                .HasConstraintName("fk_order_product");
+
+            entity.HasOne(d => d.Seller).WithMany(p => p.OrderSeller)
+                .HasForeignKey(d => d.SellerId)
+                .HasConstraintName("fk_order_seller");
+
+            entity.HasOne(d => d.User).WithMany(p => p.OrderUser)
                 .HasForeignKey(d => d.UserId)
                 .HasConstraintName("fk_order_user");
-        });
 
-        modelBuilder.Entity<OrderItem>(entity =>
-        {
-            entity.HasKey(e => e.OrderItemId).HasName("Order_Item_pkey");
-
-            entity.ToTable("Order_Item");
-
-            entity.Property(e => e.OrderItemId)
-                .HasMaxLength(100)
-                .HasColumnName("order_item_id");
-            entity.Property(e => e.OrderId)
-                .HasMaxLength(100)
-                .HasColumnName("order_id");
-            entity.Property(e => e.ProductId)
-                .HasMaxLength(100)
-                .HasColumnName("product_id");
-            entity.Property(e => e.Quantity).HasColumnName("quantity");
-            entity.Property(e => e.TotalPrice)
-                .HasPrecision(18, 2)
-                .HasColumnName("total_price");
-            entity.Property(e => e.UnitPrice)
-                .HasPrecision(18, 2)
-                .HasColumnName("unit_price");
-
-            entity.HasOne(d => d.Order).WithMany(p => p.OrderItems)
-                .HasForeignKey(d => d.OrderId)
-                .HasConstraintName("fk_orderitem_order");
-
-            entity.HasOne(d => d.Product).WithMany(p => p.OrderItems)
-                .HasForeignKey(d => d.ProductId)
-                .HasConstraintName("fk_orderitem_product");
+            entity.HasOne(d => d.Voucher).WithMany(p => p.Order)
+                .HasForeignKey(d => d.VoucherId)
+                .HasConstraintName("fk_order_voucher");
         });
 
         modelBuilder.Entity<Payment>(entity =>
         {
-            entity.HasKey(e => e.PaymentId).HasName("Payment_pkey");
+            entity.HasKey(e => e.PaymentId).HasName("payment_pkey");
 
-            entity.ToTable("Payment");
+            entity.ToTable("payment");
 
             entity.Property(e => e.PaymentId)
                 .HasMaxLength(100)
@@ -791,20 +817,20 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(100)
                 .HasColumnName("user_id");
 
-            entity.HasOne(d => d.Order).WithMany(p => p.Payments)
+            entity.HasOne(d => d.Order).WithMany(p => p.Payment)
                 .HasForeignKey(d => d.OrderId)
                 .HasConstraintName("fk_payment_order");
 
-            entity.HasOne(d => d.User).WithMany(p => p.Payments)
+            entity.HasOne(d => d.User).WithMany(p => p.Payment)
                 .HasForeignKey(d => d.UserId)
                 .HasConstraintName("fk_payment_user");
         });
 
         modelBuilder.Entity<Product>(entity =>
         {
-            entity.HasKey(e => e.ProductId).HasName("Product_pkey");
+            entity.HasKey(e => e.ProductId).HasName("product_pkey");
 
-            entity.ToTable("Product");
+            entity.ToTable("product");
 
             entity.Property(e => e.ProductId)
                 .HasMaxLength(100)
@@ -812,6 +838,9 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.CategoryId)
                 .HasMaxLength(100)
                 .HasColumnName("category_id");
+            entity.Property(e => e.Condition)
+                .HasMaxLength(50)
+                .HasColumnName("condition");
             entity.Property(e => e.CreatedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
@@ -838,20 +867,20 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.WeightGram).HasColumnName("weight_gram");
             entity.Property(e => e.WidthCm).HasColumnName("width_cm");
 
-            entity.HasOne(d => d.Category).WithMany(p => p.Products)
+            entity.HasOne(d => d.Category).WithMany(p => p.Product)
                 .HasForeignKey(d => d.CategoryId)
                 .HasConstraintName("fk_product_category");
 
-            entity.HasOne(d => d.Seller).WithMany(p => p.Products)
+            entity.HasOne(d => d.Seller).WithMany(p => p.Product)
                 .HasForeignKey(d => d.SellerId)
                 .HasConstraintName("fk_product_seller");
         });
 
         modelBuilder.Entity<ProductAttribute>(entity =>
         {
-            entity.HasKey(e => e.ProductAttributeId).HasName("Product_Attribute_pkey");
+            entity.HasKey(e => e.ProductAttributeId).HasName("product_attribute_pkey");
 
-            entity.ToTable("Product_Attribute");
+            entity.ToTable("product_attribute");
 
             entity.Property(e => e.ProductAttributeId)
                 .HasMaxLength(100)
@@ -871,20 +900,20 @@ public partial class AppDbContext : DbContext
                 .HasColumnName("updated_at");
             entity.Property(e => e.Value).HasColumnName("value");
 
-            entity.HasOne(d => d.Attribute).WithMany(p => p.ProductAttributes)
+            entity.HasOne(d => d.Attribute).WithMany(p => p.ProductAttribute)
                 .HasForeignKey(d => d.AttributeId)
-                .HasConstraintName("fk_prod_attr_attribute");
+                .HasConstraintName("fk_pa_attr");
 
-            entity.HasOne(d => d.Product).WithMany(p => p.ProductAttributes)
+            entity.HasOne(d => d.Product).WithMany(p => p.ProductAttribute)
                 .HasForeignKey(d => d.ProductId)
-                .HasConstraintName("fk_prod_attr_product");
+                .HasConstraintName("fk_pa_product");
         });
 
         modelBuilder.Entity<ProductImage>(entity =>
         {
-            entity.HasKey(e => new { e.ProductId, e.ImageId }).HasName("Product_Image_pkey");
+            entity.HasKey(e => new { e.ProductId, e.ImageId }).HasName("product_image_pkey");
 
-            entity.ToTable("Product_Image");
+            entity.ToTable("product_image");
 
             entity.Property(e => e.ProductId)
                 .HasMaxLength(100)
@@ -898,22 +927,22 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.IsMain).HasColumnName("is_main");
             entity.Property(e => e.SortOrder).HasColumnName("sort_order");
 
-            entity.HasOne(d => d.Image).WithMany(p => p.ProductImages)
+            entity.HasOne(d => d.Image).WithMany(p => p.ProductImage)
                 .HasForeignKey(d => d.ImageId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("fk_prodimg_image");
+                .HasConstraintName("fk_pi_image");
 
-            entity.HasOne(d => d.Product).WithMany(p => p.ProductImages)
+            entity.HasOne(d => d.Product).WithMany(p => p.ProductImage)
                 .HasForeignKey(d => d.ProductId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("fk_prodimg_product");
+                .HasConstraintName("fk_pi_product");
         });
 
         modelBuilder.Entity<RefundRequest>(entity =>
         {
-            entity.HasKey(e => e.RefundRequestId).HasName("Refund_Request_pkey");
+            entity.HasKey(e => e.RefundRequestId).HasName("refund_request_pkey");
 
-            entity.ToTable("Refund_Request");
+            entity.ToTable("refund_request");
 
             entity.Property(e => e.RefundRequestId)
                 .HasMaxLength(100)
@@ -934,6 +963,9 @@ public partial class AppDbContext : DbContext
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
             entity.Property(e => e.Note).HasColumnName("note");
+            entity.Property(e => e.OrderId)
+                .HasMaxLength(100)
+                .HasColumnName("order_id");
             entity.Property(e => e.RejectReason).HasColumnName("reject_reason");
             entity.Property(e => e.RequestedAt)
                 .HasColumnType("timestamp without time zone")
@@ -948,18 +980,22 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(100)
                 .HasColumnName("user_id");
 
-            entity.HasOne(d => d.User).WithMany(p => p.RefundRequests)
+            entity.HasOne(d => d.Order).WithMany(p => p.RefundRequest)
+                .HasForeignKey(d => d.OrderId)
+                .HasConstraintName("fk_rr_order");
+
+            entity.HasOne(d => d.User).WithMany(p => p.RefundRequest)
                 .HasForeignKey(d => d.UserId)
-                .HasConstraintName("fk_refund_user");
+                .HasConstraintName("fk_rr_user");
         });
 
         modelBuilder.Entity<Review>(entity =>
         {
-            entity.HasKey(e => e.ReviewId).HasName("Review_pkey");
+            entity.HasKey(e => e.ReviewId).HasName("review_pkey");
 
-            entity.ToTable("Review");
+            entity.ToTable("review");
 
-            entity.HasIndex(e => new { e.OrderId, e.ReviewerId }, "Review_order_id_reviewer_id_key").IsUnique();
+            entity.HasIndex(e => new { e.OrderId, e.ReviewerId }, "review_order_id_reviewer_id_key").IsUnique();
 
             entity.Property(e => e.ReviewId)
                 .HasMaxLength(100)
@@ -982,24 +1018,24 @@ public partial class AppDbContext : DbContext
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("updated_at");
 
-            entity.HasOne(d => d.Order).WithMany(p => p.Reviews)
+            entity.HasOne(d => d.Order).WithMany(p => p.Review)
                 .HasForeignKey(d => d.OrderId)
                 .HasConstraintName("fk_review_order");
 
-            entity.HasOne(d => d.Reviewer).WithMany(p => p.ReviewReviewers)
+            entity.HasOne(d => d.Reviewer).WithMany(p => p.ReviewReviewer)
                 .HasForeignKey(d => d.ReviewerId)
                 .HasConstraintName("fk_review_reviewer");
 
-            entity.HasOne(d => d.Seller).WithMany(p => p.ReviewSellers)
+            entity.HasOne(d => d.Seller).WithMany(p => p.ReviewSeller)
                 .HasForeignKey(d => d.SellerId)
                 .HasConstraintName("fk_review_seller");
         });
 
         modelBuilder.Entity<Role>(entity =>
         {
-            entity.HasKey(e => e.RoleId).HasName("Role_pkey");
+            entity.HasKey(e => e.RoleId).HasName("role_pkey");
 
-            entity.ToTable("Role");
+            entity.ToTable("role");
 
             entity.Property(e => e.RoleId)
                 .HasMaxLength(100)
@@ -1021,9 +1057,9 @@ public partial class AppDbContext : DbContext
 
         modelBuilder.Entity<ServiceSubscription>(entity =>
         {
-            entity.HasKey(e => e.ServiceId).HasName("Service_Subscription_pkey");
+            entity.HasKey(e => e.ServiceId).HasName("service_subscription_pkey");
 
-            entity.ToTable("Service_Subscription");
+            entity.ToTable("service_subscription");
 
             entity.Property(e => e.ServiceId)
                 .HasMaxLength(100)
@@ -1048,8 +1084,6 @@ public partial class AppDbContext : DbContext
         {
             entity.HasKey(e => e.UserId).HasName("User_pkey");
 
-            entity.ToTable("User");
-
             entity.Property(e => e.UserId)
                 .HasMaxLength(100)
                 .HasColumnName("user_id");
@@ -1063,6 +1097,9 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.FirstName)
                 .HasMaxLength(100)
                 .HasColumnName("first_name");
+            entity.Property(e => e.FlagCount)
+                .HasDefaultValue(0)
+                .HasColumnName("flag_count");
             entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
             entity.Property(e => e.LastName)
                 .HasMaxLength(100)
@@ -1080,9 +1117,9 @@ public partial class AppDbContext : DbContext
 
         modelBuilder.Entity<UserFavorite>(entity =>
         {
-            entity.HasKey(e => e.FavoriteId).HasName("User_Favorite_pkey");
+            entity.HasKey(e => e.FavoriteId).HasName("user_favorite_pkey");
 
-            entity.ToTable("User_Favorite");
+            entity.ToTable("user_favorite");
 
             entity.Property(e => e.FavoriteId)
                 .HasMaxLength(100)
@@ -1097,20 +1134,20 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(100)
                 .HasColumnName("user_id");
 
-            entity.HasOne(d => d.Category).WithMany(p => p.UserFavorites)
+            entity.HasOne(d => d.Category).WithMany(p => p.UserFavorite)
                 .HasForeignKey(d => d.CategoryId)
-                .HasConstraintName("fk_favorite_category");
+                .HasConstraintName("fk_ufav_category");
 
-            entity.HasOne(d => d.User).WithMany(p => p.UserFavorites)
+            entity.HasOne(d => d.User).WithMany(p => p.UserFavorite)
                 .HasForeignKey(d => d.UserId)
-                .HasConstraintName("fk_favorite_user");
+                .HasConstraintName("fk_ufav_user");
         });
 
         modelBuilder.Entity<UserFollow>(entity =>
         {
-            entity.HasKey(e => e.FollowId).HasName("User_Follow_pkey");
+            entity.HasKey(e => e.FollowId).HasName("user_follow_pkey");
 
-            entity.ToTable("User_Follow");
+            entity.ToTable("user_follow");
 
             entity.Property(e => e.FollowId)
                 .HasMaxLength(100)
@@ -1125,20 +1162,64 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(100)
                 .HasColumnName("follower_id");
 
-            entity.HasOne(d => d.FollowedUser).WithMany(p => p.UserFollowFollowedUsers)
+            entity.HasOne(d => d.FollowedUser).WithMany(p => p.UserFollowFollowedUser)
                 .HasForeignKey(d => d.FollowedUserId)
-                .HasConstraintName("fk_follow_followed");
+                .HasConstraintName("fk_uf_followed");
 
-            entity.HasOne(d => d.Follower).WithMany(p => p.UserFollowFollowers)
+            entity.HasOne(d => d.Follower).WithMany(p => p.UserFollowFollower)
                 .HasForeignKey(d => d.FollowerId)
-                .HasConstraintName("fk_follow_follower");
+                .HasConstraintName("fk_uf_follower");
+        });
+
+        modelBuilder.Entity<UserReport>(entity =>
+        {
+            entity.HasKey(e => e.ReportId).HasName("user_report_pkey");
+
+            entity.ToTable("user_report");
+
+            entity.Property(e => e.ReportId)
+                .HasMaxLength(100)
+                .HasColumnName("report_id");
+            entity.Property(e => e.CreatedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+            entity.Property(e => e.Description).HasColumnName("description");
+            entity.Property(e => e.Reason)
+                .HasMaxLength(100)
+                .HasColumnName("reason");
+            entity.Property(e => e.ReporterId)
+                .HasMaxLength(100)
+                .HasColumnName("reporter_id");
+            entity.Property(e => e.ReviewedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("reviewed_at");
+            entity.Property(e => e.ReviewedBy)
+                .HasMaxLength(100)
+                .HasColumnName("reviewed_by");
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .HasColumnName("status");
+            entity.Property(e => e.TargetId)
+                .HasMaxLength(100)
+                .HasColumnName("target_id");
+            entity.Property(e => e.TargetType)
+                .HasMaxLength(30)
+                .HasColumnName("target_type");
+
+            entity.HasOne(d => d.Reporter).WithMany(p => p.UserReportReporter)
+                .HasForeignKey(d => d.ReporterId)
+                .HasConstraintName("fk_ur_reporter");
+
+            entity.HasOne(d => d.ReviewedByNavigation).WithMany(p => p.UserReportReviewedByNavigation)
+                .HasForeignKey(d => d.ReviewedBy)
+                .HasConstraintName("fk_ur_reviewer");
         });
 
         modelBuilder.Entity<UserSearch>(entity =>
         {
-            entity.HasKey(e => e.SearchId).HasName("User_Search_pkey");
+            entity.HasKey(e => e.SearchId).HasName("user_search_pkey");
 
-            entity.ToTable("User_Search");
+            entity.ToTable("user_search");
 
             entity.Property(e => e.SearchId)
                 .HasMaxLength(100)
@@ -1156,20 +1237,20 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(100)
                 .HasColumnName("user_id");
 
-            entity.HasOne(d => d.Category).WithMany(p => p.UserSearches)
+            entity.HasOne(d => d.Category).WithMany(p => p.UserSearch)
                 .HasForeignKey(d => d.CategoryId)
-                .HasConstraintName("fk_search_category");
+                .HasConstraintName("fk_us_category");
 
-            entity.HasOne(d => d.User).WithMany(p => p.UserSearches)
+            entity.HasOne(d => d.User).WithMany(p => p.UserSearch)
                 .HasForeignKey(d => d.UserId)
-                .HasConstraintName("fk_search_user");
+                .HasConstraintName("fk_us_user");
         });
 
         modelBuilder.Entity<Voucher>(entity =>
         {
-            entity.HasKey(e => e.VoucherId).HasName("Voucher_pkey");
+            entity.HasKey(e => e.VoucherId).HasName("voucher_pkey");
 
-            entity.ToTable("Voucher");
+            entity.ToTable("voucher");
 
             entity.Property(e => e.VoucherId)
                 .HasMaxLength(100)
@@ -1195,6 +1276,10 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.MinOrderValue)
                 .HasPrecision(18, 2)
                 .HasColumnName("min_order_value");
+            entity.Property(e => e.Quantity).HasColumnName("quantity");
+            entity.Property(e => e.SellerId)
+                .HasMaxLength(100)
+                .HasColumnName("seller_id");
             entity.Property(e => e.StartDate)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("start_date");
@@ -1204,13 +1289,17 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.UpdatedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("updated_at");
+
+            entity.HasOne(d => d.Seller).WithMany(p => p.Voucher)
+                .HasForeignKey(d => d.SellerId)
+                .HasConstraintName("fk_voucher_seller");
         });
 
         modelBuilder.Entity<Wishlist>(entity =>
         {
-            entity.HasKey(e => e.WishlistId).HasName("Wishlist_pkey");
+            entity.HasKey(e => e.WishlistId).HasName("wishlist_pkey");
 
-            entity.ToTable("Wishlist");
+            entity.ToTable("wishlist");
 
             entity.Property(e => e.WishlistId)
                 .HasMaxLength(100)
@@ -1229,16 +1318,16 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(100)
                 .HasColumnName("user_id");
 
-            entity.HasOne(d => d.User).WithMany(p => p.Wishlists)
+            entity.HasOne(d => d.User).WithMany(p => p.Wishlist)
                 .HasForeignKey(d => d.UserId)
                 .HasConstraintName("fk_wishlist_user");
         });
 
         modelBuilder.Entity<WishlistItem>(entity =>
         {
-            entity.HasKey(e => e.WishlistItemId).HasName("Wishlist_Item_pkey");
+            entity.HasKey(e => e.WishlistItemId).HasName("wishlist_item_pkey");
 
-            entity.ToTable("Wishlist_Item");
+            entity.ToTable("wishlist_item");
 
             entity.Property(e => e.WishlistItemId)
                 .HasMaxLength(100)
@@ -1253,13 +1342,13 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(100)
                 .HasColumnName("wishlist_id");
 
-            entity.HasOne(d => d.Product).WithMany(p => p.WishlistItems)
+            entity.HasOne(d => d.Product).WithMany(p => p.WishlistItem)
                 .HasForeignKey(d => d.ProductId)
-                .HasConstraintName("fk_wishitem_product");
+                .HasConstraintName("fk_wi_product");
 
-            entity.HasOne(d => d.Wishlist).WithMany(p => p.WishlistItems)
+            entity.HasOne(d => d.Wishlist).WithMany(p => p.WishlistItem)
                 .HasForeignKey(d => d.WishlistId)
-                .HasConstraintName("fk_wishitem_wishlist");
+                .HasConstraintName("fk_wi_wishlist");
         });
 
         OnModelCreatingPartial(modelBuilder);

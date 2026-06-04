@@ -23,5 +23,7 @@ public partial class Offer
 
     public virtual User? Buyer { get; set; }
 
+    public virtual ICollection<Order> Order { get; set; } = new List<Order>();
+
     public virtual Product? Product { get; set; }
 }

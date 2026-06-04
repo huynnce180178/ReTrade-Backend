@@ -17,5 +17,5 @@ public partial class Role
 
     public DateTime? UpdatedAt { get; set; }
 
-    public virtual ICollection<AccountRole> AccountRoles { get; set; } = new List<AccountRole>();
+    public virtual ICollection<AccountRole> AccountRole { get; set; } = new List<AccountRole>();
 }

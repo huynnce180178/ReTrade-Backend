@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace RetradeBE.Models;
 
-public partial class Attribute
+public partial class Attributes
 {
     public string AttributeId { get; set; } = null!;
 
@@ -23,5 +23,5 @@ public partial class Attribute
 
     public virtual Category? Category { get; set; }
 
-    public virtual ICollection<ProductAttribute> ProductAttributes { get; set; } = new List<ProductAttribute>();
+    public virtual ICollection<ProductAttribute> ProductAttribute { get; set; } = new List<ProductAttribute>();
 }

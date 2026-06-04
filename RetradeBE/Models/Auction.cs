@@ -33,9 +33,11 @@ public partial class Auction
 
     public DateTime? UpdatedAt { get; set; }
 
-    public virtual ICollection<AuctionDeposit> AuctionDeposits { get; set; } = new List<AuctionDeposit>();
+    public virtual ICollection<AuctionDeposit> AuctionDeposit { get; set; } = new List<AuctionDeposit>();
 
-    public virtual ICollection<Bid> Bids { get; set; } = new List<Bid>();
+    public virtual ICollection<Bid> Bid { get; set; } = new List<Bid>();
+
+    public virtual ICollection<Order> Order { get; set; } = new List<Order>();
 
     public virtual Product? Product { get; set; }
 

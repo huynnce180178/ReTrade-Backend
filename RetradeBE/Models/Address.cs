@@ -9,6 +9,10 @@ public partial class Address
 
     public string? UserId { get; set; }
 
+    public string? ReceiverName { get; set; }
+
+    public string? ReceiverPhone { get; set; }
+
     public string? Street { get; set; }
 
     public int? ProvinceId { get; set; }

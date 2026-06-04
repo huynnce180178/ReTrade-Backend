@@ -19,5 +19,5 @@ public partial class ServiceSubscription
 
     public DateTime? CreatedAt { get; set; }
 
-    public virtual ICollection<MyService> MyServices { get; set; } = new List<MyService>();
+    public virtual ICollection<MyService> MyService { get; set; } = new List<MyService>();
 }

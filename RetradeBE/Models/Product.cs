@@ -15,6 +15,8 @@ public partial class Product
 
     public string? Description { get; set; }
 
+    public string? Condition { get; set; }
+
     public decimal? Price { get; set; }
 
     public int? StockQuantity { get; set; }
@@ -35,21 +37,21 @@ public partial class Product
 
     public DateTime? UpdatedAt { get; set; }
 
-    public virtual ICollection<Auction> Auctions { get; set; } = new List<Auction>();
+    public virtual ICollection<Auction> Auction { get; set; } = new List<Auction>();
 
     public virtual Category? Category { get; set; }
 
-    public virtual ICollection<ChatRoom> ChatRooms { get; set; } = new List<ChatRoom>();
+    public virtual ICollection<ChatRoom> ChatRoom { get; set; } = new List<ChatRoom>();
 
-    public virtual ICollection<Offer> Offers { get; set; } = new List<Offer>();
+    public virtual ICollection<Offer> Offer { get; set; } = new List<Offer>();
 
-    public virtual ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
+    public virtual ICollection<Order> Order { get; set; } = new List<Order>();
 
-    public virtual ICollection<ProductAttribute> ProductAttributes { get; set; } = new List<ProductAttribute>();
+    public virtual ICollection<ProductAttribute> ProductAttribute { get; set; } = new List<ProductAttribute>();
 
-    public virtual ICollection<ProductImage> ProductImages { get; set; } = new List<ProductImage>();
+    public virtual ICollection<ProductImage> ProductImage { get; set; } = new List<ProductImage>();
 
     public virtual User? Seller { get; set; }
 
-    public virtual ICollection<WishlistItem> WishlistItems { get; set; } = new List<WishlistItem>();
+    public virtual ICollection<WishlistItem> WishlistItem { get; set; } = new List<WishlistItem>();
 }

@@ -17,6 +17,8 @@ public partial class Account
 
     public string? PasswordHash { get; set; }
 
+    public bool? MustChangePassword { get; set; }
+
     public string? Status { get; set; }
 
     public DateTime? LastLoginAt { get; set; }
@@ -27,7 +29,7 @@ public partial class Account
 
     public DateTime? UpdatedAt { get; set; }
 
-    public virtual ICollection<AccountRole> AccountRoles { get; set; } = new List<AccountRole>();
+    public virtual ICollection<AccountRole> AccountRole { get; set; } = new List<AccountRole>();
 
     public virtual User? User { get; set; }
 }

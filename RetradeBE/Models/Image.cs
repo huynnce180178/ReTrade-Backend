@@ -13,7 +13,7 @@ public partial class Image
 
     public DateTime? CreatedAt { get; set; }
 
-    public virtual ICollection<CategoryImage> CategoryImages { get; set; } = new List<CategoryImage>();
+    public virtual ICollection<CategoryImage> CategoryImage { get; set; } = new List<CategoryImage>();
 
-    public virtual ICollection<ProductImage> ProductImages { get; set; } = new List<ProductImage>();
+    public virtual ICollection<ProductImage> ProductImage { get; set; } = new List<ProductImage>();
 }

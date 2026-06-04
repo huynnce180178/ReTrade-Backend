@@ -19,7 +19,7 @@ public partial class ProductAttribute
 
     public bool? IsDeleted { get; set; }
 
-    public virtual Attribute? Attribute { get; set; }
+    public virtual Attributes? Attribute { get; set; }
 
     public virtual Product? Product { get; set; }
 }

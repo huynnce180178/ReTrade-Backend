@@ -21,7 +21,7 @@ public partial class ChatRoom
 
     public virtual User? Buyer { get; set; }
 
-    public virtual ICollection<Chat> Chats { get; set; } = new List<Chat>();
+    public virtual ICollection<Chat> Chat { get; set; } = new List<Chat>();
 
     public virtual Product? Product { get; set; }
 
