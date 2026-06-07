@@ -1,77 +1,80 @@
-# ReTrade Backend
+# ReTrade Backend Service
 
-ReTrade Backend là dịch vụ API cốt lõi cho nền tảng ReTrade — một ứng dụng thương mại điện tử toàn diện được thiết kế để giao dịch, đấu giá và khám phá sản phẩm. Được xây dựng với .NET 8, hệ thống cung cấp các endpoint RESTful mạnh mẽ, có khả năng mở rộng và bảo mật cao để vận hành ứng dụng ReTrade frontend.
+ReTrade Backend là dịch vụ API cốt lõi cho nền tảng ReTrade — một ứng dụng thương mại điện tử giao dịch và đấu giá đồ cũ. Được xây dựng trên nền tảng .NET 8, hệ thống cung cấp các endpoint RESTful hiệu năng cao và bảo mật để phục vụ ứng dụng ReTrade frontend.
 
-## 🚀 Công nghệ sử dụng
+## Công nghệ sử dụng
 
-- **Framework:** ASP.NET Core 8.0 Web API
-- **ORM:** Entity Framework Core (EF Core 8)
-- **Cơ sở dữ liệu:** PostgreSQL (`Npgsql.EntityFrameworkCore.PostgreSQL`)
-- **Tài liệu API:** Swagger (`Swashbuckle.AspNetCore`)
+- Framework: ASP.NET Core 8.0 Web API
+- ORM: Entity Framework Core (EF Core 8)
+- Cơ sở dữ liệu: PostgreSQL (sử dụng thư viện Npgsql.EntityFrameworkCore.PostgreSQL)
+- Tài liệu API: Swagger (Swashbuckle.AspNetCore)
 
-## 📦 Các tính năng chính
+---
 
-Dựa trên các mô hình nghiệp vụ, hệ thống backend hỗ trợ các mô-đun chính sau:
+## Các mô-đun nghiệp vụ chính
 
-- **Quản lý & Xác thực người dùng:** Tài khoản, Phân quyền, Hồ sơ người dùng, Theo dõi (Follows) và Tìm kiếm.
-- **Danh mục sản phẩm:** Sản phẩm, Danh mục, Thuộc tính và Hình ảnh.
-- **Đấu giá & Đặt giá:** Phiên đấu giá, Lượt đặt giá, Trả giá (Offers) và Tiền cọc đấu giá.
-- **Giao dịch & Đơn hàng:** Đơn hàng, Chi tiết đơn hàng, Thanh toán và Yêu cầu hoàn tiền.
-- **Giao tiếp:** Chat theo thời gian thực, Phòng chat và Thông báo.
-- **Tương tác của người dùng:** Danh sách yêu thích, Yêu thích, Đánh giá và Mã giảm giá (Voucher).
+Hệ thống backend quản lý và phân quyền các tài nguyên sau:
 
-## 🛠️ Yêu cầu hệ thống
+- Xác thực & Phân quyền: Đăng nhập thường, Đăng nhập qua Google OAuth2, Đăng ký xác thực qua mã OTP lưu Cache, Đổi mật khẩu tiêu chuẩn qua `/change-password`.
+- Quản lý sản phẩm: Đăng sản phẩm, phân mục sản phẩm (Categories) và các thuộc tính liên quan.
+- Phiên đấu giá: Tạo phòng đấu giá trực tiếp, ghi nhận lượt đặt giá (Bids), và tiền cọc đấu giá để tránh bùng hàng.
+- Đơn hàng & Thanh toán: Xử lý đơn hàng, theo dõi lịch sử mua sắm và yêu cầu hoàn tiền.
+- Thông báo & Chat: Hệ thống thông báo tự động khi có biến động về giá hoặc đấu giá.
 
-Trước khi bắt đầu, hãy đảm bảo bạn đã cài đặt các phần mềm sau:
-- [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
-- [PostgreSQL](https://www.postgresql.org/download/) đã cài đặt và chạy trên cổng mặc định `5432`.
+---
 
-## ⚙️ Cấu hình & Cài đặt
+## Cập nhật luồng đổi mật khẩu (Password Update Details)
 
-1. **Cấu hình Cơ sở dữ liệu**
-   Chuỗi kết nối cơ sở dữ liệu được đặt trong file `appsettings.json`. Cập nhật chuỗi kết nối `DefaultConnection` với thông tin đăng nhập PostgreSQL của bạn nếu cần.
-   ```json
-   "ConnectionStrings": {
-     "DefaultConnection": "Host=localhost;Port=5432;Database=retrade;Username=postgres;Password=YourPassword123!;"
-   }
-   ```
+Để đơn giản hóa và tăng tính bảo mật cho hệ thống, endpoint đặc thù `change-password-after-recovery` đã bị gỡ bỏ hoàn toàn:
+- Hệ thống quy về sử dụng duy nhất API đổi mật khẩu tiêu chuẩn: `POST /api/Account/change-password` thông qua hàm `ChangePasswordAsync`.
+- API này yêu cầu người dùng điền đầy đủ mật khẩu cũ (hoặc mật khẩu tạm thời nhận qua email khi khôi phục) và mật khẩu mới để tăng tính an toàn tối đa.
+- DTO sử dụng: `ChangePasswordDto` (chứa `OldPassword` và `NewPassword`).
+- Class DTO dư thừa `ChangePasswordAfterRecoveryDto` đã bị xóa bỏ hoàn toàn.
 
-2. **Cập nhật Cơ sở dữ liệu (Migrations)**
-   Để tạo một bản di chuyển (migration) mới dựa trên thay đổi của Model, hãy chạy lệnh:
-   ```bash
-   dotnet ef migrations add <MigrationName>
-   ```
-   Để áp dụng các bản di chuyển (migrations) và cập nhật cấu trúc cơ sở dữ liệu, hãy chạy lệnh sau trong thư mục dự án:
-   ```bash
-   dotnet ef database update
-   ```
+---
 
-3. **Tạo Model từ Cơ sở dữ liệu (Database First Scaffolding)**
-   Để tạo các mô hình Entity Framework Core từ một cơ sở dữ liệu có sẵn, hãy chạy lệnh sau trong thư mục dự án:
-   ```bash
-   dotnet ef dbcontext scaffold Name=ConnectionStrings:DefaultConnection Npgsql.EntityFrameworkCore.PostgreSQL -o Models --context-dir Data --context AppDbContext --force --no-pluralize
-   ```
+## Yêu cầu hệ thống
 
-4. **Chạy ứng dụng**
-   Di chuyển vào thư mục `RetradeBE` và chạy dự án:
-   ```bash
-   dotnet run
-   ```
-   Ngoài ra, bạn có thể chạy ứng dụng qua Visual Studio hoặc sử dụng `dotnet watch run` để tự động tải lại (hot reloading) trong quá trình phát triển.
+Trước khi bắt đầu chạy backend, hãy chuẩn bị:
+- Cài đặt .NET 8 SDK
+- Khởi chạy PostgreSQL trên cổng mặc định 5432 và tạo cơ sở dữ liệu trống.
 
-5. **Tài liệu API**
-   Sau khi ứng dụng đang chạy, bạn có thể khám phá các endpoint API qua giao diện Swagger tại:
-   - `http://localhost:<port>/swagger`
-   - `https://localhost:<port>/swagger`
+---
 
-## 🔗 Chia sẻ tài nguyên nguồn gốc chéo (CORS)
+## Hướng dẫn thiết lập cơ sở dữ liệu và vận hành
 
-Backend được cấu hình để chấp nhận các yêu cầu từ frontend đang chạy tại `http://localhost:5173`. Đảm bảo frontend của bạn chạy trên cổng này hoặc cập nhật giá trị `FrontendUrl` trong `appsettings.json`.
+### 1. Cấu hình chuỗi kết nối (Connection String)
+Cập nhật chuỗi kết nối cơ sở dữ liệu của bạn trong tệp `appsettings.json` tại khóa `DefaultConnection`:
+```json
+"ConnectionStrings": {
+  "DefaultConnection": "Host=localhost;Port=5432;Database=retrade;Username=postgres;Password=YourPassword123!;"
+}
+```
 
-## 📂 Cấu trúc dự án
+### 2. Cập nhật Cơ sở dữ liệu (Migrations)
+Để tạo một bản di chuyển (migration) mới sau khi thay đổi code Model của Entity Framework:
+```bash
+dotnet ef migrations add <MigrationName>
+```
+Để áp dụng các file migration vào PostgreSQL và cập nhật cấu trúc bảng:
+```bash
+dotnet ef database update
+```
 
-- `Controllers/`: Chứa các endpoint API xử lý các yêu cầu HTTP gửi đến.
-- `Models/`: Các lớp thực thể (Entity) đại diện cho các bảng trong cơ sở dữ liệu.
-- `Data/`: Chứa `DbContext` và cấu hình của EF Core.
-- `appsettings.json`: Các cài đặt cấu hình cho ứng dụng.
-- `Program.cs`: Điểm vào (entry point) cho ứng dụng ASP.NET Core, dùng để cấu hình các dịch vụ (services) và middleware.
+### 3. Tạo Entity Model tự động từ DB (Database First Scaffold)
+Nếu bạn thay đổi cấu trúc bảng trực tiếp trên PostgreSQL và muốn tạo ngược lại các file code C# Model trong project:
+```bash
+dotnet ef dbcontext scaffold Name=ConnectionStrings:DefaultConnection Npgsql.EntityFrameworkCore.PostgreSQL -o Models --context-dir Data --context AppDbContext --force --no-pluralize
+```
+
+### 4. Chạy dịch vụ Backend
+Di chuyển vào thư mục chứa code `RetradeBE` và khởi chạy API:
+```bash
+dotnet run
+```
+Bạn có thể sử dụng lệnh `dotnet watch run` để tự động tải lại code (hot reload) mỗi khi thực hiện thay đổi file.
+
+### 5. Xem tài liệu tích hợp (Swagger API UI)
+Sau khi API khởi chạy thành công, truy cập đường dẫn sau trên trình duyệt để kiểm tra và test thử các endpoint:
+- http://localhost:<port>/swagger
+- https://localhost:<port>/swagger
