@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace RetradeBE.Models;
@@ -16,8 +16,6 @@ public partial class User
     public string? Phone { get; set; }
 
     public string? AvatarUrl { get; set; }
-
-    public string? Status { get; set; }
 
     public int? FlagCount { get; set; }
 

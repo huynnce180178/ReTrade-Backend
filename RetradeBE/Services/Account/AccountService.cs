@@ -1,0 +1,527 @@
+using AutoMapper;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
+using RetradeBE.Models;
+using RetradeBE.Models.DTOs;
+using RetradeBE.Repositories;
+using RetradeBE.Config;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
+using System.Net.Http.Headers;
+
+namespace RetradeBE.Services
+{
+    public class AccountService : IAccountService
+    {
+        private readonly IAccountRepository _repository;
+        private readonly IUserRepository _userRepository;
+        private readonly IEmailService _emailService;
+        private readonly IMemoryCache _cache;
+        private readonly JwtSettings _jwtSettings;
+        private readonly GoogleSettings _googleSettings;
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IMapper _mapper;
+        private readonly IWebHostEnvironment _env;
+
+        public AccountService(IAccountRepository repository, IUserRepository userRepository, IEmailService emailService, IMemoryCache cache, IOptions<JwtSettings> jwtSettings, IOptions<GoogleSettings> googleSettings, IHttpClientFactory httpClientFactory, IMapper mapper, IWebHostEnvironment env)
+        {
+            _repository = repository;
+            _userRepository = userRepository;
+            _emailService = emailService;
+            _cache = cache;
+            _jwtSettings = jwtSettings.Value;
+            _googleSettings = googleSettings.Value;
+            _httpClientFactory = httpClientFactory;
+            _mapper = mapper;
+            _env = env;
+        }
+
+        private async Task<string> GetEmailTemplateAsync(string templateName)
+        {
+            string path = Path.Combine(_env.ContentRootPath, "Templates", templateName);
+            if (!File.Exists(path)) return string.Empty;
+            return await File.ReadAllTextAsync(path);
+        }
+
+
+        public async Task<IEnumerable<Account>> GetAllAsync() => await _repository.GetAllAsync();
+        public async Task<Account> GetByIdAsync(object id) => await _repository.GetByIdAsync(id);
+        public async Task AddAsync(Account item) => await _repository.AddAsync(item);
+        public async Task UpdateAsync(Account item) => await _repository.UpdateAsync(item);
+        public async Task DeleteAsync(object id)
+        {
+            await _repository.DeleteAsync(id);
+        }
+
+        public async Task RestoreAsync(object id)
+        {
+            await _repository.RestoreAsync(id);
+        }
+
+        public async Task<UserProfileDto?> GetProfileAsync(string accountId)
+        {
+            var account = await _repository.GetByIdAsync(accountId);
+            if (account == null) return null;
+
+            var user = await _userRepository.GetByIdAsync(account.UserId!);
+            if (user == null) return null;
+
+            var profile = _mapper.Map<UserProfileDto>(user);
+            _mapper.Map(account, profile);
+
+            return profile;
+        }
+
+        public async Task<string> RegisterAsync(RegisterDto dto)
+        {
+            var existingUser = await _userRepository.GetByEmailAsync(dto.Email);
+            if (existingUser != null) return "Email already exists.";
+
+            var existingAccount = await _repository.GetByUsernameAsync(dto.Username);
+            if (existingAccount != null) return "Username already exists.";
+
+            string userId = await GenerateUserIdAsync();
+            string accountId = await GenerateAccountIdAsync();
+
+            // Tạo User
+            var user = _mapper.Map<User>(dto);
+            user.UserId = userId;
+            await _userRepository.AddAsync(user);
+
+            // Sinh mã OTP 6 số
+            string otp = new Random().Next(100000, 999999).ToString();
+
+            // Lưu OTP vào MemoryCache với thời hạn 3 phút
+            _cache.Set(dto.Email, otp, TimeSpan.FromMinutes(3));
+
+            // Tạo Account
+            var account = _mapper.Map<Account>(dto);
+            account.AccountId = accountId;
+            account.UserId = userId;
+            account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+            await _repository.AddAsync(account);
+
+            // Gán quyền dựa trên RoleId đã có trong DB (1‑Admin, 2‑Buyer, 3‑Seller)
+            string roleName = ((RetradeBE.Models.Enums.RoleEnum)dto.RoleId).ToString();
+            await _repository.AssignRoleAsync(accountId, roleName);
+
+            // Gửi OTP qua email
+            string template = await GetEmailTemplateAsync("VerificationOtp.html");
+            string emailBody = template.Replace("{{OTP}}", otp);
+            await _emailService.SendEmailAsync(dto.Email, "ReTrade Account Verification", emailBody);
+
+            return "Register success. Please check your email for OTP.";
+        }
+
+        public async Task<bool> VerifyAsync(VerifyDto dto)
+        {
+            // Kiểm tra OTP trong Cache
+            if (!_cache.TryGetValue(dto.Email, out string? savedOtp) || savedOtp != dto.Otp)
+            {
+                return false;
+            }
+
+            var user = await _userRepository.GetByEmailAsync(dto.Email);
+            if (user == null) return false;
+
+            // Lấy Account liên kết
+            var allAccounts = await _repository.GetAllAsync();
+            var account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
+
+            if (account == null) return false;
+
+            // Cập nhật trạng thái account
+            account.Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString();
+            await _repository.UpdateAsync(account);
+
+            // Xóa OTP khỏi Cache
+            _cache.Remove(dto.Email);
+
+            return true;
+        }
+
+        public async Task<string> ResendOtpAsync(string email)
+        {
+            var user = await _userRepository.GetByEmailAsync(email);
+            if (user == null) return "User not found.";
+            
+            // Sinh mã OTP 6 số mới
+            string otp = new Random().Next(100000, 999999).ToString();
+
+            // Lưu OTP vào MemoryCache với thời hạn 3 phút (đè lên mã cũ nếu có)
+            _cache.Set(email, otp, TimeSpan.FromMinutes(3));
+
+            // Gửi OTP qua email
+            string template = await GetEmailTemplateAsync("VerificationOtp.html");
+            string emailBody = template.Replace("{{OTP}}", otp);
+            await _emailService.SendEmailAsync(email, "ReTrade Resend OTP", emailBody);
+
+            return "Resend OTP success. Please check your email.";
+        }
+
+        public async Task<object?> LoginAsync(LoginDto dto)
+        {
+            Account? account = null;
+            if (dto.Username.Contains("@"))
+            {
+                var user = await _userRepository.GetByEmailAsync(dto.Username);
+                if (user != null)
+                {
+                    var allAccounts = await _repository.GetAllAsync();
+                    account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
+                }
+            }
+            else
+            {
+                account = await _repository.GetByUsernameAsync(dto.Username);
+            }
+
+            if (account == null || account.IsDeleted == true || account.Status != RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString()) return null;
+
+            bool isPasswordValid = BCrypt.Net.BCrypt.Verify(dto.Password, account.PasswordHash);
+            if (!isPasswordValid) return null;
+
+            var roles = await _repository.GetRolesAsync(account.AccountId);
+            if (roles == null || !roles.Any())
+            {
+                roles = new List<string> { RetradeBE.Models.Enums.RoleEnum.Buyer.ToString() };
+            }
+
+            // 2FA removed: proceed to issue JWT immediately
+
+            // Sinh JWT
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var key = Encoding.ASCII.GetBytes(_jwtSettings.SecretKey);
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, account.AccountId),
+                new Claim(ClaimTypes.Name, account.Username!)
+            };
+            foreach (var r in roles)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, r));
+            }
+
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(claims),
+                Expires = DateTime.UtcNow.AddMinutes(_jwtSettings.ExpiryMinutes),
+                Issuer = _jwtSettings.Issuer,
+                Audience = _jwtSettings.Audience,
+                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+            };
+
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+            
+            // Update last login
+            account.LastLoginAt = DateTime.UtcNow;
+            await _repository.UpdateAsync(account);
+
+            var userEntity = await _userRepository.GetByIdAsync(account.UserId!);
+
+            return new AuthResponseDto
+            {
+                AccountId = account.AccountId,
+                Username = account.Username!,
+                Email = userEntity?.Email,
+                FirstName = userEntity?.FirstName,
+                LastName = userEntity?.LastName,
+                Phone = userEntity?.Phone,
+                AvatarUrl = userEntity?.AvatarUrl,
+                PasswordHash = account.PasswordHash,
+                Token = tokenHandler.WriteToken(token),
+                Roles = roles,
+                MustChangePassword = account.MustChangePassword ?? false,
+            };
+        }
+
+        private async Task<string> GenerateUserIdAsync()
+        {
+            int count = await _userRepository.CountAllUsersAsync();
+            return $"UC{count + 1}";
+        }
+
+        private async Task<string> GenerateAccountIdAsync()
+        {
+            int count = await _repository.CountAllAccountsAsync();
+            return $"AC{count + 1}";
+        }
+
+        public async Task<object?> LoginWithGoogleAsync(string accessToken)
+        {
+            // Gọi Google UserInfo API để lấy thông tin user
+            using var httpClient = _httpClientFactory.CreateClient();
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            var response = await httpClient.GetAsync("https://www.googleapis.com/oauth2/v3/userinfo");
+            if (!response.IsSuccessStatusCode) return null;
+
+            var json = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+            string? email = json.TryGetProperty("email", out var emailProp) ? emailProp.GetString() : null;
+            string? providerUserId = json.TryGetProperty("sub", out var subProp) ? subProp.GetString() : null;
+            string? firstName = json.TryGetProperty("given_name", out var fnProp) ? fnProp.GetString() : null;
+            string? lastName = json.TryGetProperty("family_name", out var lnProp) ? lnProp.GetString() : null;
+            string? picture = json.TryGetProperty("picture", out var picProp) ? picProp.GetString() : null;
+
+            if (string.IsNullOrEmpty(email)) return null;
+            const string googleProvider = "Google";
+
+            // Tìm user theo email
+            var user = await _userRepository.GetByEmailAsync(email);
+            Account? account = null;
+
+            if (user == null)
+            {
+                // Tạo mới User & Account nếu chưa có
+                string userId = await GenerateUserIdAsync();
+                string accountId = await GenerateAccountIdAsync();
+
+                // Tạo username từ email (phần trước @)
+                string baseUsername = email.Split('@')[0].Replace(".", "").Replace("+", "");
+                string username = baseUsername;
+                int suffix = 1;
+                while (await _repository.GetByUsernameAsync(username) != null)
+                {
+                    username = $"{baseUsername}{suffix++}";
+                }
+
+                user = new User
+                {
+                    UserId = userId,
+                    Email = email,
+                    FirstName = firstName ?? "",
+                    LastName = lastName ?? "",
+                    AvatarUrl = picture ?? "https://res.cloudinary.com/dx0hrokek/image/upload/v1780673207/avt-emty_wwnzba.jpg",
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _userRepository.AddAsync(user);
+
+                account = new Account
+                {
+                    AccountId = accountId,
+                    UserId = userId,
+                    Provider = googleProvider,
+                    Username = username,
+                    ProviderUserId = providerUserId ?? email,
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()), // random password
+                    Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString(), // Google accounts bỏ qua verify
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _repository.AddAsync(account);
+                await _repository.AssignRoleAsync(accountId, RetradeBE.Models.Enums.RoleEnum.Buyer.ToString());
+            }
+            else
+            {
+                // Tìm account theo userId
+                var allAccounts = await _repository.GetAllAsync();
+                account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
+                if (account == null || account.IsDeleted == true) return null;
+
+                // Tự động activate nếu Pending (đăng nhập Google lần đầu sau khi register thường)
+                if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Pending.ToString())
+                {
+                    account.Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString();
+                }
+
+                account.Provider = googleProvider;
+                account.ProviderUserId = providerUserId ?? email;
+                account.UpdatedAt = DateTime.UtcNow;
+                await _repository.UpdateAsync(account);
+            }
+
+            // Sinh JWT
+            var roles = await _repository.GetRolesAsync(account.AccountId);
+            if (roles == null || !roles.Any())
+                roles = new List<string> { RetradeBE.Models.Enums.RoleEnum.Buyer.ToString() };
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var key = Encoding.ASCII.GetBytes(_jwtSettings.SecretKey);
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, account.AccountId),
+                new Claim(ClaimTypes.Name, account.Username!)
+            };
+            foreach (var r in roles)
+                claims.Add(new Claim(ClaimTypes.Role, r));
+
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(claims),
+                Expires = DateTime.UtcNow.AddMinutes(_jwtSettings.ExpiryMinutes),
+                Issuer = _jwtSettings.Issuer,
+                Audience = _jwtSettings.Audience,
+                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+            };
+
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+
+            return new AuthResponseDto
+            {
+                AccountId = account.AccountId,
+                Username = account.Username!,
+                Email = user.Email,
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                Phone = user.Phone,
+                AvatarUrl = user.AvatarUrl,
+                PasswordHash = "",
+                Token = tokenHandler.WriteToken(token),
+                Roles = roles,
+                
+            };
+        }
+
+        public async Task<string> ForgotPasswordAsync(string email)
+        {
+            var user = await _userRepository.GetByEmailAsync(email);
+            if (user == null) return "Email not found.";
+
+            // Check if there is a linked account
+            var allAccounts = await _repository.GetAllAsync();
+            var account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
+            if (account == null) return "No account associated with this email.";
+
+            // Generate OTP
+            string otp = new Random().Next(100000, 999999).ToString();
+
+            // Save OTP to cache with prefix to avoid collision, 3 minutes expiration
+            _cache.Set($"forgot_pwd_{email}", otp, TimeSpan.FromMinutes(3));
+
+            // Send Email
+            string template = await GetEmailTemplateAsync("ForgotPasswordOtp.html");
+            string emailBody = template.Replace("{{OTP}}", otp);
+            await _emailService.SendEmailAsync(email, "ReTrade Password Reset OTP", emailBody);
+
+            return "Password reset OTP has been sent to your email.";
+        }
+
+        private string GenerateRandomPassword()
+        {
+            const string uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            const string lowercase = "abcdefghijklmnopqrstuvwxyz";
+            const string digits = "0123456789";
+            const string specialChars = "@$!%*?&";
+            var random = new Random();
+            
+            var passwordChars = new List<char>
+            {
+                uppercase[random.Next(uppercase.Length)],
+                digits[random.Next(digits.Length)],
+                specialChars[random.Next(specialChars.Length)]
+            };
+            
+            string allChars = uppercase + lowercase + digits + specialChars;
+            for (int i = passwordChars.Count; i < 8; i++)
+            {
+                passwordChars.Add(allChars[random.Next(allChars.Length)]);
+            }
+            
+            return new string(passwordChars.OrderBy(x => random.Next()).ToArray());
+        }
+
+        public async Task<string> PasswordRecoveryAsync(string email)
+        {
+            var user = await _userRepository.GetByEmailAsync(email);
+            if (user == null) return "User not found.";
+
+            var allAccounts = await _repository.GetAllAsync();
+            var account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
+            if (account == null) return "Account not found.";
+
+            // Generate Random Password
+            string newPassword = GenerateRandomPassword();
+
+            // Update Password and mark MustChangePassword
+            account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+            account.MustChangePassword = true;
+            account.UpdatedAt = DateTime.UtcNow;
+            await _repository.UpdateAsync(account);
+
+            // Send Email
+            string template = await GetEmailTemplateAsync("ResetPasswordAuto.html");
+            string emailBody = template.Replace("{{NEW_PASSWORD}}", newPassword);
+            await _emailService.SendEmailAsync(email, "ReTrade Password Generated", emailBody);
+
+            return "A new password has been generated and sent to your email.";
+        }
+
+        public async Task<string> ResetPasswordAsync(ResetPasswordDto dto)
+        {
+            // Verify OTP
+            if (!_cache.TryGetValue($"forgot_pwd_{dto.Email}", out string? savedOtp) || savedOtp != dto.Otp)
+            {
+                return "Invalid or expired OTP.";
+            }
+
+            var user = await _userRepository.GetByEmailAsync(dto.Email);
+            if (user == null) return "User not found.";
+
+            var allAccounts = await _repository.GetAllAsync();
+            var account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
+            if (account == null) return "Account not found.";
+
+            // Update Password
+            account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+            await _repository.UpdateAsync(account);
+
+            // Remove OTP from cache
+            _cache.Remove($"forgot_pwd_{dto.Email}");
+
+            // Send Success Email
+            string template = await GetEmailTemplateAsync("ResetPasswordSuccess.html");
+            string emailBody = template;
+            await _emailService.SendEmailAsync(dto.Email, "ReTrade Password Reset Successful", emailBody);
+
+            return "Password has been reset successfully.";
+        }
+
+        public async Task<string> ChangePasswordAsync(string accountId, ChangePasswordDto dto)
+        {
+            var account = await _repository.GetByIdAsync(accountId);
+            if (account == null) return "Account not found.";
+
+            if (!BCrypt.Net.BCrypt.Verify(dto.OldPassword, account.PasswordHash))
+            {
+                return "Old password is incorrect.";
+            }
+
+            account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+            account.MustChangePassword = false;
+            account.UpdatedAt = DateTime.UtcNow;
+            await _repository.UpdateAsync(account);
+
+            return "Password changed successfully.";
+        }
+
+
+
+        public async Task<UserProfileDto?> UpdateProfileAsync(string accountId, UpdateProfileDto dto)
+        {
+            var account = await _repository.GetByIdAsync(accountId);
+            if (account == null) return null;
+
+            var user = await _userRepository.GetByIdAsync(account.UserId!);
+            if (user == null) return null;
+
+            if (dto.FirstName != null) user.FirstName = dto.FirstName;
+            if (dto.LastName != null) user.LastName = dto.LastName;
+            if (dto.Email != null) user.Email = dto.Email;
+            if (dto.Phone != null) user.Phone = dto.Phone;
+            user.UpdatedAt = DateTime.UtcNow;
+            await _userRepository.UpdateAsync(user);
+
+            if (dto.Username != null) account.Username = dto.Username;
+            account.UpdatedAt = DateTime.UtcNow;
+            await _repository.UpdateAsync(account);
+
+            var profile = _mapper.Map<UserProfileDto>(user);
+            _mapper.Map(account, profile);
+
+            return profile;
+        }
+
+        
+    }
+}

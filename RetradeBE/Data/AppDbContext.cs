@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using RetradeBE.Models;
@@ -143,7 +143,6 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(100)
                 .HasColumnName("account_id");
             entity.Property(e => e.RoleId)
-                .HasMaxLength(100)
                 .HasColumnName("role_id");
             entity.Property(e => e.CreatedAt)
                 .HasColumnType("timestamp without time zone")
@@ -1040,19 +1039,9 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.RoleId)
                 .HasMaxLength(100)
                 .HasColumnName("role_id");
-            entity.Property(e => e.CreatedAt)
-                .HasColumnType("timestamp without time zone")
-                .HasColumnName("created_at");
-            entity.Property(e => e.Description).HasColumnName("description");
             entity.Property(e => e.Name)
                 .HasMaxLength(50)
                 .HasColumnName("name");
-            entity.Property(e => e.Status)
-                .HasMaxLength(20)
-                .HasColumnName("status");
-            entity.Property(e => e.UpdatedAt)
-                .HasColumnType("timestamp without time zone")
-                .HasColumnName("updated_at");
         });
 
         modelBuilder.Entity<ServiceSubscription>(entity =>
@@ -1107,9 +1096,6 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Phone)
                 .HasMaxLength(30)
                 .HasColumnName("phone");
-            entity.Property(e => e.Status)
-                .HasMaxLength(20)
-                .HasColumnName("status");
             entity.Property(e => e.UpdatedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("updated_at");

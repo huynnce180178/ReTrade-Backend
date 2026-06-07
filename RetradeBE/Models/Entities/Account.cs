@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace RetradeBE.Models;
@@ -20,6 +20,7 @@ public partial class Account
     public bool? MustChangePassword { get; set; }
 
     public string? Status { get; set; }
+
 
     public DateTime? LastLoginAt { get; set; }
 
