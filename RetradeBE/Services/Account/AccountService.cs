@@ -102,6 +102,7 @@ namespace RetradeBE.Services
             account.AccountId = accountId;
             account.UserId = userId;
             account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+            account.IsPasswordSet = true;
             await _repository.AddAsync(account);
 
             // Gán quyền dựa trên RoleId đã có trong DB (1‑Admin, 2‑Buyer, 3‑Seller)
@@ -235,6 +236,7 @@ namespace RetradeBE.Services
                 Token = tokenHandler.WriteToken(token),
                 Roles = roles,
                 MustChangePassword = account.MustChangePassword ?? false,
+                IsPasswordSet = account.IsPasswordSet ?? true,
             };
         }
 
@@ -307,6 +309,7 @@ namespace RetradeBE.Services
                     ProviderUserId = providerUserId ?? email,
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()), // random password
                     Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString(), // Google accounts bỏ qua verify
+                    IsPasswordSet = false,
                     CreatedAt = DateTime.UtcNow
                 };
                 await _repository.AddAsync(account);
@@ -369,7 +372,7 @@ namespace RetradeBE.Services
                 PasswordHash = "",
                 Token = tokenHandler.WriteToken(token),
                 Roles = roles,
-                
+                IsPasswordSet = account.IsPasswordSet ?? true,
             };
         }
 
@@ -488,11 +491,26 @@ namespace RetradeBE.Services
             }
 
             account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+            account.IsPasswordSet = true;
             account.MustChangePassword = false;
             account.UpdatedAt = DateTime.UtcNow;
             await _repository.UpdateAsync(account);
 
             return "Password changed successfully.";
+        }
+
+        public async Task<string> SetPasswordAsync(string accountId, SetPasswordDto dto)
+        {
+            var account = await _repository.GetByIdAsync(accountId);
+            if (account == null) return "Account not found.";
+
+            account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+            account.IsPasswordSet = true;
+            account.MustChangePassword = false;
+            account.UpdatedAt = DateTime.UtcNow;
+            await _repository.UpdateAsync(account);
+
+            return "Password set successfully.";
         }
 
 

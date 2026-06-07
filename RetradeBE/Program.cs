@@ -152,8 +152,23 @@ namespace RetradeBE
 
             var app = builder.Build();
 
+            // Automatically apply migrations at startup
+            using (var scope = app.Services.CreateScope())
+            {
+                try
+                {
+                    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                    dbContext.Database.Migrate();
+                    Console.WriteLine("Database migrated successfully.");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error applying migrations: {ex.Message}");
+                }
+            }
+
             // Configure the HTTP request pipeline.
-            if (app.Environment.IsDevelopment())
+            if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Docker"))
             {
                 app.UseSwagger();
                 app.UseSwaggerUI();

@@ -42,7 +42,7 @@ namespace RetradeBE.Models.DTOs
         public string Token { get; set; } = string.Empty;
         public List<string> Roles { get; set; } = new();
         public bool MustChangePassword { get; set; } = false;
-        
+        public bool IsPasswordSet { get; set; } = true;
     }
 
     public class GoogleLoginDto
@@ -78,6 +78,14 @@ namespace RetradeBE.Models.DTOs
         public string NewPassword { get; set; } = string.Empty;
     }
 
+    public class SetPasswordDto
+    {
+        [Required]
+        [RegularExpression(@"^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$", 
+            ErrorMessage = "Password must be at least 8 characters long, contain at least 1 uppercase letter, 1 number, and 1 special character.")]
+        public string NewPassword { get; set; } = string.Empty;
+    }
+
 
 
     public class UpdateProfileDto
@@ -102,7 +110,7 @@ namespace RetradeBE.Models.DTOs
         public string? Status { get; set; }
         public bool? IsDeleted { get; set; }
         public DateTime? CreatedAt { get; set; }
-        
+        public bool? IsPasswordSet { get; set; }
     }
 
     

@@ -136,6 +136,18 @@ namespace RetradeBE.Controllers.Account
             return Ok(new { message = result });
         }
 
+        [Authorize]
+        [HttpPost("set-password")]
+        public async Task<IActionResult> SetPassword([FromBody] Models.DTOs.SetPasswordDto dto)
+        {
+            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(accountId)) return Unauthorized();
+
+            var result = await _service.SetPasswordAsync(accountId, dto);
+            if (result.Contains("not found")) return BadRequest(result);
+            return Ok(new { message = result });
+        }
+
 
 
         [Authorize]

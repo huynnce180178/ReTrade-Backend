@@ -19,6 +19,8 @@ public partial class Account
 
     public bool? MustChangePassword { get; set; }
 
+    public bool? IsPasswordSet { get; set; }
+
     public string? Status { get; set; }
 
 

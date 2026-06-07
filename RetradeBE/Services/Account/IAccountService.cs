@@ -21,6 +21,7 @@ namespace RetradeBE.Services
         Task<string> ResetPasswordAsync(ResetPasswordDto dto);
         Task<string> PasswordRecoveryAsync(string email);
         Task<string> ChangePasswordAsync(string accountId, ChangePasswordDto dto);
+        Task<string> SetPasswordAsync(string accountId, SetPasswordDto dto);
         Task<UserProfileDto?> UpdateProfileAsync(string accountId, UpdateProfileDto dto);
         
     }
