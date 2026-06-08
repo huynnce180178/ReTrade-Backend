@@ -1,16 +1,22 @@
 using RetradeBE.Models;
 using RetradeBE.Models.DTOs;
 using RetradeBE.Repositories;
+using RetradeBE.Hubs;
+using Microsoft.AspNetCore.SignalR;
 
 namespace RetradeBE.Services
 {
     public class ProfileService : IProfileService
     {
         private readonly IProfileRepository _repository;
+        private readonly IAccountRepository _accountRepository;
+        private readonly IHubContext<SellerHub> _sellerHub;
 
-        public ProfileService(IProfileRepository repository)
+        public ProfileService(IProfileRepository repository, IAccountRepository accountRepository, IHubContext<SellerHub> sellerHub)
         {
             _repository = repository;
+            _accountRepository = accountRepository;
+            _sellerHub = sellerHub;
         }
 
         public async Task<ProfileDetailDto?> GetMyProfileAsync(string accountId)
@@ -19,7 +25,8 @@ namespace RetradeBE.Services
             if (account?.User == null) return null;
 
             var addresses = await _repository.GetActiveAddressesByUserIdAsync(account.User.UserId);
-            return MapProfile(account, account.User, addresses);
+            var roles = await _accountRepository.GetRolesAsync(account.AccountId);
+            return MapProfile(account, account.User, addresses, roles);
         }
 
         public async Task<ProfileDetailDto?> GetUserProfileAsync(string userId)
@@ -31,7 +38,8 @@ namespace RetradeBE.Services
             if (account == null) return null;
 
             var addresses = await _repository.GetActiveAddressesByUserIdAsync(user.UserId);
-            return MapProfile(account, user, addresses);
+            var roles = await _accountRepository.GetRolesAsync(account.AccountId);
+            return MapProfile(account, user, addresses, roles);
         }
 
         public async Task<ProfileDetailDto?> UpdateMyProfileAsync(string accountId, ProfileUpdateDto dto)
@@ -73,7 +81,8 @@ namespace RetradeBE.Services
             }
 
             var addresses = await _repository.GetActiveAddressesByUserIdAsync(account.User.UserId);
-            return MapProfile(account, account.User, addresses);
+            var roles = await _accountRepository.GetRolesAsync(account.AccountId);
+            return MapProfile(account, account.User, addresses, roles);
         }
 
         public async Task<SellerDetailDto?> GetSellerInformationAsync(string sellerId, string? currentAccountId = null)
@@ -85,6 +94,15 @@ namespace RetradeBE.Services
             var sellerAccount = await _repository.GetPrimaryAccountByUserIdAsync(sellerId);
             var addresses = await _repository.GetActiveAddressesByUserIdAsync(sellerId);
             var currentUserId = await GetUserIdByAccountIdAsync(currentAccountId);
+            var sellerRoles = sellerAccount == null
+                ? new List<string>()
+                : await _accountRepository.GetRolesAsync(sellerAccount.AccountId);
+            var currentRoles = string.IsNullOrWhiteSpace(currentAccountId)
+                ? new List<string>()
+                : await _accountRepository.GetRolesAsync(currentAccountId);
+            var isOwnSeller = currentUserId == seller.UserId;
+            var isSeller = HasRole(sellerRoles, "Seller");
+            var currentIsAdmin = HasRole(currentRoles, "Admin");
 
             return new SellerDetailDto
             {
@@ -101,7 +119,10 @@ namespace RetradeBE.Services
                 FollowingCount = await _repository.CountFollowingAsync(seller.UserId),
                 ProductCount = await _repository.CountProductsAsync(seller.UserId),
                 AverageRating = await _repository.GetAverageSellerRatingAsync(seller.UserId),
+                IsSeller = isSeller,
                 IsFollowing = currentUserId != null && await _repository.FollowExistsAsync(currentUserId, seller.UserId),
+                IsOwnSeller = isOwnSeller,
+                CanFollow = currentUserId != null && isSeller && !currentIsAdmin && !isOwnSeller,
                 DefaultAddress = MapDefaultAddress(addresses)
             };
         }
@@ -114,16 +135,13 @@ namespace RetradeBE.Services
             sellerId = await ResolveUserIdAsync(sellerId) ?? sellerId;
             var seller = await _repository.GetUserByIdAsync(sellerId);
             if (seller == null || seller.IsDeleted == true) return null;
-            if (currentUserId == sellerId)
-            {
-                throw new InvalidOperationException("You cannot follow yourself.");
-            }
+            await EnsureCanFollowSellerAsync(accountId, currentUserId, sellerId);
 
             if (!await _repository.FollowExistsAsync(currentUserId, sellerId))
             {
                 var follow = new UserFollow
                 {
-                    FollowId = await GenerateFollowIdAsync(),
+                    FollowId = GenerateFollowId(),
                     FollowerId = currentUserId,
                     FollowedUserId = sellerId,
                     CreatedAt = DateTime.UtcNow
@@ -131,13 +149,17 @@ namespace RetradeBE.Services
                 await _repository.AddFollowAsync(follow);
             }
 
-            return new FollowResultDto
+            var result = new FollowResultDto
             {
                 SellerId = sellerId,
+                FollowerId = currentUserId,
                 IsFollowing = true,
                 FollowersCount = await _repository.CountFollowersAsync(sellerId),
                 Message = "Follow seller successfully."
             };
+
+            await PublishFollowChangedAsync(result);
+            return result;
         }
 
         public async Task<FollowResultDto?> UnfollowSellerAsync(string accountId, string sellerId)
@@ -148,6 +170,7 @@ namespace RetradeBE.Services
             sellerId = await ResolveUserIdAsync(sellerId) ?? sellerId;
             var seller = await _repository.GetUserByIdAsync(sellerId);
             if (seller == null || seller.IsDeleted == true) return null;
+            await EnsureCanFollowSellerAsync(accountId, currentUserId, sellerId);
 
             var follow = await _repository.GetFollowAsync(currentUserId, sellerId);
             if (follow != null)
@@ -155,13 +178,53 @@ namespace RetradeBE.Services
                 await _repository.RemoveFollowAsync(follow);
             }
 
-            return new FollowResultDto
+            var result = new FollowResultDto
             {
                 SellerId = sellerId,
+                FollowerId = currentUserId,
                 IsFollowing = false,
                 FollowersCount = await _repository.CountFollowersAsync(sellerId),
                 Message = "Unfollow seller successfully."
             };
+
+            await PublishFollowChangedAsync(result);
+            return result;
+        }
+
+        private async Task EnsureCanFollowSellerAsync(string accountId, string currentUserId, string sellerId)
+        {
+            if (currentUserId == sellerId)
+            {
+                throw new InvalidOperationException("You cannot follow yourself.");
+            }
+
+            var currentRoles = await _accountRepository.GetRolesAsync(accountId);
+            if (HasRole(currentRoles, "Admin"))
+            {
+                throw new InvalidOperationException("Admins cannot follow users.");
+            }
+
+            var sellerAccount = await _repository.GetPrimaryAccountByUserIdAsync(sellerId);
+            var sellerRoles = sellerAccount == null
+                ? new List<string>()
+                : await _accountRepository.GetRolesAsync(sellerAccount.AccountId);
+            if (!HasRole(sellerRoles, "Seller"))
+            {
+                throw new InvalidOperationException("You can only follow sellers.");
+            }
+        }
+
+        private static bool HasRole(IEnumerable<string> roles, string roleName)
+        {
+            return roles.Any(r => string.Equals(r, roleName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private Task PublishFollowChangedAsync(FollowResultDto result)
+        {
+            return _sellerHub
+                .Clients
+                .Group(SellerHub.GetSellerGroupName(result.SellerId))
+                .SendAsync("SellerFollowChanged", result);
         }
 
         private async Task<string?> GetUserIdByAccountIdAsync(string? accountId)
@@ -228,13 +291,9 @@ namespace RetradeBE.Services
             return $"ADDR{count + 1}";
         }
 
-        private async Task<string> GenerateFollowIdAsync()
-        {
-            var count = await _repository.CountFollowsAsync();
-            return $"UF{count + 1}";
-        }
+        private static string GenerateFollowId() => $"UF{Guid.NewGuid():N}";
 
-        private static ProfileDetailDto MapProfile(Account account, User user, List<Address> addresses)
+        private static ProfileDetailDto MapProfile(Account account, User user, List<Address> addresses, List<string>? roles = null)
         {
             return new ProfileDetailDto
             {
@@ -251,7 +310,8 @@ namespace RetradeBE.Services
                 CreatedAt = user.CreatedAt,
                 UpdatedAt = user.UpdatedAt,
                 DefaultAddress = MapDefaultAddress(addresses),
-                Addresses = addresses.Select(MapAddress).ToList()
+                Addresses = addresses.Select(MapAddress).ToList(),
+                Roles = roles ?? new List<string>()
             };
         }
 

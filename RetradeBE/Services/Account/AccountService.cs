@@ -61,20 +61,6 @@ namespace RetradeBE.Services
             await _repository.RestoreAsync(id);
         }
 
-        public async Task<UserProfileDto?> GetProfileAsync(string accountId)
-        {
-            var account = await _repository.GetByIdAsync(accountId);
-            if (account == null) return null;
-
-            var user = await _userRepository.GetByIdAsync(account.UserId!);
-            if (user == null) return null;
-
-            var profile = _mapper.Map<UserProfileDto>(user);
-            _mapper.Map(account, profile);
-
-            return profile;
-        }
-
         public async Task<string> RegisterAsync(RegisterDto dto)
         {
             var existingUser = await _userRepository.GetByEmailAsync(dto.Email);
@@ -515,31 +501,5 @@ namespace RetradeBE.Services
 
 
 
-        public async Task<UserProfileDto?> UpdateProfileAsync(string accountId, UpdateProfileDto dto)
-        {
-            var account = await _repository.GetByIdAsync(accountId);
-            if (account == null) return null;
-
-            var user = await _userRepository.GetByIdAsync(account.UserId!);
-            if (user == null) return null;
-
-            if (dto.FirstName != null) user.FirstName = dto.FirstName;
-            if (dto.LastName != null) user.LastName = dto.LastName;
-            if (dto.Email != null) user.Email = dto.Email;
-            if (dto.Phone != null) user.Phone = dto.Phone;
-            user.UpdatedAt = DateTime.UtcNow;
-            await _userRepository.UpdateAsync(user);
-
-            if (dto.Username != null) account.Username = dto.Username;
-            account.UpdatedAt = DateTime.UtcNow;
-            await _repository.UpdateAsync(account);
-
-            var profile = _mapper.Map<UserProfileDto>(user);
-            _mapper.Map(account, profile);
-
-            return profile;
-        }
-
-        
     }
 }

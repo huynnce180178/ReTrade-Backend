@@ -11,7 +11,6 @@ namespace RetradeBE.Services
         Task UpdateAsync(Account item);
         Task DeleteAsync(object id);
         Task RestoreAsync(object id);
-        Task<UserProfileDto?> GetProfileAsync(string accountId);
         Task<string> RegisterAsync(RegisterDto dto);
         Task<string> ResendOtpAsync(string email);
         Task<bool> VerifyAsync(VerifyDto dto);
@@ -22,7 +21,5 @@ namespace RetradeBE.Services
         Task<string> PasswordRecoveryAsync(string email);
         Task<string> ChangePasswordAsync(string accountId, ChangePasswordDto dto);
         Task<string> SetPasswordAsync(string accountId, SetPasswordDto dto);
-        Task<UserProfileDto?> UpdateProfileAsync(string accountId, UpdateProfileDto dto);
-        
     }
 }

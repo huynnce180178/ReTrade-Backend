@@ -18,12 +18,6 @@ namespace RetradeBE.Mappings
                 .ForMember(dest => dest.Status, opt => opt.MapFrom(src => RetradeBE.Models.Enums.AccountStatusEnum.Pending.ToString()))
                 .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => DateTime.UtcNow))
                 .ForMember(dest => dest.PasswordHash, opt => opt.Ignore()); // Will be hashed manually in service
-
-            // User -> UserProfileDto
-            CreateMap<User, UserProfileDto>();
-
-            // Account -> UserProfileDto
-            CreateMap<Account, UserProfileDto>();
         }
     }
 }
