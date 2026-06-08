@@ -24,6 +24,25 @@ namespace RetradeBE.Mappings
 
             // Account -> UserProfileDto
             CreateMap<Account, UserProfileDto>();
+
+            // Category Mappings
+            // Category -> CategoryResponseDto
+            CreateMap<Category, CategoryResponseDto>()
+                .ForMember(dest => dest.Attributes, opt => opt.MapFrom(src => src.Attributes));
+
+            // Attributes -> AttributeDto
+            CreateMap<Attributes, AttributeDto>();
+
+            // AttributeCreateDto -> Attributes
+            CreateMap<AttributeCreateDto, Attributes>()
+                .ForMember(dest => dest.AttributeId, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => DateTime.UtcNow))
+                .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => DateTime.UtcNow))
+                .ForMember(dest => dest.IsDeleted, opt => opt.MapFrom(src => false));
+
+            // AttributeUpdateDto -> Attributes
+            CreateMap<AttributeUpdateDto, Attributes>()
+                .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => DateTime.UtcNow));
         }
     }
 }
