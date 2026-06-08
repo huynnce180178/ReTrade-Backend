@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.OData;
 using System.Text.Json.Serialization;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using RetradeBE.Mappings;
+using RetradeBE.Hubs;
 
 namespace RetradeBE
 {
@@ -27,6 +28,7 @@ namespace RetradeBE
             builder.Services.Configure<RetradeBE.Config.CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
             builder.Services.Configure<RetradeBE.Config.GoogleSettings>(builder.Configuration.GetSection("GoogleSettings"));
             builder.Services.AddHttpClient();
+            builder.Services.AddSignalR();
 
             // Add services to the container.
             builder.Services.AddControllers()
@@ -136,6 +138,12 @@ namespace RetradeBE
 
             // Lấy đường dẫn Frontend từ appsettings.json
             var frontendUrl = builder.Configuration.GetValue<string>("FrontendUrl") ?? "http://localhost:5173";
+            var frontendOrigins = new[]
+            {
+                frontendUrl,
+                "http://localhost:5173",
+                "http://127.0.0.1:5173"
+            }.Distinct().ToArray();
 
             // Thêm CORS để Frontend có thể gọi API (ví dụ: React, Vue, Angular chạy ở port khác)
             builder.Services.AddCors(options =>
@@ -143,7 +151,7 @@ namespace RetradeBE
                 options.AddPolicy("AllowFrontend",
                     policy =>
                     {
-                        policy.WithOrigins(frontendUrl)
+                        policy.WithOrigins(frontendOrigins)
                               .AllowAnyHeader()
                               .AllowAnyMethod()
                               .AllowCredentials();
@@ -187,6 +195,7 @@ namespace RetradeBE
 
 
             app.MapControllers();
+            app.MapHub<SellerHub>("/hubs/sellers");
 
             app.Run();
         }

@@ -99,32 +99,6 @@ namespace RetradeBE.Controllers.Account
         }
 
         [Authorize]
-        [HttpGet("my-account")]
-        public async Task<IActionResult> GetMyAccount()
-        {
-            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(accountId)) return Unauthorized();
-
-            var profile = await _service.GetProfileAsync(accountId);
-            if (profile == null) return NotFound("User not found.");
-
-            return Ok(profile);
-        }
-
-        [Authorize]
-        [HttpPut("my-account")]
-        public async Task<IActionResult> UpdateProfile([FromBody] Models.DTOs.UpdateProfileDto dto)
-        {
-            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(accountId)) return Unauthorized();
-
-            var profile = await _service.UpdateProfileAsync(accountId, dto);
-            if (profile == null) return NotFound("User not found.");
-
-            return Ok(profile);
-        }
-
-        [Authorize]
         [HttpPost("change-password")]
         public async Task<IActionResult> ChangePassword([FromBody] Models.DTOs.ChangePasswordDto dto)
         {

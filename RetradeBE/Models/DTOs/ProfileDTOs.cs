@@ -57,6 +57,7 @@ namespace RetradeBE.Models.DTOs
         public DateTime? UpdatedAt { get; set; }
         public AddressDto? DefaultAddress { get; set; }
         public List<AddressDto> Addresses { get; set; } = new();
+        public List<string> Roles { get; set; } = new();
     }
 
     public class SellerDetailDto
@@ -74,13 +75,17 @@ namespace RetradeBE.Models.DTOs
         public int FollowingCount { get; set; }
         public int ProductCount { get; set; }
         public double? AverageRating { get; set; }
+        public bool IsSeller { get; set; }
         public bool IsFollowing { get; set; }
+        public bool IsOwnSeller { get; set; }
+        public bool CanFollow { get; set; }
         public AddressDto? DefaultAddress { get; set; }
     }
 
     public class FollowResultDto
     {
         public string SellerId { get; set; } = string.Empty;
+        public string FollowerId { get; set; } = string.Empty;
         public bool IsFollowing { get; set; }
         public int FollowersCount { get; set; }
         public string Message { get; set; } = string.Empty;
