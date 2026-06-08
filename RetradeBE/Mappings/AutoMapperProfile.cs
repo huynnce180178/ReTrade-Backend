@@ -1,6 +1,7 @@
 using AutoMapper;
 using RetradeBE.Models;
 using RetradeBE.Models.DTOs;
+using System.Linq;
 
 namespace RetradeBE.Mappings
 {
@@ -29,7 +30,6 @@ namespace RetradeBE.Mappings
             // Category -> CategoryResponseDto
             CreateMap<Category, CategoryResponseDto>()
                 .ForMember(dest => dest.Attributes, opt => opt.MapFrom(src => src.Attributes.Where(a => a.IsDeleted != true)));
-
             // Attributes -> AttributeDto
             CreateMap<Attributes, AttributeDto>();
 

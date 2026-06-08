@@ -1,5 +1,6 @@
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using RetradeBE.Models;
 using RetradeBE.Models.DTOs;
@@ -116,6 +117,81 @@ public class CategoryService : ICategoryService
         category.ParentId =
             dto.ParentId ?? category.ParentId;
         category.UpdatedAt = DateTime.UtcNow;
+
+        if (dto.Attributes != null)
+        {
+            var existingAttributes = category.Attributes.ToList();
+
+            var incomingAttrsWithId = dto.Attributes
+                .Where(a => !string.IsNullOrWhiteSpace(a.AttributeId))
+                .ToList();
+
+            var incomingIds = incomingAttrsWithId.Select(a => a.AttributeId).ToHashSet();
+            foreach (var existingAttr in existingAttributes)
+            {
+                if (!incomingIds.Contains(existingAttr.AttributeId))
+                {
+                    existingAttr.IsDeleted = true;
+                    existingAttr.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+
+            foreach (var incomingAttr in incomingAttrsWithId)
+            {
+                var existingAttr = existingAttributes.FirstOrDefault(a => a.AttributeId == incomingAttr.AttributeId);
+                if (existingAttr != null)
+                {
+                    existingAttr.Name = incomingAttr.Name ?? existingAttr.Name;
+                    existingAttr.DataType = incomingAttr.DataType ?? existingAttr.DataType;
+                    existingAttr.IsRequired = incomingAttr.IsRequired ?? existingAttr.IsRequired ?? false;
+                    existingAttr.IsDeleted = false;
+                    existingAttr.UpdatedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    throw new Exception($"Attribute '{incomingAttr.AttributeId}' không thuộc Category này.");
+                }
+            }
+
+            var newAttrs = dto.Attributes
+                .Where(a => string.IsNullOrWhiteSpace(a.AttributeId))
+                .ToList();
+
+            if (newAttrs.Any())
+            {
+                int nextIndex = 1;
+                foreach (var attr in existingAttributes)
+                {
+                    if (attr.AttributeId.StartsWith(categoryId + "_ATTR"))
+                    {
+                        var suffix = attr.AttributeId.Substring((categoryId + "_ATTR").Length);
+                        if (int.TryParse(suffix, out int index))
+                        {
+                            if (index >= nextIndex)
+                            {
+                                nextIndex = index + 1;
+                            }
+                        }
+                    }
+                }
+
+                foreach (var newAttr in newAttrs)
+                {
+                    category.Attributes.Add(new Attributes
+                    {
+                        AttributeId = $"{categoryId}_ATTR{nextIndex:D3}",
+                        CategoryId = categoryId,
+                        Name = newAttr.Name,
+                        DataType = newAttr.DataType,
+                        IsRequired = newAttr.IsRequired ?? false,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow,
+                        IsDeleted = false
+                    });
+                    nextIndex++;
+                }
+            }
+        }
 
         await _repository.UpdateAsync(category);
 
