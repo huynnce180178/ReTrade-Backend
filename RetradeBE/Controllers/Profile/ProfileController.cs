@@ -1,0 +1,62 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using RetradeBE.Models.DTOs;
+using RetradeBE.Services;
+using System.Security.Claims;
+
+namespace RetradeBE.Controllers.Profile
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class ProfileController : ControllerBase
+    {
+        private readonly IProfileService _profileService;
+
+        public ProfileController(IProfileService profileService)
+        {
+            _profileService = profileService;
+        }
+
+        [Authorize]
+        [HttpGet("me")]
+        public async Task<IActionResult> GetMyProfile()
+        {
+            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(accountId)) return Unauthorized();
+
+            var profile = await _profileService.GetMyProfileAsync(accountId);
+            if (profile == null) return NotFound("User profile not found.");
+
+            return Ok(profile);
+        }
+
+        [HttpGet("user/{userId}")]
+        public async Task<IActionResult> GetUserProfile(string userId)
+        {
+            var profile = await _profileService.GetUserProfileAsync(userId);
+            if (profile == null) return NotFound("User profile not found.");
+
+            return Ok(profile);
+        }
+
+        [Authorize]
+        [HttpPut("me")]
+        public async Task<IActionResult> UpdateMyProfile([FromBody] ProfileUpdateDto dto)
+        {
+            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(accountId)) return Unauthorized();
+
+            try
+            {
+                var profile = await _profileService.UpdateMyProfileAsync(accountId, dto);
+                if (profile == null) return NotFound("User profile not found.");
+
+                return Ok(profile);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+    }
+}
