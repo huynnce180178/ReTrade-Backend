@@ -28,7 +28,7 @@ namespace RetradeBE.Mappings
             // Category Mappings
             // Category -> CategoryResponseDto
             CreateMap<Category, CategoryResponseDto>()
-                .ForMember(dest => dest.Attributes, opt => opt.MapFrom(src => src.Attributes));
+                .ForMember(dest => dest.Attributes, opt => opt.MapFrom(src => src.Attributes.Where(a => a.IsDeleted != true)));
 
             // Attributes -> AttributeDto
             CreateMap<Attributes, AttributeDto>();
