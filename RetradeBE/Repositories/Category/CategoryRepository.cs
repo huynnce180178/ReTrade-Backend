@@ -13,11 +13,11 @@ namespace RetradeBE.Repositories
             _context = context;
         }
 
-        public async Task<IEnumerable<Category>> GetAllAsync()
+        public IQueryable<Category> Query()
         {
-            return await _context.Category
+            return _context.Category
                 .Include(c => c.Attributes)
-                .ToListAsync();
+                .AsNoTracking();
         }
 
         public async Task<Category?> GetByIdAsync(string categoryId)
@@ -25,13 +25,6 @@ namespace RetradeBE.Repositories
             return await _context.Category
                 .Include(c => c.Attributes)
                 .FirstOrDefaultAsync(c => c.CategoryId == categoryId);
-        }
-
-        public async Task<Category?> GetByNameAsync(string name)
-        {
-            return await _context.Category
-                .Include(c => c.Attributes)
-                .FirstOrDefaultAsync(c => c.Name == name);
         }
 
         public async Task AddAsync(Category category)
@@ -44,54 +37,6 @@ namespace RetradeBE.Repositories
         {
             _context.Category.Update(category);
             await _context.SaveChangesAsync();
-        }
-
-        public async Task InactiveAsync(string categoryId)
-        {
-            var category = await _context.Category.FindAsync(categoryId);
-            if (category != null)
-            {
-                category.Status = "Inactive";
-                category.UpdatedAt = DateTime.UtcNow;
-                _context.Category.Update(category);
-                await _context.SaveChangesAsync();
-            }
-        }
-
-        public async Task RestoreAsync(string categoryId)
-        {
-            var category = await _context.Category.FindAsync(categoryId);
-            if (category != null)
-            {
-                category.Status = "Active";
-                category.UpdatedAt = DateTime.UtcNow;
-                _context.Category.Update(category);
-                await _context.SaveChangesAsync();
-            }
-        }
-
-        public async Task<bool> ExistsAsync(string categoryId)
-        {
-            return await _context.Category
-                .AnyAsync(c => c.CategoryId == categoryId);
-        }
-
-        public async Task<string> GetNextCategoryIdAsync()
-        {
-            var lastCategory = await _context.Category
-                .OrderByDescending(c => c.CategoryId)
-                .FirstOrDefaultAsync();
-
-            int nextNumber = 1;
-            if (lastCategory != null && lastCategory.CategoryId.StartsWith("CAT"))
-            {
-                if (int.TryParse(lastCategory.CategoryId.Substring(3), out int lastNumber))
-                {
-                    nextNumber = lastNumber + 1;
-                }
-            }
-
-            return $"CAT{nextNumber:D3}";
         }
     }
 }

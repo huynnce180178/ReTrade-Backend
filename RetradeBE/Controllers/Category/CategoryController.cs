@@ -3,10 +3,10 @@ using Microsoft.AspNetCore.OData.Query;
 using RetradeBE.Models.DTOs;
 using RetradeBE.Services;
 
-namespace RetradeBE.Controllers.Category
+namespace RetradeBE.Controllers
 {
-    [Route("api/[controller]")]
     [ApiController]
+    [Route("api/[controller]")]
     public class CategoryController : ControllerBase
     {
         private readonly ICategoryService _service;
@@ -16,105 +16,65 @@ namespace RetradeBE.Controllers.Category
             _service = service;
         }
 
-        /// <summary>
-        /// Lấy danh sách tất cả Category (kèm cả Active và Inactive)
-        /// Hỗ trợ OData: $filter, $orderby, $search, $skip, $top
-        /// Ví dụ:
-        /// GET /api/category?$filter=status eq 'Active'&$orderby=name asc
-        /// GET /api/category?$filter=status eq 'Inactive'
-        /// GET /api/category?$search='Điện thoại'&$orderby=name asc&$skip=0&$top=10
         [HttpGet]
-        [EnableQuery]
-        public async Task<IActionResult> GetAll()
+        [EnableQuery(
+            PageSize = 20,
+            MaxTop = 100)]
+        public IActionResult GetAll()
         {
-            var categories = await _service.GetAllAsync();
-            return Ok(categories.AsQueryable());
+            return Ok(_service.Query());
         }
 
-        /// Lấy chi tiết Category theo ID (kèm Attributes)
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(string id)
         {
-            try
-            {
-                var category = await _service.GetByIdAsync(id);
-                if (category == null)
-                    return NotFound(new { message = $"Category '{id}' không tồn tại" });
+            var category =
+                await _service.GetByIdAsync(id);
 
-                return Ok(category);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
+            if (category == null)
+                return NotFound();
+
+            return Ok(category);
         }
 
-
-        /// Tạo Category mới + Attributes
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] CategoryCreateDto dto)
+        public async Task<IActionResult> Create(
+            CategoryCreateDto dto)
         {
-            try
-            {
-                if (!ModelState.IsValid)
-                    return BadRequest(ModelState);
+            var result =
+                await _service.CreateAsync(dto);
 
-                var category = await _service.CreateAsync(dto);
-                return CreatedAtAction(nameof(GetById), new { id = category.CategoryId }, category);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
+            return CreatedAtAction(
+                nameof(GetById),
+                new { id = result.CategoryId },
+                result);
         }
-        /// Cập nhật Category + Attributes
+
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(string id, [FromBody] CategoryUpdateDto dto)
+        public async Task<IActionResult> Update(
+            string id,
+            CategoryUpdateDto dto)
         {
-            try
-            {
-                if (!ModelState.IsValid)
-                    return BadRequest(ModelState);
-
-                var category = await _service.UpdateAsync(id, dto);
-                return Ok(category);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
+            return Ok(
+                await _service.UpdateAsync(id, dto));
         }
 
-        /// Soft delete (Inactive) Category
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Inactive(string id)
+        public async Task<IActionResult> Inactive(
+            string id)
         {
-            try
-            {
-                await _service.InactiveAsync(id);
-                return Ok(new { message = $"Category '{id}' đã được vô hiệu hóa" });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
+            await _service.InactiveAsync(id);
+
+            return NoContent();
         }
 
-        /// <summary>
-        /// Khôi phục Category
-        /// </summary>
         [HttpPatch("{id}/restore")]
-        public async Task<IActionResult> Restore(string id)
+        public async Task<IActionResult> Restore(
+            string id)
         {
-            try
-            {
-                await _service.RestoreAsync(id);
-                return Ok(new { message = $"Category '{id}' đã được khôi phục" });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
+            await _service.RestoreAsync(id);
+
+            return NoContent();
         }
     }
 }
