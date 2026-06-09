@@ -197,6 +197,7 @@ namespace RetradeBE
 
 
             app.MapControllers();
+            app.MapHub<RetradeBE.Hubs.AccountHub>("/hubs/accounts");
             app.MapHub<SellerHub>("/hubs/sellers");
 
             app.Run();

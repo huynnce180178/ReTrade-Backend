@@ -948,9 +948,9 @@ namespace RetradeBE.Migrations
                 columns: new[] { "account_id", "created_at", "is_deleted", "last_login_at", "password_hash", "provider", "provider_user_id", "status", "updated_at", "user_id", "username" },
                 values: new object[,]
                 {
-                    { "ACC_ADMIN", null, null, null, "$2a$11$XFDcgQtapRKlxhrDeIKT.ONkYyy2rdIr4KuhAA227mymHjQcwvARK", "LOCAL", null, "Active", null, "USER_ADMIN", "admin" },
-                    { "ACC_BUYER", null, null, null, "$2a$11$skXVMZHvw/ATfZrHOWofzueSzR613nON14UP.Oebr3pqDIg4pb7pu", "LOCAL", null, "Active", null, "USER_BUYER", "buyer" },
-                    { "ACC_SELLER", null, null, null, "$2a$11$eq3/BuW/5icBnDHOYjfO1eYOG1SVa6YEQp/oZQPtXV2RHj7sCZi8G", "LOCAL", null, "Active", null, "USER_SELLER", "seller" }
+                    { "ACC_ADMIN", null, null, null, "$2a$11$D8rpGqj4uPb34Kf9BhHud.b5wrpHqo25Om7dHv5MSJCyc7D8A8iuO", "LOCAL", null, "Active", null, "USER_ADMIN", "admin" },
+                    { "ACC_BUYER", null, null, null, "$2a$11$EvX6TGoRi2u0C9KWIRwDguqF4ci/fYcPT.6Wdced7L57NQ6g59OC6", "LOCAL", null, "Active", null, "USER_BUYER", "buyer" },
+                    { "ACC_SELLER", null, null, null, "$2a$11$FxpVyrvrrOXIGWFyR2clfOrXx58Pp87rkmST//6jwUM3lD3xP0bnO", "LOCAL", null, "Active", null, "USER_SELLER", "seller" }
                 });
 
             migrationBuilder.InsertData(

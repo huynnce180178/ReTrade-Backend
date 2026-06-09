@@ -47,10 +47,17 @@ namespace RetradeBE.Controllers.Account
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto dto)
         {
-            var response = await _service.LoginAsync(dto);
-            if (response == null) return Unauthorized("Invalid credentials or account not active.");
-            
-            return Ok(response);
+            try
+            {
+                var response = await _service.LoginAsync(dto);
+                if (response == null) return Unauthorized("Invalid credentials or account not active.");
+
+                return Ok(response);
+            }
+            catch (InvalidOperationException ex) when (ex.Message == "ACCOUNT_INACTIVE")
+            {
+                return Unauthorized("Tài khoản đã bị vô hiệu hóa, vui lòng kiểm tra email.");
+            }
         }
 
         [HttpPost("login-with-google")]
@@ -59,10 +66,17 @@ namespace RetradeBE.Controllers.Account
             if (string.IsNullOrEmpty(dto.AccessToken))
                 return BadRequest("Google access token is required.");
 
-            var response = await _service.LoginWithGoogleAsync(dto.AccessToken);
-            if (response == null) return Unauthorized("Google login failed. Invalid token or account disabled.");
+            try
+            {
+                var response = await _service.LoginWithGoogleAsync(dto.AccessToken);
+                if (response == null) return Unauthorized("Google login failed. Invalid token or account disabled.");
 
-            return Ok(response);
+                return Ok(response);
+            }
+            catch (InvalidOperationException ex) when (ex.Message == "ACCOUNT_INACTIVE")
+            {
+                return Unauthorized("Tài khoản đã bị vô hiệu hóa, vui lòng kiểm tra email.");
+            }
         }
 
         [HttpPost("forgot-password")]
@@ -164,6 +178,22 @@ namespace RetradeBE.Controllers.Account
 
             await _service.RestoreAsync(id);
             return Ok(new { message = "Account has been restored successfully." });
+        }
+
+        [Authorize]
+        [HttpPatch("deactivate-me")]
+        public async Task<IActionResult> DeactivateMe()
+        {
+            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(accountId)) return Unauthorized();
+
+            var result = await _service.DeactivateMyAccountAsync(accountId);
+            if (!result)
+            {
+                return BadRequest("Unable to deactivate account.");
+            }
+
+            return Ok(new { message = "Account has been deactivated successfully." });
         }
 
         

@@ -12,7 +12,7 @@ using RetradeBE.Data;
 namespace RetradeBE.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260609123800_InitialCreate")]
+    [Migration("20260609154411_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -100,7 +100,7 @@ namespace RetradeBE.Migrations
                         new
                         {
                             AccountId = "ACC_ADMIN",
-                            PasswordHash = "$2a$11$XFDcgQtapRKlxhrDeIKT.ONkYyy2rdIr4KuhAA227mymHjQcwvARK",
+                            PasswordHash = "$2a$11$D8rpGqj4uPb34Kf9BhHud.b5wrpHqo25Om7dHv5MSJCyc7D8A8iuO",
                             Provider = "LOCAL",
                             Status = "Active",
                             UserId = "USER_ADMIN",
@@ -109,7 +109,7 @@ namespace RetradeBE.Migrations
                         new
                         {
                             AccountId = "ACC_BUYER",
-                            PasswordHash = "$2a$11$skXVMZHvw/ATfZrHOWofzueSzR613nON14UP.Oebr3pqDIg4pb7pu",
+                            PasswordHash = "$2a$11$EvX6TGoRi2u0C9KWIRwDguqF4ci/fYcPT.6Wdced7L57NQ6g59OC6",
                             Provider = "LOCAL",
                             Status = "Active",
                             UserId = "USER_BUYER",
@@ -118,7 +118,7 @@ namespace RetradeBE.Migrations
                         new
                         {
                             AccountId = "ACC_SELLER",
-                            PasswordHash = "$2a$11$eq3/BuW/5icBnDHOYjfO1eYOG1SVa6YEQp/oZQPtXV2RHj7sCZi8G",
+                            PasswordHash = "$2a$11$FxpVyrvrrOXIGWFyR2clfOrXx58Pp87rkmST//6jwUM3lD3xP0bnO",
                             Provider = "LOCAL",
                             Status = "Active",
                             UserId = "USER_SELLER",

@@ -1,9 +1,14 @@
 using AutoMapper;
+using AutoMapper.QueryableExtensions;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.SignalR;
 using RetradeBE.Models;
 using RetradeBE.Models.DTOs;
+using RetradeBE.Models.DTOs.Admin;
+using RetradeBE.Hubs;
 using RetradeBE.Repositories;
 using RetradeBE.Config;
 using System.IdentityModel.Tokens.Jwt;
@@ -25,8 +30,10 @@ namespace RetradeBE.Services
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IMapper _mapper;
         private readonly IWebHostEnvironment _env;
+        private readonly IHubContext<AccountHub> _accountHub;
+        private readonly ILogger<AccountService> _logger;
 
-        public AccountService(IAccountRepository repository, IUserRepository userRepository, IEmailService emailService, IMemoryCache cache, IOptions<JwtSettings> jwtSettings, IOptions<GoogleSettings> googleSettings, IHttpClientFactory httpClientFactory, IMapper mapper, IWebHostEnvironment env)
+        public AccountService(IAccountRepository repository, IUserRepository userRepository, IEmailService emailService, IMemoryCache cache, IOptions<JwtSettings> jwtSettings, IOptions<GoogleSettings> googleSettings, IHttpClientFactory httpClientFactory, IMapper mapper, IWebHostEnvironment env, IHubContext<AccountHub> accountHub, ILogger<AccountService> logger)
         {
             _repository = repository;
             _userRepository = userRepository;
@@ -37,6 +44,8 @@ namespace RetradeBE.Services
             _httpClientFactory = httpClientFactory;
             _mapper = mapper;
             _env = env;
+            _accountHub = accountHub;
+            _logger = logger;
         }
 
         private async Task<string> GetEmailTemplateAsync(string templateName)
@@ -44,6 +53,183 @@ namespace RetradeBE.Services
             string path = Path.Combine(_env.ContentRootPath, "Templates", templateName);
             if (!File.Exists(path)) return string.Empty;
             return await File.ReadAllTextAsync(path);
+        }
+
+        public IQueryable<UserListDto> QueryUserList()
+        {
+            return _repository.Query()
+                .ProjectTo<UserListDto>(_mapper.ConfigurationProvider);
+        }
+
+        public async Task<bool> BanUserAsync(string accountId)
+        {
+            var account = await _repository.GetByIdAsync(accountId);
+            if (account == null) return false;
+
+            var isCurrentlyInactive = account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString();
+            account.Status = isCurrentlyInactive
+                ? RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString()
+                : RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString();
+            account.UpdatedAt = DateTime.UtcNow;
+            await _repository.UpdateAsync(account);
+
+            if (!isCurrentlyInactive)
+            {
+                await _accountHub.Clients
+                    .Group(AccountHub.GetAccountGroupName(accountId))
+                    .SendAsync("ForceLogout", "Your account has been banned by an administrator.");
+
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(account.UserId))
+                    {
+                        var user = await _userRepository.GetByIdAsync(account.UserId);
+                        if (user != null && !string.IsNullOrWhiteSpace(user.Email))
+                        {
+                            var displayName = !string.IsNullOrWhiteSpace(user.FirstName)
+                                ? user.FirstName
+                                : (account.Username ?? "User");
+
+                            string template = await GetEmailTemplateAsync("AccountBannedNotice.html");
+                            string emailBody;
+
+                            if (!string.IsNullOrWhiteSpace(template))
+                            {
+                                emailBody = template
+                                    .Replace("{{DISPLAY_NAME}}", displayName)
+                                    .Replace("{{ACCOUNT_ID}}", account.AccountId)
+                                    .Replace("{{BANNED_AT}}", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss 'UTC'"));
+                            }
+                            else
+                            {
+                                emailBody = $@"<p>Hello {displayName},</p>
+<p>Your ReTrade account has been set to <strong>Inactive</strong> by an administrator.</p>
+<p>If you have any questions or believe this was a mistake, please reply directly to this email.</p>
+<p>Account ID: {account.AccountId}<br/>Time: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC</p>
+<p>Regards,<br/>ReTrade Support Team</p>";
+                            }
+
+                            await _emailService.SendEmailAsync(
+                                user.Email,
+                                "[ReTrade] Account Ban Notification",
+                                emailBody);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send ban notification email for account {AccountId}", accountId);
+                }
+            }
+            else
+            {
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(account.UserId))
+                    {
+                        var user = await _userRepository.GetByIdAsync(account.UserId);
+                        if (user != null && !string.IsNullOrWhiteSpace(user.Email))
+                        {
+                            var displayName = !string.IsNullOrWhiteSpace(user.FirstName)
+                                ? user.FirstName
+                                : (account.Username ?? "User");
+
+                            string template = await GetEmailTemplateAsync("AccountReactivatedNotice.html");
+                            string emailBody;
+
+                            if (!string.IsNullOrWhiteSpace(template))
+                            {
+                                emailBody = template
+                                    .Replace("{{DISPLAY_NAME}}", displayName)
+                                    .Replace("{{ACCOUNT_ID}}", account.AccountId)
+                                    .Replace("{{REACTIVATED_AT}}", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss 'UTC'"));
+                            }
+                            else
+                            {
+                                emailBody = $@"<p>Hello {displayName},</p>
+<p>Your ReTrade account has been <strong>reactivated</strong> and is now active again.</p>
+<p>If you did not expect this change or have any concerns, please reply directly to this email.</p>
+<p>Account ID: {account.AccountId}<br/>Time: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC</p>
+<p>Regards,<br/>ReTrade Support Team</p>";
+                            }
+
+                            await _emailService.SendEmailAsync(
+                                user.Email,
+                                "[ReTrade] Account Reactivated",
+                                emailBody);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send reactivated notification email for account {AccountId}", accountId);
+                }
+            }
+
+            return true;
+        }
+
+        public async Task<bool> DeactivateMyAccountAsync(string accountId)
+        {
+            var account = await _repository.GetByIdAsync(accountId);
+            if (account == null) return false;
+
+            if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString())
+            {
+                return false;
+            }
+
+            account.Status = RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString();
+            account.UpdatedAt = DateTime.UtcNow;
+            await _repository.UpdateAsync(account);
+
+            await _accountHub.Clients
+                .Group(AccountHub.GetAccountGroupName(accountId))
+                .SendAsync("ForceLogout", "You have deactivated your account.");
+
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(account.UserId))
+                {
+                    var user = await _userRepository.GetByIdAsync(account.UserId);
+                    if (user != null && !string.IsNullOrWhiteSpace(user.Email))
+                    {
+                        var displayName = !string.IsNullOrWhiteSpace(user.FirstName)
+                            ? user.FirstName
+                            : (account.Username ?? "User");
+
+                        string template = await GetEmailTemplateAsync("AccountSelfDeactivatedNotice.html");
+                        string emailBody;
+
+                        if (!string.IsNullOrWhiteSpace(template))
+                        {
+                            emailBody = template
+                                .Replace("{{DISPLAY_NAME}}", displayName)
+                                .Replace("{{ACCOUNT_ID}}", account.AccountId)
+                                .Replace("{{DEACTIVATED_AT}}", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss 'UTC'"));
+                        }
+                        else
+                        {
+                            emailBody = $@"<p>Hello {displayName},</p>
+<p>Your ReTrade account has been <strong>deactivated</strong>.</p>
+<p>If you did not mean to do this or have any questions, please reply directly to this email.</p>
+<p>Account ID: {account.AccountId}<br/>Time: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC</p>
+<p>Regards,<br/>ReTrade Support Team</p>";
+                        }
+
+                        await _emailService.SendEmailAsync(
+                            user.Email,
+                            "[ReTrade] Account Deactivated",
+                            emailBody);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send self-deactivation email for account {AccountId}", accountId);
+            }
+
+            return true;
         }
 
 
@@ -166,7 +352,12 @@ namespace RetradeBE.Services
                 account = await _repository.GetByUsernameAsync(dto.Username);
             }
 
-            if (account == null || account.IsDeleted == true || account.Status != RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString()) return null;
+            if (account == null || account.IsDeleted == true) return null;
+            if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString())
+            {
+                throw new InvalidOperationException("ACCOUNT_INACTIVE");
+            }
+            if (account.Status != RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString()) return null;
 
             bool isPasswordValid = BCrypt.Net.BCrypt.Verify(dto.Password, account.PasswordHash);
             if (!isPasswordValid) return null;
@@ -308,6 +499,11 @@ namespace RetradeBE.Services
                 var allAccounts = await _repository.GetAllAsync();
                 account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
                 if (account == null || account.IsDeleted == true) return null;
+
+                if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString())
+                {
+                    throw new InvalidOperationException("ACCOUNT_INACTIVE");
+                }
 
                 // Tự động activate nếu Pending (đăng nhập Google lần đầu sau khi register thường)
                 if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Pending.ToString())

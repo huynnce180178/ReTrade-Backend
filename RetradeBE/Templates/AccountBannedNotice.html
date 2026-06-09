@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ReTrade Account Status Notice</title>
+</head>
+<body style="margin:0;padding:0;background:#f6f8fb;font-family:Arial,sans-serif;color:#1f2937;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:24px 0;background:#f6f8fb;">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="620" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+                    <tr>
+                        <td style="padding:20px 24px;background:#7f1d1d;color:#ffffff;">
+                            <h2 style="margin:0;font-size:22px;line-height:1.2;">ReTrade Account Notice</h2>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:24px;">
+                            <p style="margin:0 0 12px;font-size:15px;">Hello {{DISPLAY_NAME}},</p>
+                            <p style="margin:0 0 12px;font-size:15px;line-height:1.6;">
+                                Your ReTrade account has been set to
+                                <strong style="color:#b91c1c;">Inactive</strong>
+                                by an administrator.
+                            </p>
+                            <p style="margin:0 0 16px;font-size:15px;line-height:1.6;">
+                                If you have any questions or believe this was a mistake,
+                                please reply directly to this email and our support team will assist you.
+                            </p>
+
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;">
+                                <tr>
+                                    <td style="padding:12px 14px;font-size:14px;line-height:1.6;">
+                                        <strong>Account ID:</strong> {{ACCOUNT_ID}}<br />
+                                        <strong>Time:</strong> {{BANNED_AT}}
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="margin:18px 0 0;font-size:14px;color:#6b7280;line-height:1.6;">
+                                Regards,<br />
+                                ReTrade Support Team
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
