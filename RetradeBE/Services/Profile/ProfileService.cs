@@ -267,7 +267,7 @@ namespace RetradeBE.Services
 
             if (dto.ReceiverName != null) address.ReceiverName = dto.ReceiverName;
             if (dto.ReceiverPhone != null) address.ReceiverPhone = dto.ReceiverPhone;
-            if (dto.Street != null) address.Street = dto.Street;
+            if (dto.Street != null || dto.StreetAddress != null) address.Street = dto.Street ?? dto.StreetAddress;
             if (dto.ProvinceId.HasValue) address.ProvinceId = dto.ProvinceId;
             if (dto.DistrictId.HasValue) address.DistrictId = dto.DistrictId;
             if (dto.WardCode != null) address.WardCode = dto.WardCode;
@@ -329,6 +329,7 @@ namespace RetradeBE.Services
                 ReceiverName = address.ReceiverName,
                 ReceiverPhone = address.ReceiverPhone,
                 Street = address.Street,
+                StreetAddress = address.Street,
                 ProvinceId = address.ProvinceId,
                 DistrictId = address.DistrictId,
                 WardCode = address.WardCode,

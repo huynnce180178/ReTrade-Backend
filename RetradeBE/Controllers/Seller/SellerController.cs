@@ -53,10 +53,17 @@ namespace RetradeBE.Controllers.Seller
             var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(accountId)) return Unauthorized();
 
-            var result = await _profileService.UnfollowSellerAsync(accountId, sellerId);
-            if (result == null) return NotFound("Seller not found.");
+            try
+            {
+                var result = await _profileService.UnfollowSellerAsync(accountId, sellerId);
+                if (result == null) return NotFound("Seller not found.");
 
-            return Ok(result);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
     }
 }

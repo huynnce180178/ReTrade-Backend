@@ -8,6 +8,7 @@ namespace RetradeBE.Models.DTOs
         public string? ReceiverName { get; set; }
         public string? ReceiverPhone { get; set; }
         public string? Street { get; set; }
+        public string? StreetAddress { get; set; }
         public int? ProvinceId { get; set; }
         public int? DistrictId { get; set; }
         public string? WardCode { get; set; }
@@ -21,10 +22,40 @@ namespace RetradeBE.Models.DTOs
         public string? ReceiverName { get; set; }
         public string? ReceiverPhone { get; set; }
         public string? Street { get; set; }
+        public string? StreetAddress { get; set; }
         public int? ProvinceId { get; set; }
         public int? DistrictId { get; set; }
         public string? WardCode { get; set; }
         public bool? IsDefault { get; set; }
+        public string? Status { get; set; }
+    }
+
+    public class AddressCreateDto
+    {
+        [Required]
+        public string ReceiverName { get; set; } = string.Empty;
+
+        [Required]
+        [RegularExpression(@"^\d{9,12}$", ErrorMessage = "Receiver phone must be 9 to 12 digits.")]
+        public string ReceiverPhone { get; set; } = string.Empty;
+
+        [Required]
+        public string StreetAddress { get; set; } = string.Empty;
+
+        [Required]
+        public int? ProvinceId { get; set; }
+
+        [Required]
+        public int? DistrictId { get; set; }
+
+        [Required]
+        public string WardCode { get; set; } = string.Empty;
+
+        public bool? IsDefault { get; set; }
+    }
+
+    public class AddressUpdateDto : AddressCreateDto
+    {
         public string? Status { get; set; }
     }
 

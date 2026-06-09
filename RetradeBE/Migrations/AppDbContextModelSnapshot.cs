@@ -97,7 +97,7 @@ namespace RetradeBE.Migrations
                         new
                         {
                             AccountId = "ACC_ADMIN",
-                            PasswordHash = "$2a$11$SE.uBS6qCHQm0lTXK/ouJulwWDPVNdEzpinVp7/Y401j3QEGzptzm",
+                            PasswordHash = "$2a$11$XFDcgQtapRKlxhrDeIKT.ONkYyy2rdIr4KuhAA227mymHjQcwvARK",
                             Provider = "LOCAL",
                             Status = "Active",
                             UserId = "USER_ADMIN",
@@ -106,7 +106,7 @@ namespace RetradeBE.Migrations
                         new
                         {
                             AccountId = "ACC_BUYER",
-                            PasswordHash = "$2a$11$sLI8kcGyDJOcMc/lHYgumu8D34BUc0AWTP7V0JBSSXulDYtGH0xoO",
+                            PasswordHash = "$2a$11$skXVMZHvw/ATfZrHOWofzueSzR613nON14UP.Oebr3pqDIg4pb7pu",
                             Provider = "LOCAL",
                             Status = "Active",
                             UserId = "USER_BUYER",
@@ -115,7 +115,7 @@ namespace RetradeBE.Migrations
                         new
                         {
                             AccountId = "ACC_SELLER",
-                            PasswordHash = "$2a$11$WQkmSi32N2ZjB38Ebce9A.SwtEo7crYPLFw6iK7whz8tmXuaWMuN2",
+                            PasswordHash = "$2a$11$eq3/BuW/5icBnDHOYjfO1eYOG1SVa6YEQp/oZQPtXV2RHj7sCZi8G",
                             Provider = "LOCAL",
                             Status = "Active",
                             UserId = "USER_SELLER",

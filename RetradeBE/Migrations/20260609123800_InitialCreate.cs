@@ -4,6 +4,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
+#pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
+
 namespace RetradeBE.Migrations
 {
     /// <inheritdoc />
@@ -171,6 +173,7 @@ namespace RetradeBE.Migrations
                     provider_user_id = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
                     password_hash = table.Column<string>(type: "text", nullable: true),
                     must_change_password = table.Column<bool>(type: "boolean", nullable: true, defaultValue: false),
+                    is_password_set = table.Column<bool>(type: "boolean", nullable: true, defaultValue: true),
                     status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
                     last_login_at = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
                     is_deleted = table.Column<bool>(type: "boolean", nullable: true),
@@ -918,6 +921,46 @@ namespace RetradeBE.Migrations
                         column: x => x.seller_id,
                         principalTable: "User",
                         principalColumn: "user_id");
+                });
+
+            migrationBuilder.InsertData(
+                table: "User",
+                columns: new[] { "user_id", "avatar_url", "created_at", "email", "first_name", "is_deleted", "last_name", "phone", "updated_at" },
+                values: new object[,]
+                {
+                    { "USER_ADMIN", null, null, "admin@retrade.com", "Admin", null, "System", null, null },
+                    { "USER_BUYER", null, null, "buyer@retrade.com", "Demo", null, "Buyer", null, null },
+                    { "USER_SELLER", null, null, "seller@retrade.com", "Demo", null, "Seller", null, null }
+                });
+
+            migrationBuilder.InsertData(
+                table: "role",
+                columns: new[] { "role_id", "name" },
+                values: new object[,]
+                {
+                    { 1, "Admin" },
+                    { 2, "Buyer" },
+                    { 3, "Seller" }
+                });
+
+            migrationBuilder.InsertData(
+                table: "account",
+                columns: new[] { "account_id", "created_at", "is_deleted", "last_login_at", "password_hash", "provider", "provider_user_id", "status", "updated_at", "user_id", "username" },
+                values: new object[,]
+                {
+                    { "ACC_ADMIN", null, null, null, "$2a$11$XFDcgQtapRKlxhrDeIKT.ONkYyy2rdIr4KuhAA227mymHjQcwvARK", "LOCAL", null, "Active", null, "USER_ADMIN", "admin" },
+                    { "ACC_BUYER", null, null, null, "$2a$11$skXVMZHvw/ATfZrHOWofzueSzR613nON14UP.Oebr3pqDIg4pb7pu", "LOCAL", null, "Active", null, "USER_BUYER", "buyer" },
+                    { "ACC_SELLER", null, null, null, "$2a$11$eq3/BuW/5icBnDHOYjfO1eYOG1SVa6YEQp/oZQPtXV2RHj7sCZi8G", "LOCAL", null, "Active", null, "USER_SELLER", "seller" }
+                });
+
+            migrationBuilder.InsertData(
+                table: "account_role",
+                columns: new[] { "account_id", "role_id", "created_at" },
+                values: new object[,]
+                {
+                    { "ACC_ADMIN", 1, null },
+                    { "ACC_BUYER", 2, null },
+                    { "ACC_SELLER", 3, null }
                 });
 
             migrationBuilder.CreateIndex(
