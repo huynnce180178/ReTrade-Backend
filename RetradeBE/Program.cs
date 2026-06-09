@@ -13,6 +13,7 @@ using System.Text.Json.Serialization;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using RetradeBE.Mappings;
 using RetradeBE.Hubs;
+using RetradeBE.Models;
 
 namespace RetradeBE
 {
@@ -168,6 +169,7 @@ namespace RetradeBE
                     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                     dbContext.Database.Migrate();
                     Console.WriteLine("Database migrated successfully.");
+                    SeedData(dbContext);
                 }
                 catch (Exception ex)
                 {
@@ -198,6 +200,74 @@ namespace RetradeBE
             app.MapHub<SellerHub>("/hubs/sellers");
 
             app.Run();
+        }
+
+        private static void SeedData(AppDbContext dbContext)
+        {
+            SeedRole(dbContext, 1, "Admin");
+            SeedRole(dbContext, 2, "Buyer");
+            SeedRole(dbContext, 3, "Seller");
+
+            SeedUserAccount(dbContext, "USER_ADMIN", "Admin", "System", "admin@retrade.com", "ACC_ADMIN", "admin", "Admin123@", 1);
+            SeedUserAccount(dbContext, "USER_BUYER", "Demo", "Buyer", "buyer@retrade.com", "ACC_BUYER", "buyer", "Buyer123@", 2);
+            SeedUserAccount(dbContext, "USER_SELLER", "Demo", "Seller", "seller@retrade.com", "ACC_SELLER", "seller", "Seller123@", 3);
+        }
+
+        private static void SeedRole(AppDbContext dbContext, int roleId, string name)
+        {
+            if (!dbContext.Role.Any(r => r.RoleId == roleId))
+            {
+                dbContext.Role.Add(new Role { RoleId = roleId, Name = name });
+                dbContext.SaveChanges();
+            }
+        }
+
+        private static void SeedUserAccount(
+            AppDbContext dbContext,
+            string userId, string firstName, string lastName, string email,
+            string accountId, string username, string plainPassword, int roleId)
+        {
+            var userExists = dbContext.User.Any(u => u.UserId == userId);
+            var accountExists = dbContext.Account.Any(a => a.AccountId == accountId);
+            var accountRoleExists = dbContext.AccountRole.Any(ar => ar.AccountId == accountId && ar.RoleId == roleId);
+
+            if (!userExists)
+            {
+                dbContext.User.Add(new User
+                {
+                    UserId = userId,
+                    FirstName = firstName,
+                    LastName = lastName,
+                    Email = email
+                });
+            }
+
+            if (!accountExists)
+            {
+                dbContext.Account.Add(new Account
+                {
+                    AccountId = accountId,
+                    UserId = userId,
+                    Username = username,
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(plainPassword),
+                    Provider = "LOCAL",
+                    Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString()
+                });
+            }
+
+            if (!accountRoleExists)
+            {
+                dbContext.AccountRole.Add(new AccountRole
+                {
+                    AccountId = accountId,
+                    RoleId = roleId
+                });
+            }
+
+            if (!userExists || !accountExists || !accountRoleExists)
+            {
+                dbContext.SaveChanges();
+            }
         }
     }
 
