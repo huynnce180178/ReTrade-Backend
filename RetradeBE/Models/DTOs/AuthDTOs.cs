@@ -32,6 +32,7 @@ namespace RetradeBE.Models.DTOs
     public class AuthResponseDto
     {
         public string AccountId { get; set; } = string.Empty;
+        public string UserId { get; set; } = string.Empty;
         public string Username { get; set; } = string.Empty;
         public string? Email { get; set; }
         public string? FirstName { get; set; }

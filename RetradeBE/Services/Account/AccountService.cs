@@ -212,6 +212,7 @@ namespace RetradeBE.Services
             return new AuthResponseDto
             {
                 AccountId = account.AccountId,
+                UserId = userEntity?.UserId ?? account.UserId ?? string.Empty,
                 Username = account.Username!,
                 Email = userEntity?.Email,
                 FirstName = userEntity?.FirstName,
@@ -349,6 +350,7 @@ namespace RetradeBE.Services
             return new AuthResponseDto
             {
                 AccountId = account.AccountId,
+                UserId = user.UserId,
                 Username = account.Username!,
                 Email = user.Email,
                 FirstName = user.FirstName,
