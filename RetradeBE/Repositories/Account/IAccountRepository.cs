@@ -4,6 +4,8 @@ namespace RetradeBE.Repositories
 {
     public interface IAccountRepository
     {
+        IQueryable<Account> Query();
+
         Task<IEnumerable<Account>> GetAllAsync();
         Task<Account> GetByIdAsync(object id);
         Task<Account?> GetByUsernameAsync(string username);

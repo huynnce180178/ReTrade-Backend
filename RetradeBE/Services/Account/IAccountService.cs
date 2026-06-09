@@ -1,10 +1,15 @@
 using RetradeBE.Models;
 using RetradeBE.Models.DTOs;
+using RetradeBE.Models.DTOs.Admin;
 
 namespace RetradeBE.Services
 {
     public interface IAccountService
     {
+        IQueryable<UserListDto> QueryUserList();
+        Task<bool> BanUserAsync(string accountId);
+        Task<bool> DeactivateMyAccountAsync(string accountId);
+
         Task<IEnumerable<Account>> GetAllAsync();
         Task<Account> GetByIdAsync(object id);
         Task AddAsync(Account item);

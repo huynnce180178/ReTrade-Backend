@@ -19,6 +19,12 @@ namespace RetradeBE.Repositories
             await _context.SaveChangesAsync();
         }
 
+        public IQueryable<Account> Query()
+        {
+            return _context.Account
+                .AsNoTracking();
+        }
+
         public async Task DeleteAsync(object id)
         {
             var item = await _context.Account.FindAsync(id);
