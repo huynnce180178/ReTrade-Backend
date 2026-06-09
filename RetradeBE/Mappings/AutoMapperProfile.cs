@@ -20,11 +20,6 @@ namespace RetradeBE.Mappings
                 .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => DateTime.UtcNow))
                 .ForMember(dest => dest.PasswordHash, opt => opt.Ignore()); // Will be hashed manually in service
 
-/*            // User -> UserProfileDto
-            CreateMap<User, UserProfileDto>();
-
-            // Account -> UserProfileDto
-            CreateMap<Account, UserProfileDto>();*/
 
             // Category Mappings
             // Category -> CategoryResponseDto

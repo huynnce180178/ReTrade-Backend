@@ -18,7 +18,7 @@ namespace RetradeBE.Controllers.Profile
         }
 
         [Authorize]
-        [HttpGet("me")]
+        [HttpGet("my-profile")]
         public async Task<IActionResult> GetMyProfile()
         {
             var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -30,7 +30,7 @@ namespace RetradeBE.Controllers.Profile
             return Ok(profile);
         }
 
-        [HttpGet("user/{userId}")]
+        [HttpGet("user-profile/{userId}")]
         public async Task<IActionResult> GetUserProfile(string userId)
         {
             var profile = await _profileService.GetUserProfileAsync(userId);
@@ -40,7 +40,7 @@ namespace RetradeBE.Controllers.Profile
         }
 
         [Authorize]
-        [HttpPut("me")]
+        [HttpPut("my-profile")]
         public async Task<IActionResult> UpdateMyProfile([FromBody] ProfileUpdateDto dto)
         {
             var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);

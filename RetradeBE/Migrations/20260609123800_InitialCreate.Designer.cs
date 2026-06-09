@@ -12,7 +12,7 @@ using RetradeBE.Data;
 namespace RetradeBE.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260607035434_InitialCreate")]
+    [Migration("20260609123800_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -39,6 +39,12 @@ namespace RetradeBE.Migrations
                     b.Property<bool?>("IsDeleted")
                         .HasColumnType("boolean")
                         .HasColumnName("is_deleted");
+
+                    b.Property<bool?>("IsPasswordSet")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_password_set");
 
                     b.Property<DateTime?>("LastLoginAt")
                         .HasColumnType("timestamp without time zone")
@@ -89,6 +95,35 @@ namespace RetradeBE.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("account", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            AccountId = "ACC_ADMIN",
+                            PasswordHash = "$2a$11$XFDcgQtapRKlxhrDeIKT.ONkYyy2rdIr4KuhAA227mymHjQcwvARK",
+                            Provider = "LOCAL",
+                            Status = "Active",
+                            UserId = "USER_ADMIN",
+                            Username = "admin"
+                        },
+                        new
+                        {
+                            AccountId = "ACC_BUYER",
+                            PasswordHash = "$2a$11$skXVMZHvw/ATfZrHOWofzueSzR613nON14UP.Oebr3pqDIg4pb7pu",
+                            Provider = "LOCAL",
+                            Status = "Active",
+                            UserId = "USER_BUYER",
+                            Username = "buyer"
+                        },
+                        new
+                        {
+                            AccountId = "ACC_SELLER",
+                            PasswordHash = "$2a$11$eq3/BuW/5icBnDHOYjfO1eYOG1SVa6YEQp/oZQPtXV2RHj7sCZi8G",
+                            Provider = "LOCAL",
+                            Status = "Active",
+                            UserId = "USER_SELLER",
+                            Username = "seller"
+                        });
                 });
 
             modelBuilder.Entity("RetradeBE.Models.AccountRole", b =>
@@ -112,6 +147,23 @@ namespace RetradeBE.Migrations
                     b.HasIndex("RoleId");
 
                     b.ToTable("account_role", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            AccountId = "ACC_ADMIN",
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            AccountId = "ACC_BUYER",
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            AccountId = "ACC_SELLER",
+                            RoleId = 3
+                        });
                 });
 
             modelBuilder.Entity("RetradeBE.Models.Address", b =>
@@ -1295,6 +1347,23 @@ namespace RetradeBE.Migrations
                         .HasName("role_pkey");
 
                     b.ToTable("role", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            RoleId = 1,
+                            Name = "Admin"
+                        },
+                        new
+                        {
+                            RoleId = 2,
+                            Name = "Buyer"
+                        },
+                        new
+                        {
+                            RoleId = 3,
+                            Name = "Seller"
+                        });
                 });
 
             modelBuilder.Entity("RetradeBE.Models.ServiceSubscription", b =>
@@ -1390,6 +1459,29 @@ namespace RetradeBE.Migrations
                         .HasName("User_pkey");
 
                     b.ToTable("User");
+
+                    b.HasData(
+                        new
+                        {
+                            UserId = "USER_ADMIN",
+                            Email = "admin@retrade.com",
+                            FirstName = "Admin",
+                            LastName = "System"
+                        },
+                        new
+                        {
+                            UserId = "USER_BUYER",
+                            Email = "buyer@retrade.com",
+                            FirstName = "Demo",
+                            LastName = "Buyer"
+                        },
+                        new
+                        {
+                            UserId = "USER_SELLER",
+                            Email = "seller@retrade.com",
+                            FirstName = "Demo",
+                            LastName = "Seller"
+                        });
                 });
 
             modelBuilder.Entity("RetradeBE.Models.UserFavorite", b =>
