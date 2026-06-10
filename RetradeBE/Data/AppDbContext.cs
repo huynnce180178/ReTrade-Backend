@@ -803,6 +803,9 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.OrderId)
                 .HasMaxLength(100)
                 .HasColumnName("order_id");
+            entity.Property(e => e.ServiceId)
+                .HasMaxLength(100)
+                .HasColumnName("service_id");
             entity.Property(e => e.PaymentMethod)
                 .HasMaxLength(20)
                 .HasColumnName("payment_method");

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using RetradeBE.Data;
 using RetradeBE.Repositories;
 using RetradeBE.Services;
+using RetradeBE.Services.BackgroundJobs;
 using System.Reflection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -28,6 +29,7 @@ namespace RetradeBE
             builder.Services.Configure<RetradeBE.Config.EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
             builder.Services.Configure<RetradeBE.Config.CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
             builder.Services.Configure<RetradeBE.Config.GoogleSettings>(builder.Configuration.GetSection("GoogleSettings"));
+            builder.Services.Configure<RetradeBE.Config.VnPaySettings>(builder.Configuration.GetSection("VNPAY"));
             builder.Services.AddHttpClient();
             builder.Services.AddSignalR();
 
@@ -79,6 +81,7 @@ namespace RetradeBE
 
             builder.Services.AddAutoMapper(cfg => cfg.AddProfile<AutoMapperProfile>());
             builder.Services.AddControllers();
+            builder.Services.AddHostedService<SubscriptionExpirationService>();
             builder.Services.AddMemoryCache(); // Thêm bộ nhớ đệm (dùng lưu OTP)
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(c =>
@@ -212,6 +215,33 @@ namespace RetradeBE
             SeedUserAccount(dbContext, "USER_ADMIN", "Admin", "System", "admin@retrade.com", "ACC_ADMIN", "admin", "Admin123@", 1);
             SeedUserAccount(dbContext, "USER_BUYER", "Demo", "Buyer", "buyer@retrade.com", "ACC_BUYER", "buyer", "Buyer123@", 2);
             SeedUserAccount(dbContext, "USER_SELLER", "Demo", "Seller", "seller@retrade.com", "ACC_SELLER", "seller", "Seller123@", 3);
+
+            SeedServiceSubscription(
+                dbContext,
+                "SERVICE_UPGRADE_SELLER",
+                "Gói Nâng Cấp Seller",
+                "Buyer",
+                99000m,
+                30,
+                "Mở quyền trở thành Seller. Được phép đăng bán sản phẩm. Quản lý cửa hàng chuyên nghiệp.");
+
+            SeedServiceSubscription(
+                dbContext,
+                "SERVICE_VOUCHER_FEATURE",
+                "Gói Mã Giảm Giá",
+                "Seller",
+                49000m,
+                30,
+                "Kích hoạt quyền tạo mã giảm giá. Tự do tung các voucher cho shop. Thu hút nhiều khách hàng hơn.");
+
+            SeedServiceSubscription(
+                dbContext,
+                "SERVICE_PRIORITY_LISTING",
+                "Gói Đẩy Sản Phẩm Lên Đầu Trang",
+                "Seller",
+                69000m,
+                30,
+                "Kích hoạt quyền ưu tiên hiển thị. Đưa sản phẩm lên top kết quả tìm kiếm. Tiếp cận hàng vạn người mua tiềm năng.");
         }
 
         private static void SeedRole(AppDbContext dbContext, int roleId, string name)
@@ -269,6 +299,41 @@ namespace RetradeBE
             {
                 dbContext.SaveChanges();
             }
+        }
+
+        private static void SeedServiceSubscription(
+            AppDbContext dbContext,
+            string serviceId,
+            string name,
+            string targetRole,
+            decimal price,
+            int durationDays,
+            string benefitsDescription)
+        {
+            var existingService = dbContext.ServiceSubscription.FirstOrDefault(s => s.ServiceId == serviceId);
+            if (existingService != null)
+            {
+                existingService.Name = name;
+                existingService.TargetRole = targetRole;
+                existingService.Price = price;
+                existingService.DurationDays = durationDays;
+                existingService.BenefitsDescription = benefitsDescription;
+            }
+            else
+            {
+                dbContext.ServiceSubscription.Add(new ServiceSubscription
+                {
+                    ServiceId = serviceId,
+                    Name = name,
+                    TargetRole = targetRole,
+                    Price = price,
+                    DurationDays = durationDays,
+                    BenefitsDescription = benefitsDescription,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            dbContext.SaveChanges();
         }
     }
 
