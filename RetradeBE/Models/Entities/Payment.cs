@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace RetradeBE.Models;
@@ -8,6 +8,8 @@ public partial class Payment
     public string PaymentId { get; set; } = null!;
 
     public string? OrderId { get; set; }
+
+    public string? ServiceId { get; set; }
 
     public string? UserId { get; set; }
 
