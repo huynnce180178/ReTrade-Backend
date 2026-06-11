@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using RetradeBE.Data;
 using RetradeBE.Models;
 
-namespace RetradeBE.Repositories
+namespace RetradeBE.Repositories.AccountRoleRepository
 {
     public class AccountRepository : IAccountRepository
     {
@@ -85,7 +85,7 @@ namespace RetradeBE.Repositories
                 await _context.SaveChangesAsync();
             }
 
-            var accountRole = new AccountRole { AccountId = accountId, RoleId = role.RoleId, CreatedAt = DateTime.UtcNow.AddHours(7) };
+            var accountRole = new Models.AccountRole { AccountId = accountId, RoleId = role.RoleId, CreatedAt = DateTime.UtcNow.AddHours(7) };
             await _context.AccountRole.AddAsync(accountRole);
             await _context.SaveChangesAsync();
         }

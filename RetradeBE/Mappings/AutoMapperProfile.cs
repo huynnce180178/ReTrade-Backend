@@ -54,6 +54,8 @@ namespace RetradeBE.Mappings
             // AttributeUpdateDto -> Attributes
             CreateMap<AttributeUpdateDto, Attributes>()
                 .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => DateTime.UtcNow));
+            //Attribute -> AttributeDTO
+            CreateMap<Role, RoleDto>();
         }
     }
 }
