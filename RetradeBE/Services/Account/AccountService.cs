@@ -66,7 +66,7 @@ namespace RetradeBE.Services
             var account = await _repository.GetByIdAsync(accountId);
             if (account == null) return false;
 
-            var isCurrentlyInactive = account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString();
+            var isCurrentlyInactive = account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Ban.ToString();
             account.Status = isCurrentlyInactive
                 ? RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString()
                 : RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString();

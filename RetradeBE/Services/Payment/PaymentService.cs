@@ -263,7 +263,7 @@ public class PaymentService : IPaymentService
 
                 if (!alreadyHasRole)
                 {
-                    _context.AccountRole.Add(new AccountRole
+                    _context.AccountRole.Add(new Models.AccountRole
                     {
                         AccountId = account.AccountId,
                         RoleId = targetRole.RoleId,
