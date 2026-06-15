@@ -25,7 +25,9 @@ namespace RetradeBE.Mappings
             // Category Mappings
             // Category -> CategoryResponseDto
             CreateMap<Category, CategoryResponseDto>()
-                .ForMember(dest => dest.Attributes, opt => opt.MapFrom(src => src.Attributes.Where(a => a.IsDeleted != true)))
+                .ForMember(dest => dest.Attributes, opt => opt.MapFrom(src => src.Attributes
+                    .Where(a => a.IsDeleted != true)
+                    .OrderBy(a => a.DisplayOrder)))
                 .ForMember(dest => dest.ImageUrl, opt => opt.MapFrom(src => src.CategoryImage.OrderBy(ci => ci.CreatedAt).Select(ci => ci.Image.ImageUrl).FirstOrDefault()));
 
             // Account -> UserListDto (admin user list)
