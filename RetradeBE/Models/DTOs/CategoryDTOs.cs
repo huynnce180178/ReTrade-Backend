@@ -9,6 +9,12 @@ namespace RetradeBE.Models.DTOs
         public string? Name { get; set; }
         public string? DataType { get; set; }
         public bool? IsRequired { get; set; }
+        public decimal? MinValue { get; set; }
+        public decimal? MaxValue { get; set; }
+        public string? Unit { get; set; }
+        public int? DisplayOrder { get; set; }
+        public bool? IsFilterable { get; set; }
+        public bool? IsSearchable { get; set; }
     }
 
     /// <summary>
@@ -30,6 +36,12 @@ namespace RetradeBE.Models.DTOs
         public string? Name { get; set; }
         public string? DataType { get; set; }
         public bool? IsRequired { get; set; }
+        public decimal? MinValue { get; set; }
+        public decimal? MaxValue { get; set; }
+        public string? Unit { get; set; }
+        public int? DisplayOrder { get; set; }
+        public bool? IsFilterable { get; set; }
+        public bool? IsSearchable { get; set; }
     }
 
     /// <summary>
@@ -52,6 +64,12 @@ namespace RetradeBE.Models.DTOs
         public string? Name { get; set; }
         public string? DataType { get; set; }
         public bool? IsRequired { get; set; }
+        public decimal? MinValue { get; set; }
+        public decimal? MaxValue { get; set; }
+        public string? Unit { get; set; }
+        public int? DisplayOrder { get; set; }
+        public bool? IsFilterable { get; set; }
+        public bool? IsSearchable { get; set; }
     }
 
     /// <summary>

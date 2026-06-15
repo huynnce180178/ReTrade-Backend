@@ -74,6 +74,12 @@ public class CategoryService : ICategoryService
                     Name = attr.Name,
                     DataType = attr.DataType,
                     IsRequired = attr.IsRequired ?? false,
+                    MinValue = attr.MinValue,
+                    MaxValue = attr.MaxValue,
+                    Unit = attr.Unit,
+                    DisplayOrder = attr.DisplayOrder ?? index,
+                    IsFilterable = attr.IsFilterable ?? false,
+                    IsSearchable = attr.IsSearchable ?? false,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow,
                     IsDeleted = false
@@ -151,6 +157,12 @@ public class CategoryService : ICategoryService
                     existingAttr.Name = incomingAttr.Name ?? existingAttr.Name;
                     existingAttr.DataType = incomingAttr.DataType ?? existingAttr.DataType;
                     existingAttr.IsRequired = incomingAttr.IsRequired ?? existingAttr.IsRequired ?? false;
+                    existingAttr.MinValue = incomingAttr.MinValue;
+                    existingAttr.MaxValue = incomingAttr.MaxValue;
+                    existingAttr.Unit = incomingAttr.Unit;
+                    existingAttr.DisplayOrder = incomingAttr.DisplayOrder ?? existingAttr.DisplayOrder;
+                    existingAttr.IsFilterable = incomingAttr.IsFilterable ?? existingAttr.IsFilterable;
+                    existingAttr.IsSearchable = incomingAttr.IsSearchable ?? existingAttr.IsSearchable;
                     existingAttr.IsDeleted = false;
                     existingAttr.UpdatedAt = DateTime.UtcNow;
                 }
@@ -191,6 +203,12 @@ public class CategoryService : ICategoryService
                         Name = newAttr.Name,
                         DataType = newAttr.DataType,
                         IsRequired = newAttr.IsRequired ?? false,
+                        MinValue = newAttr.MinValue,
+                        MaxValue = newAttr.MaxValue,
+                        Unit = newAttr.Unit,
+                        DisplayOrder = newAttr.DisplayOrder ?? nextIndex,
+                        IsFilterable = newAttr.IsFilterable ?? false,
+                        IsSearchable = newAttr.IsSearchable ?? false,
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow,
                         IsDeleted = false
