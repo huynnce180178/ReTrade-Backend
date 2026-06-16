@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 using RetradeBE.Models.DTOs;
 using RetradeBE.Models.Enums;
 using RetradeBE.Services;
-using System.Security.Claims;
 
 namespace RetradeBE.Controllers.Order
 {
@@ -20,21 +19,20 @@ namespace RetradeBE.Controllers.Order
         }
 
         [HttpGet("my-orders")]
-        public async Task<IActionResult> GetMyOrders([FromQuery] OrderSearchQueryDto query)
+        public async Task<IActionResult> GetMyOrders([FromQuery] string userId, [FromQuery] OrderSearchQueryDto query)
         {
-            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrWhiteSpace(accountId)) return Unauthorized();
+            if (string.IsNullOrWhiteSpace(userId)) return BadRequest("UserId is required.");
 
-            return Ok(await _orderService.GetMyOrdersAsync(accountId, query));
+            return Ok(await _orderService.GetMyOrdersAsync(userId, query));
         }
 
         [HttpGet("seller-orders")]
-        public async Task<IActionResult> GetSellerOrders([FromQuery] OrderSearchQueryDto query)
+        [Authorize(Roles = $"{nameof(RoleEnum.Seller)},{nameof(RoleEnum.Admin)}")]
+        public async Task<IActionResult> GetSellerOrders([FromQuery] string sellerId, [FromQuery] OrderSearchQueryDto query)
         {
-            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrWhiteSpace(accountId)) return Unauthorized();
+            if (string.IsNullOrWhiteSpace(sellerId)) return BadRequest("SellerId is required.");
 
-            return Ok(await _orderService.GetSellerOrdersAsync(accountId, query));
+            return Ok(await _orderService.GetSellerOrdersAsync(sellerId, query));
         }
 
         [HttpGet("admin")]
@@ -45,27 +43,26 @@ namespace RetradeBE.Controllers.Order
         }
 
         [HttpGet("{orderId}")]
-        public async Task<IActionResult> GetOrderDetail(string orderId)
+        [Authorize(Roles = nameof(RoleEnum.Seller))]
+        public async Task<IActionResult> GetOrderDetail(string orderId, [FromQuery] string sellerId)
         {
-            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrWhiteSpace(accountId)) return Unauthorized();
+            if (string.IsNullOrWhiteSpace(sellerId)) return BadRequest("SellerId is required.");
 
-            var order = await _orderService.GetOrderDetailAsync(accountId, orderId);
+            var order = await _orderService.GetOrderDetailAsync(sellerId, orderId);
             if (order == null) return NotFound("Order not found.");
 
             return Ok(order);
         }
 
         [HttpPatch("{orderId}/confirm")]
-        [Authorize(Roles = $"{nameof(RoleEnum.Seller)},{nameof(RoleEnum.Admin)}")]
-        public async Task<IActionResult> ConfirmOrder(string orderId)
+        [Authorize(Roles = nameof(RoleEnum.Seller))]
+        public async Task<IActionResult> ConfirmOrder(string orderId, [FromQuery] string sellerId)
         {
-            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrWhiteSpace(accountId)) return Unauthorized();
+            if (string.IsNullOrWhiteSpace(sellerId)) return BadRequest("SellerId is required.");
 
             try
             {
-                var order = await _orderService.ConfirmOrderAsync(accountId, orderId);
+                var order = await _orderService.ConfirmOrderAsync(sellerId, orderId);
                 if (order == null) return NotFound("Order not found.");
 
                 return Ok(order);
@@ -77,15 +74,14 @@ namespace RetradeBE.Controllers.Order
         }
 
         [HttpPatch("{orderId}/status")]
-        [Authorize(Roles = $"{nameof(RoleEnum.Seller)},{nameof(RoleEnum.Admin)}")]
-        public async Task<IActionResult> UpdateStatus(string orderId, OrderStatusUpdateDto dto)
+        [Authorize(Roles = nameof(RoleEnum.Seller))]
+        public async Task<IActionResult> UpdateStatus(string orderId, [FromQuery] string sellerId, OrderStatusUpdateDto dto)
         {
-            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrWhiteSpace(accountId)) return Unauthorized();
+            if (string.IsNullOrWhiteSpace(sellerId)) return BadRequest("SellerId is required.");
 
             try
             {
-                var order = await _orderService.UpdateStatusAsync(accountId, orderId, dto);
+                var order = await _orderService.UpdateStatusAsync(sellerId, orderId, dto);
                 if (order == null) return NotFound("Order not found.");
 
                 return Ok(order);

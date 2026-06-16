@@ -11,22 +11,18 @@ namespace RetradeBE.Services
     public class OrderService : IOrderService
     {
         private readonly IOrderRepository _orderRepository;
-        private readonly IAccountRepository _accountRepository;
         private readonly IHubContext<OrderHub> _orderHub;
 
         public OrderService(
             IOrderRepository orderRepository,
-            IAccountRepository accountRepository,
             IHubContext<OrderHub> orderHub)
         {
             _orderRepository = orderRepository;
-            _accountRepository = accountRepository;
             _orderHub = orderHub;
         }
 
-        public async Task<PagedResultDto<OrderListDto>> GetMyOrdersAsync(string accountId, OrderSearchQueryDto query)
+        public async Task<PagedResultDto<OrderListDto>> GetMyOrdersAsync(string userId, OrderSearchQueryDto query)
         {
-            var userId = await GetUserIdByAccountIdAsync(accountId);
             if (string.IsNullOrWhiteSpace(userId))
             {
                 return EmptyPagedResult(query);
@@ -36,15 +32,14 @@ namespace RetradeBE.Services
             return await ToPagedListAsync(orders, query);
         }
 
-        public async Task<PagedResultDto<OrderListDto>> GetSellerOrdersAsync(string accountId, OrderSearchQueryDto query)
+        public async Task<PagedResultDto<OrderListDto>> GetSellerOrdersAsync(string sellerId, OrderSearchQueryDto query)
         {
-            var userId = await GetUserIdByAccountIdAsync(accountId);
-            if (string.IsNullOrWhiteSpace(userId))
+            if (string.IsNullOrWhiteSpace(sellerId))
             {
                 return EmptyPagedResult(query);
             }
 
-            var orders = ApplyFilters(_orderRepository.Query().Where(o => o.SellerId == userId), query);
+            var orders = ApplyFilters(_orderRepository.Query().Where(o => o.SellerId == sellerId), query);
             return await ToPagedListAsync(orders, query);
         }
 
@@ -54,7 +49,7 @@ namespace RetradeBE.Services
             return await ToPagedListAsync(orders, query);
         }
 
-        public async Task<OrderDetailDto?> GetOrderDetailAsync(string accountId, string orderId)
+        public async Task<OrderDetailDto?> GetOrderDetailAsync(string sellerId, string orderId)
         {
             var order = await _orderRepository.GetByIdAsync(orderId);
             if (order == null)
@@ -62,12 +57,7 @@ namespace RetradeBE.Services
                 return null;
             }
 
-            var account = await _accountRepository.GetByIdAsync(accountId);
-            var roles = await _accountRepository.GetRolesAsync(accountId);
-            var isAdmin = roles.Any(r => string.Equals(r, "Admin", StringComparison.OrdinalIgnoreCase));
-            var currentUserId = account?.UserId;
-
-            if (!isAdmin && order.UserId != currentUserId && order.SellerId != currentUserId)
+            if (order.SellerId != sellerId)
             {
                 return null;
             }
@@ -75,15 +65,15 @@ namespace RetradeBE.Services
             return ToDetailDto(order);
         }
 
-        public async Task<OrderDetailDto?> ConfirmOrderAsync(string accountId, string orderId)
+        public async Task<OrderDetailDto?> ConfirmOrderAsync(string sellerId, string orderId)
         {
-            return await UpdateStatusAsync(accountId, orderId, new OrderStatusUpdateDto
+            return await UpdateStatusAsync(sellerId, orderId, new OrderStatusUpdateDto
             {
                 Status = nameof(OrderStatusEnum.Confirmed)
             });
         }
 
-        public async Task<OrderDetailDto?> UpdateStatusAsync(string accountId, string orderId, OrderStatusUpdateDto dto)
+        public async Task<OrderDetailDto?> UpdateStatusAsync(string sellerId, string orderId, OrderStatusUpdateDto dto)
         {
             var order = await _orderRepository.GetForUpdateAsync(orderId);
             if (order == null)
@@ -91,8 +81,7 @@ namespace RetradeBE.Services
                 return null;
             }
 
-            var access = await GetOrderAccessAsync(accountId);
-            if (!access.IsAdmin && order.SellerId != access.UserId)
+            if (order.SellerId != sellerId)
             {
                 return null;
             }
@@ -103,7 +92,7 @@ namespace RetradeBE.Services
             }
 
             var currentStatus = ParseStatus(order.Status);
-            if (!CanMoveTo(currentStatus, nextStatus, access.IsAdmin))
+            if (!CanMoveTo(currentStatus, nextStatus))
             {
                 throw new InvalidOperationException($"Cannot update order status from {currentStatus} to {nextStatus}.");
             }
@@ -282,24 +271,6 @@ namespace RetradeBE.Services
             };
         }
 
-        private async Task<string?> GetUserIdByAccountIdAsync(string accountId)
-        {
-            var account = await _accountRepository.GetByIdAsync(accountId);
-            return account?.UserId;
-        }
-
-        private async Task<OrderAccessInfo> GetOrderAccessAsync(string accountId)
-        {
-            var account = await _accountRepository.GetByIdAsync(accountId);
-            var roles = await _accountRepository.GetRolesAsync(accountId);
-
-            return new OrderAccessInfo
-            {
-                UserId = account?.UserId,
-                IsAdmin = roles.Any(r => string.Equals(r, nameof(RoleEnum.Admin), StringComparison.OrdinalIgnoreCase))
-            };
-        }
-
         private static OrderStatusEnum ParseStatus(string? status)
         {
             return Enum.TryParse<OrderStatusEnum>(status, true, out var parsed)
@@ -307,14 +278,9 @@ namespace RetradeBE.Services
                 : OrderStatusEnum.Pending;
         }
 
-        private static bool CanMoveTo(OrderStatusEnum currentStatus, OrderStatusEnum nextStatus, bool isAdmin)
+        private static bool CanMoveTo(OrderStatusEnum currentStatus, OrderStatusEnum nextStatus)
         {
             if (currentStatus == nextStatus)
-            {
-                return true;
-            }
-
-            if (isAdmin)
             {
                 return true;
             }
@@ -368,10 +334,5 @@ namespace RetradeBE.Services
             };
         }
 
-        private class OrderAccessInfo
-        {
-            public string? UserId { get; set; }
-            public bool IsAdmin { get; set; }
-        }
     }
 }
