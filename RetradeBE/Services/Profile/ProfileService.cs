@@ -3,6 +3,7 @@ using RetradeBE.Models.DTOs;
 using RetradeBE.Repositories;
 using RetradeBE.Hubs;
 using Microsoft.AspNetCore.SignalR;
+using AutoMapper;
 
 namespace RetradeBE.Services
 {
@@ -11,12 +12,14 @@ namespace RetradeBE.Services
         private readonly IProfileRepository _repository;
         private readonly IAccountRepository _accountRepository;
         private readonly IHubContext<SellerHub> _sellerHub;
+        private readonly IMapper _mapper;
 
-        public ProfileService(IProfileRepository repository, IAccountRepository accountRepository, IHubContext<SellerHub> sellerHub)
+        public ProfileService(IProfileRepository repository, IAccountRepository accountRepository, IHubContext<SellerHub> sellerHub, IMapper mapper)
         {
             _repository = repository;
             _accountRepository = accountRepository;
             _sellerHub = sellerHub;
+            _mapper = mapper;
         }
 
         public async Task<ProfileDetailDto?> GetMyProfileAsync(string accountId)
@@ -26,7 +29,14 @@ namespace RetradeBE.Services
 
             var addresses = await _repository.GetActiveAddressesByUserIdAsync(account.User.UserId);
             var roles = await _accountRepository.GetRolesAsync(account.AccountId);
-            return MapProfile(account, account.User, addresses, roles);
+
+            var profileDto = _mapper.Map<ProfileDetailDto>(account);
+            profileDto.Addresses = _mapper.Map<List<AddressDto>>(addresses);
+            var defaultAddress = addresses.FirstOrDefault(a => a.IsDefault == true) ?? addresses.FirstOrDefault();
+            profileDto.DefaultAddress = defaultAddress != null ? _mapper.Map<AddressDto>(defaultAddress) : null;
+            profileDto.Roles = roles ?? new List<string>();
+
+            return profileDto;
         }
 
         public async Task<ProfileDetailDto?> GetUserProfileAsync(string userId)
@@ -39,7 +49,14 @@ namespace RetradeBE.Services
 
             var addresses = await _repository.GetActiveAddressesByUserIdAsync(user.UserId);
             var roles = await _accountRepository.GetRolesAsync(account.AccountId);
-            return MapProfile(account, user, addresses, roles);
+
+            var profileDto = _mapper.Map<ProfileDetailDto>(account);
+            profileDto.Addresses = _mapper.Map<List<AddressDto>>(addresses);
+            var defaultAddress = addresses.FirstOrDefault(a => a.IsDefault == true) ?? addresses.FirstOrDefault();
+            profileDto.DefaultAddress = defaultAddress != null ? _mapper.Map<AddressDto>(defaultAddress) : null;
+            profileDto.Roles = roles ?? new List<string>();
+
+            return profileDto;
         }
 
         public async Task<ProfileDetailDto?> UpdateMyProfileAsync(string accountId, ProfileUpdateDto dto)
@@ -82,7 +99,14 @@ namespace RetradeBE.Services
 
             var addresses = await _repository.GetActiveAddressesByUserIdAsync(account.User.UserId);
             var roles = await _accountRepository.GetRolesAsync(account.AccountId);
-            return MapProfile(account, account.User, addresses, roles);
+
+            var profileDto = _mapper.Map<ProfileDetailDto>(account);
+            profileDto.Addresses = _mapper.Map<List<AddressDto>>(addresses);
+            var defaultAddress = addresses.FirstOrDefault(a => a.IsDefault == true) ?? addresses.FirstOrDefault();
+            profileDto.DefaultAddress = defaultAddress != null ? _mapper.Map<AddressDto>(defaultAddress) : null;
+            profileDto.Roles = roles ?? new List<string>();
+
+            return profileDto;
         }
 
         public async Task<SellerDetailDto?> GetSellerInformationAsync(string sellerId, string? currentAccountId = null)
@@ -293,49 +317,10 @@ namespace RetradeBE.Services
 
         private static string GenerateFollowId() => $"UF{Guid.NewGuid():N}";
 
-        private static ProfileDetailDto MapProfile(Account account, User user, List<Address> addresses, List<string>? roles = null)
-        {
-            return new ProfileDetailDto
-            {
-                AccountId = account.AccountId,
-                UserId = user.UserId,
-                Username = account.Username ?? string.Empty,
-                Email = user.Email,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Phone = user.Phone,
-                AvatarUrl = user.AvatarUrl,
-                Status = account.Status,
-                IsDeleted = user.IsDeleted,
-                CreatedAt = user.CreatedAt,
-                UpdatedAt = user.UpdatedAt,
-                DefaultAddress = MapDefaultAddress(addresses),
-                Addresses = addresses.Select(MapAddress).ToList(),
-                Roles = roles ?? new List<string>()
-            };
-        }
-
-        private static AddressDto? MapDefaultAddress(List<Address> addresses)
+        private AddressDto? MapDefaultAddress(List<Address> addresses)
         {
             var address = addresses.FirstOrDefault(a => a.IsDefault == true) ?? addresses.FirstOrDefault();
-            return address == null ? null : MapAddress(address);
-        }
-
-        private static AddressDto MapAddress(Address address)
-        {
-            return new AddressDto
-            {
-                AddressId = address.AddressId,
-                ReceiverName = address.ReceiverName,
-                ReceiverPhone = address.ReceiverPhone,
-                Street = address.Street,
-                StreetAddress = address.Street,
-                ProvinceId = address.ProvinceId,
-                DistrictId = address.DistrictId,
-                WardCode = address.WardCode,
-                IsDefault = address.IsDefault,
-                Status = address.Status
-            };
+            return address == null ? null : _mapper.Map<AddressDto>(address);
         }
     }
 }

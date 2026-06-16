@@ -179,6 +179,17 @@ public class PaymentService : IPaymentService
             await ActivateSubscriptionAsync(payment.UserId!, payment.ServiceId, payment.Amount ?? 0);
         }
 
+        // Nếu là payment cho đơn hàng thì cập nhật trạng thái đơn hàng
+        if (isSuccess && !string.IsNullOrWhiteSpace(payment.OrderId))
+        {
+            var order = await _context.Order.FirstOrDefaultAsync(o => o.OrderId == payment.OrderId);
+            if (order != null)
+            {
+                order.Status = RetradeBE.Models.Enums.OrderStatusEnum.Pending.ToString();
+                order.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
         await _context.SaveChangesAsync();
 
         return new VnPayReturnResponseDto

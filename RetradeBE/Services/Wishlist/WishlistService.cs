@@ -7,6 +7,8 @@ using RetradeBE.Repositories;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
 
 namespace RetradeBE.Services
 {
@@ -15,15 +17,18 @@ namespace RetradeBE.Services
         private readonly IWishlistRepository _wishlistRepository;
         private readonly IAccountRepository  _accountRepository;
         private readonly AppDbContext        _context;
+        private readonly IMapper             _mapper;
 
         public WishlistService(
             IWishlistRepository wishlistRepository,
             IAccountRepository  accountRepository,
-            AppDbContext        context)
+            AppDbContext        context,
+            IMapper             mapper)
         {
             _wishlistRepository = wishlistRepository;
             _accountRepository  = accountRepository;
             _context            = context;
+            _mapper             = mapper;
         }
 
         public async Task<WishlistDetailDto> AddToWishlistAsync(string accountId, AddToWishlistDto dto)
@@ -63,14 +68,23 @@ namespace RetradeBE.Services
             await _context.SaveChangesAsync();
 
             var updated = await _wishlistRepository.GetOrCreateActiveWishlistAsync(userId);
-            return MapToDetailDto(updated);
+            return _mapper.Map<WishlistDetailDto>(updated);
         }
 
         public async Task<WishlistDetailDto> GetWishlistDetailAsync(string accountId)
         {
             var userId   = await ResolveUserIdAsync(accountId);
             var wishlist = await _wishlistRepository.GetOrCreateActiveWishlistAsync(userId);
-            return MapToDetailDto(wishlist);
+            return _mapper.Map<WishlistDetailDto>(wishlist);
+        }
+
+        public async Task<IQueryable<WishlistItemDto>> GetWishlistItemsQueryAsync(string accountId)
+        {
+            var userId   = await ResolveUserIdAsync(accountId);
+            var wishlist = await _wishlistRepository.GetOrCreateActiveWishlistAsync(userId);
+            return _context.WishlistItem
+                .Where(wi => wi.WishlistId == wishlist.WishlistId)
+                .ProjectTo<WishlistItemDto>(_mapper.ConfigurationProvider);
         }
 
         public async Task RemoveWishlistItemAsync(string accountId, string wishlistItemId)
@@ -120,53 +134,6 @@ namespace RetradeBE.Services
                 throw new Exception("Wishlist is not currently available.");
 
             return wishlist;
-        }
-
-        private static WishlistDetailDto MapToDetailDto(Wishlist wishlist)
-        {
-            return new WishlistDetailDto
-            {
-                WishlistId = wishlist.WishlistId,
-                UserId     = wishlist.UserId,
-                Status     = wishlist.Status,
-                CreatedAt  = wishlist.CreatedAt,
-                UpdatedAt  = wishlist.UpdatedAt,
-                Items      = wishlist.WishlistItem
-                    .Select(wi => MapToItemDto(wi))
-                    .ToList()
-            };
-        }
-
-        private static WishlistItemDto MapToItemDto(WishlistItem wi)
-        {
-            var product = wi.Product;
-
-            string? mainImageUrl = product?.ProductImage
-                .Where(pi => pi.IsMain == true)
-                .Select(pi => pi.Image?.ImageUrl)
-                .FirstOrDefault()
-                ?? product?.ProductImage
-                .OrderBy(pi => pi.SortOrder)
-                .Select(pi => pi.Image?.ImageUrl)
-                .FirstOrDefault();
-
-            string? sellerName = product?.Seller != null
-                ? $"{product.Seller.FirstName} {product.Seller.LastName}".Trim()
-                : null;
-
-            return new WishlistItemDto
-            {
-                WishlistItemId = wi.WishlistItemId,
-                ProductId      = wi.ProductId,
-                ProductName    = product?.Name,
-                Price          = product?.Price,
-                Condition      = product?.Condition,
-                Status         = product?.Status,
-                MainImageUrl   = mainImageUrl,
-                SellerId       = product?.SellerId,
-                SellerName     = sellerName,
-                AddedAt        = wi.CreatedAt
-            };
         }
     }
 }

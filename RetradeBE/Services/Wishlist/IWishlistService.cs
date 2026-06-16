@@ -11,6 +11,9 @@ namespace RetradeBE.Services
         /// <summary>Lấy chi tiết wishlist của user đang đăng nhập (hỗ trợ OData).</summary>
         Task<WishlistDetailDto> GetWishlistDetailAsync(string accountId);
 
+        /// <summary>Lấy query các item trong wishlist cho OData.</summary>
+        Task<IQueryable<WishlistItemDto>> GetWishlistItemsQueryAsync(string accountId);
+
         /// <summary>Xóa một item khỏi wishlist.</summary>
         Task RemoveWishlistItemAsync(string accountId, string wishlistItemId);
     }

@@ -38,7 +38,6 @@ namespace RetradeBE.Controllers
         }
 
         [HttpGet]
-        [EnableQuery]
         public async Task<IActionResult> GetWishlistDetail()
         {
             var accountId = GetAccountId();
@@ -47,6 +46,24 @@ namespace RetradeBE.Controllers
             try
             {
                 var result = await _service.GetWishlistDetailAsync(accountId);
+                return Ok(result);
+            }
+            catch (System.Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpGet("items")]
+        [EnableQuery]
+        public async Task<IActionResult> GetWishlistItems()
+        {
+            var accountId = GetAccountId();
+            if (accountId == null) return Unauthorized();
+
+            try
+            {
+                var result = await _service.GetWishlistItemsQueryAsync(accountId);
                 return Ok(result);
             }
             catch (System.Exception ex)
