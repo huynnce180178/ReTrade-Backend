@@ -56,6 +56,31 @@ namespace RetradeBE.Mappings
             // AttributeUpdateDto -> Attributes
             CreateMap<AttributeUpdateDto, Attributes>()
                 .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => DateTime.UtcNow));
+            CreateMap<Order, PurchaseListDto>()
+                .ForMember(dest => dest.ProductName, opt => opt.MapFrom(src => src.Product != null ? src.Product.Name : null))
+                .ForMember(dest => dest.ProductImageUrl, opt => opt.MapFrom(src => src.Product != null
+                    ? src.Product.ProductImage
+                        .Where(pi => pi.IsMain == true)
+                        .Select(pi => pi.Image.ImageUrl)
+                        .FirstOrDefault()
+                      ?? src.Product.ProductImage
+                        .OrderBy(pi => pi.SortOrder)
+                        .Select(pi => pi.Image.ImageUrl)
+                        .FirstOrDefault()
+                    : null))
+                .ForMember(dest => dest.SellerName, opt => opt.MapFrom(src => src.Seller != null ? (src.Seller.FirstName + " " + src.Seller.LastName).Trim() : null))
+                .ForMember(dest => dest.SellerEmail, opt => opt.MapFrom(src => src.Seller != null ? src.Seller.Email : null))
+                .ForMember(dest => dest.SellerPhone, opt => opt.MapFrom(src => src.Seller != null ? src.Seller.Phone : null));
+
+            CreateMap<Order, PurchaseDetailDto>()
+                .IncludeBase<Order, PurchaseListDto>()
+                .ForMember(dest => dest.BuyerId, opt => opt.MapFrom(src => src.UserId))
+                .ForMember(dest => dest.BuyerName, opt => opt.MapFrom(src => src.User != null ? (src.User.FirstName + " " + src.User.LastName).Trim() : null))
+                .ForMember(dest => dest.BuyerEmail, opt => opt.MapFrom(src => src.User != null ? src.User.Email : null))
+                .ForMember(dest => dest.BuyerPhone, opt => opt.MapFrom(src => src.User != null ? src.User.Phone : null))
+                .ForMember(dest => dest.Payments, opt => opt.MapFrom(src => src.Payment.OrderByDescending(p => p.CreatedAt)));
+
+            CreateMap<Payment, PaymentSummaryDto>();
             //Attribute -> AttributeDTO
             CreateMap<Role, RoleDto>();
 
@@ -110,3 +135,4 @@ namespace RetradeBE.Mappings
         }
     }
 }
+
