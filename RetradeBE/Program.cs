@@ -215,6 +215,7 @@ namespace RetradeBE
             SeedUserAccount(dbContext, "USER_ADMIN", "Admin", "System", "admin@retrade.com", "ACC_ADMIN", "admin", "Admin123@", 1);
             SeedUserAccount(dbContext, "USER_BUYER", "Demo", "Buyer", "buyer@retrade.com", "ACC_BUYER", "buyer", "Buyer123@", 2);
             SeedUserAccount(dbContext, "USER_SELLER", "Demo", "Seller", "seller@retrade.com", "ACC_SELLER", "seller", "Seller123@", 3);
+            SeedDemoOrders(dbContext);
 
             SeedServiceSubscription(
                 dbContext,
@@ -298,6 +299,184 @@ namespace RetradeBE
             if (!userExists || !accountExists || !accountRoleExists)
             {
                 dbContext.SaveChanges();
+            }
+        }
+
+        private static void SeedDemoOrders(AppDbContext dbContext)
+        {
+            var now = DateTime.UtcNow;
+
+            if (!dbContext.Category.Any(c => c.CategoryId == "CAT_DEMO_ELECTRONICS"))
+            {
+                dbContext.Category.Add(new Category
+                {
+                    CategoryId = "CAT_DEMO_ELECTRONICS",
+                    Name = "Demo Electronics",
+                    Description = "Seed data for testing order list before checkout is available.",
+                    Status = "Active",
+                    CreatedAt = now,
+                    UpdatedAt = now
+                });
+            }
+
+            SeedDemoProduct(
+                dbContext,
+                "PROD_DEMO_PHONE",
+                "IMG_DEMO_PHONE",
+                "Vintage Demo Phone",
+                "Second-hand phone used for testing order list.",
+                1250000m,
+                "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&auto=format&fit=crop&q=80");
+
+            SeedDemoProduct(
+                dbContext,
+                "PROD_DEMO_HEADPHONE",
+                "IMG_DEMO_HEADPHONE",
+                "Demo Wireless Headphone",
+                "Wireless headphone sample for seller and buyer order testing.",
+                650000m,
+                "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&auto=format&fit=crop&q=80");
+
+            SeedDemoOrder(
+                dbContext,
+                "ORD_DEMO_001",
+                "RTD-2026-0001",
+                "PROD_DEMO_PHONE",
+                1,
+                1250000m,
+                30000m,
+                0m,
+                "Pending",
+                "PAY_DEMO_001",
+                "Pending",
+                now.AddDays(-2));
+
+            SeedDemoOrder(
+                dbContext,
+                "ORD_DEMO_002",
+                "RTD-2026-0002",
+                "PROD_DEMO_HEADPHONE",
+                2,
+                650000m,
+                25000m,
+                50000m,
+                "Shipping",
+                "PAY_DEMO_002",
+                "Paid",
+                now.AddDays(-1));
+
+            dbContext.SaveChanges();
+        }
+
+        private static void SeedDemoProduct(
+            AppDbContext dbContext,
+            string productId,
+            string imageId,
+            string name,
+            string description,
+            decimal price,
+            string imageUrl)
+        {
+            var now = DateTime.UtcNow;
+
+            if (!dbContext.Image.Any(i => i.ImageId == imageId))
+            {
+                dbContext.Image.Add(new Image
+                {
+                    ImageId = imageId,
+                    ImageUrl = imageUrl,
+                    AltText = name,
+                    CreatedAt = now
+                });
+            }
+
+            if (!dbContext.Product.Any(p => p.ProductId == productId))
+            {
+                dbContext.Product.Add(new Product
+                {
+                    ProductId = productId,
+                    SellerId = "USER_SELLER",
+                    CategoryId = "CAT_DEMO_ELECTRONICS",
+                    Name = name,
+                    Description = description,
+                    Condition = "Used",
+                    Price = price,
+                    StockQuantity = 5,
+                    Status = "Accepted",
+                    IsDeleted = false,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                });
+            }
+
+            if (!dbContext.ProductImage.Any(pi => pi.ProductId == productId && pi.ImageId == imageId))
+            {
+                dbContext.ProductImage.Add(new ProductImage
+                {
+                    ProductId = productId,
+                    ImageId = imageId,
+                    IsMain = true,
+                    SortOrder = 1,
+                    CreatedAt = now
+                });
+            }
+        }
+
+        private static void SeedDemoOrder(
+            AppDbContext dbContext,
+            string orderId,
+            string orderCode,
+            string productId,
+            int quantity,
+            decimal unitPrice,
+            decimal shippingFee,
+            decimal discountAmount,
+            string status,
+            string paymentId,
+            string paymentStatus,
+            DateTime createdAt)
+        {
+            var finalAmount = unitPrice * quantity + shippingFee - discountAmount;
+
+            if (!dbContext.Order.Any(o => o.OrderId == orderId))
+            {
+                dbContext.Order.Add(new Order
+                {
+                    OrderId = orderId,
+                    OrderCode = orderCode,
+                    UserId = "USER_BUYER",
+                    SellerId = "USER_SELLER",
+                    ProductId = productId,
+                    Quantity = quantity,
+                    UnitPrice = unitPrice,
+                    AddressSnapshot = "Demo Buyer, 123 Test Street, District 1, Ho Chi Minh City",
+                    TrackingCode = status == "Shipping" ? "DEMO-TRACK-002" : null,
+                    ShippingProvider = status == "Shipping" ? "Demo Express" : null,
+                    TotalAmount = unitPrice * quantity,
+                    ShippingFee = shippingFee,
+                    DiscountAmount = discountAmount,
+                    FinalAmount = finalAmount,
+                    ExpectedDeliveryTime = createdAt.AddDays(5),
+                    Status = status,
+                    CreatedAt = createdAt,
+                    UpdatedAt = createdAt
+                });
+            }
+
+            if (!dbContext.Payment.Any(p => p.PaymentId == paymentId))
+            {
+                dbContext.Payment.Add(new Payment
+                {
+                    PaymentId = paymentId,
+                    OrderId = orderId,
+                    UserId = "USER_BUYER",
+                    Amount = finalAmount,
+                    PaymentMethod = "VNPAY",
+                    ProviderTransactionId = paymentStatus == "Paid" ? "VNPAY-DEMO-002" : null,
+                    Status = paymentStatus,
+                    CreatedAt = createdAt,
+                    UpdatedAt = createdAt
+                });
             }
         }
 
