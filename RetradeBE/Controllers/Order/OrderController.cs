@@ -55,5 +55,45 @@ namespace RetradeBE.Controllers.Order
 
             return Ok(order);
         }
+
+        [HttpPatch("{orderId}/confirm")]
+        [Authorize(Roles = $"{nameof(RoleEnum.Seller)},{nameof(RoleEnum.Admin)}")]
+        public async Task<IActionResult> ConfirmOrder(string orderId)
+        {
+            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(accountId)) return Unauthorized();
+
+            try
+            {
+                var order = await _orderService.ConfirmOrderAsync(accountId, orderId);
+                if (order == null) return NotFound("Order not found.");
+
+                return Ok(order);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpPatch("{orderId}/status")]
+        [Authorize(Roles = $"{nameof(RoleEnum.Seller)},{nameof(RoleEnum.Admin)}")]
+        public async Task<IActionResult> UpdateStatus(string orderId, OrderStatusUpdateDto dto)
+        {
+            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(accountId)) return Unauthorized();
+
+            try
+            {
+                var order = await _orderService.UpdateStatusAsync(accountId, orderId, dto);
+                if (order == null) return NotFound("Order not found.");
+
+                return Ok(order);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
     }
 }

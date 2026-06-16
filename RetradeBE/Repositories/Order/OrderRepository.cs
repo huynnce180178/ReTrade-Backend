@@ -30,5 +30,23 @@ namespace RetradeBE.Repositories
             return await Query()
                 .FirstOrDefaultAsync(o => o.OrderId == orderId);
         }
+
+        public async Task<Order?> GetForUpdateAsync(string orderId)
+        {
+            return await _context.Order
+                .Include(o => o.User)
+                .Include(o => o.Seller)
+                .Include(o => o.Product)
+                    .ThenInclude(p => p!.ProductImage)
+                    .ThenInclude(pi => pi.Image)
+                .Include(o => o.Payment)
+                .FirstOrDefaultAsync(o => o.OrderId == orderId);
+        }
+
+        public async Task UpdateAsync(Order order)
+        {
+            _context.Order.Update(order);
+            await _context.SaveChangesAsync();
+        }
     }
 }

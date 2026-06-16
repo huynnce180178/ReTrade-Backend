@@ -10,6 +10,14 @@ namespace RetradeBE.Models.DTOs
         public int PageSize { get; set; } = 12;
     }
 
+    public class OrderStatusUpdateDto
+    {
+        public string Status { get; set; } = null!;
+        public string? TrackingCode { get; set; }
+        public string? ShippingProvider { get; set; }
+        public DateTime? ExpectedDeliveryTime { get; set; }
+    }
+
     public class OrderListDto
     {
         public string OrderId { get; set; } = null!;

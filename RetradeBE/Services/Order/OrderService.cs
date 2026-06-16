@@ -1,6 +1,9 @@
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using RetradeBE.Hubs;
 using RetradeBE.Models;
 using RetradeBE.Models.DTOs;
+using RetradeBE.Models.Enums;
 using RetradeBE.Repositories;
 
 namespace RetradeBE.Services
@@ -9,11 +12,16 @@ namespace RetradeBE.Services
     {
         private readonly IOrderRepository _orderRepository;
         private readonly IAccountRepository _accountRepository;
+        private readonly IHubContext<OrderHub> _orderHub;
 
-        public OrderService(IOrderRepository orderRepository, IAccountRepository accountRepository)
+        public OrderService(
+            IOrderRepository orderRepository,
+            IAccountRepository accountRepository,
+            IHubContext<OrderHub> orderHub)
         {
             _orderRepository = orderRepository;
             _accountRepository = accountRepository;
+            _orderHub = orderHub;
         }
 
         public async Task<PagedResultDto<OrderListDto>> GetMyOrdersAsync(string accountId, OrderSearchQueryDto query)
@@ -65,6 +73,64 @@ namespace RetradeBE.Services
             }
 
             return ToDetailDto(order);
+        }
+
+        public async Task<OrderDetailDto?> ConfirmOrderAsync(string accountId, string orderId)
+        {
+            return await UpdateStatusAsync(accountId, orderId, new OrderStatusUpdateDto
+            {
+                Status = nameof(OrderStatusEnum.Confirmed)
+            });
+        }
+
+        public async Task<OrderDetailDto?> UpdateStatusAsync(string accountId, string orderId, OrderStatusUpdateDto dto)
+        {
+            var order = await _orderRepository.GetForUpdateAsync(orderId);
+            if (order == null)
+            {
+                return null;
+            }
+
+            var access = await GetOrderAccessAsync(accountId);
+            if (!access.IsAdmin && order.SellerId != access.UserId)
+            {
+                return null;
+            }
+
+            if (!Enum.TryParse<OrderStatusEnum>(dto.Status, true, out var nextStatus))
+            {
+                throw new InvalidOperationException("Invalid order status.");
+            }
+
+            var currentStatus = ParseStatus(order.Status);
+            if (!CanMoveTo(currentStatus, nextStatus, access.IsAdmin))
+            {
+                throw new InvalidOperationException($"Cannot update order status from {currentStatus} to {nextStatus}.");
+            }
+
+            order.Status = nextStatus.ToString();
+            order.UpdatedAt = DateTime.UtcNow;
+
+            if (!string.IsNullOrWhiteSpace(dto.TrackingCode))
+            {
+                order.TrackingCode = dto.TrackingCode.Trim();
+            }
+
+            if (!string.IsNullOrWhiteSpace(dto.ShippingProvider))
+            {
+                order.ShippingProvider = dto.ShippingProvider.Trim();
+            }
+
+            if (dto.ExpectedDeliveryTime.HasValue)
+            {
+                order.ExpectedDeliveryTime = dto.ExpectedDeliveryTime.Value;
+            }
+
+            await _orderRepository.UpdateAsync(order);
+            var updatedOrder = ToDetailDto(order);
+            await NotifySellerOrderStatusChangedAsync(updatedOrder);
+
+            return updatedOrder;
         }
 
         private static IQueryable<Order> ApplyFilters(IQueryable<Order> orders, OrderSearchQueryDto query)
@@ -222,6 +288,74 @@ namespace RetradeBE.Services
             return account?.UserId;
         }
 
+        private async Task<OrderAccessInfo> GetOrderAccessAsync(string accountId)
+        {
+            var account = await _accountRepository.GetByIdAsync(accountId);
+            var roles = await _accountRepository.GetRolesAsync(accountId);
+
+            return new OrderAccessInfo
+            {
+                UserId = account?.UserId,
+                IsAdmin = roles.Any(r => string.Equals(r, nameof(RoleEnum.Admin), StringComparison.OrdinalIgnoreCase))
+            };
+        }
+
+        private static OrderStatusEnum ParseStatus(string? status)
+        {
+            return Enum.TryParse<OrderStatusEnum>(status, true, out var parsed)
+                ? parsed
+                : OrderStatusEnum.Pending;
+        }
+
+        private static bool CanMoveTo(OrderStatusEnum currentStatus, OrderStatusEnum nextStatus, bool isAdmin)
+        {
+            if (currentStatus == nextStatus)
+            {
+                return true;
+            }
+
+            if (isAdmin)
+            {
+                return true;
+            }
+
+            if (currentStatus is OrderStatusEnum.Delivered or OrderStatusEnum.Returned or OrderStatusEnum.Cancelled)
+            {
+                return false;
+            }
+
+            return currentStatus switch
+            {
+                OrderStatusEnum.AwaitingPayment => nextStatus is OrderStatusEnum.Cancelled,
+                OrderStatusEnum.Pending => nextStatus is OrderStatusEnum.Confirmed or OrderStatusEnum.Cancelled,
+                OrderStatusEnum.Confirmed => nextStatus is OrderStatusEnum.Shipping or OrderStatusEnum.Cancelled,
+                OrderStatusEnum.Shipping => nextStatus is OrderStatusEnum.Delivered or OrderStatusEnum.Returned,
+                _ => false
+            };
+        }
+
+        private async Task NotifySellerOrderStatusChangedAsync(OrderDetailDto order)
+        {
+            if (string.IsNullOrWhiteSpace(order.SellerId))
+            {
+                return;
+            }
+
+            await _orderHub.Clients
+                .Group(OrderHub.GetSellerOrderGroupName(order.SellerId))
+                .SendAsync("SellerOrderStatusChanged", new
+                {
+                    order.OrderId,
+                    order.OrderCode,
+                    order.SellerId,
+                    order.Status,
+                    order.TrackingCode,
+                    order.ShippingProvider,
+                    order.ExpectedDeliveryTime,
+                    order.UpdatedAt
+                });
+        }
+
         private static PagedResultDto<OrderListDto> EmptyPagedResult(OrderSearchQueryDto query)
         {
             return new PagedResultDto<OrderListDto>
@@ -232,6 +366,12 @@ namespace RetradeBE.Services
                 PageSize = query.PageSize < 1 ? 12 : Math.Min(query.PageSize, 100),
                 TotalPages = 1
             };
+        }
+
+        private class OrderAccessInfo
+        {
+            public string? UserId { get; set; }
+            public bool IsAdmin { get; set; }
         }
     }
 }
