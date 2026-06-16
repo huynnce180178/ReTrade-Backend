@@ -333,6 +333,5 @@ namespace RetradeBE.Services
                 TotalPages = 1
             };
         }
-
     }
 }
