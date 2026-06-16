@@ -120,10 +120,14 @@ namespace RetradeBE.Services.Checkout
                 ? RetradeBE.Models.Enums.OrderStatusEnum.AwaitingPayment.ToString() 
                 : RetradeBE.Models.Enums.OrderStatusEnum.Pending.ToString();
 
+            var now = DateTime.UtcNow.AddHours(7);
+            var random = new Random().Next(10, 99).ToString();
+            var orderCode = $"ORD{random}{now:yyyyMMddHHmm}";
+
             var order = new Order
             {
                 OrderId = Guid.NewGuid().ToString(),
-                OrderCode = "ORD" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString(),
+                OrderCode = orderCode,
                 UserId = userId,
                 SellerId = product.SellerId,
                 ProductId = product.ProductId,
