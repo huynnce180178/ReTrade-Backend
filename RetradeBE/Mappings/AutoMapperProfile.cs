@@ -83,6 +83,19 @@ namespace RetradeBE.Mappings
             CreateMap<Payment, PaymentSummaryDto>();
             //Attribute -> AttributeDTO
             CreateMap<Role, RoleDto>();
+
+            // UserSearch Mappings
+            CreateMap<UserSearch, UserSearchResponseDto>()
+                .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category != null ? src.Category.Name : null));
+            CreateMap<UserSearchCreateDto, UserSearch>();
+
+            // UserFavorite Mappings
+            CreateMap<UserFavorite, UserFavoriteResponseDto>()
+                .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category != null ? src.Category.Name : null))
+                .ForMember(dest => dest.CategoryImageUrl, opt => opt.MapFrom(src => src.Category != null 
+                    ? src.Category.CategoryImage.OrderByDescending(ci => ci.CreatedAt).Select(ci => ci.Image != null ? ci.Image.ImageUrl : null).FirstOrDefault() 
+                    : null));
+            CreateMap<UserFavoriteCreateDto, UserFavorite>();
         }
     }
 }

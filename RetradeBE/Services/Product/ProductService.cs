@@ -406,7 +406,7 @@ namespace RetradeBE.Services
             if (totalPages == 0) totalPages = 1;
 
             var items = await queryable
-                .OrderByDescending(p => p.CreatedAt)
+                .OrderByDynamic(query.SortBy)
                 .Skip((query.Page - 1) * query.PageSize)
                 .Take(query.PageSize)
                 .Select(p => new ProductListDto
@@ -594,5 +594,21 @@ namespace RetradeBE.Services
         }
 
         #endregion
+    }
+
+    internal static class ProductQueryExtensions
+    {
+        public static IQueryable<Product> OrderByDynamic(this IQueryable<Product> query, string? sortBy)
+        {
+            return sortBy?.ToLower() switch
+            {
+                "price_asc" => query.OrderBy(p => p.Price),
+                "price_desc" => query.OrderByDescending(p => p.Price),
+                "oldest" => query.OrderBy(p => p.CreatedAt),
+                "name_asc" => query.OrderBy(p => p.Name),
+                "name_desc" => query.OrderByDescending(p => p.Name),
+                _ => query.OrderByDescending(p => p.CreatedAt), // "newest" or default
+            };
+        }
     }
 }
