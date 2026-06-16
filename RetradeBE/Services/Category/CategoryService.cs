@@ -123,14 +123,10 @@ public class CategoryService : ICategoryService
             dto.ParentId ?? category.ParentId;
         category.UpdatedAt = DateTime.UtcNow;
 
-        Console.WriteLine($"[UpdateAsync] categoryId: {categoryId}");
-        Console.WriteLine($"[UpdateAsync] dto.Attributes count: {dto.Attributes?.Count ?? -1}");
-
         if (dto.Attributes != null)
         {
             foreach (var a in dto.Attributes)
             {
-                Console.WriteLine($"  - Id: '{a.AttributeId}', Name: '{a.Name}', DataType: '{a.DataType}', IsRequired: {a.IsRequired}");
             }
 
             var existingAttributes = category.Attributes.ToList();

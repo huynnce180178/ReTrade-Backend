@@ -30,6 +30,8 @@ namespace RetradeBE
             builder.Services.Configure<RetradeBE.Config.CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
             builder.Services.Configure<RetradeBE.Config.GoogleSettings>(builder.Configuration.GetSection("GoogleSettings"));
             builder.Services.Configure<RetradeBE.Config.VnPaySettings>(builder.Configuration.GetSection("VNPAY"));
+            builder.Services.Configure<RetradeBE.Config.GhnSettings>(builder.Configuration.GetSection("GHN"));
+
             builder.Services.AddHttpClient();
             builder.Services.AddSignalR();
 
@@ -277,22 +279,27 @@ namespace RetradeBE
             string userId, string firstName, string lastName, string email,
             string accountId, string username, string plainPassword, int roleId)
         {
-            var userExists = dbContext.User.Any(u => u.UserId == userId);
-            var accountExists = dbContext.Account.Any(a => a.AccountId == accountId);
+            var user = dbContext.User.FirstOrDefault(u => u.UserId == userId);
+            var account = dbContext.Account.FirstOrDefault(a => a.AccountId == accountId);
             var accountRoleExists = dbContext.AccountRole.Any(ar => ar.AccountId == accountId && ar.RoleId == roleId);
 
-            if (!userExists)
+            if (user == null)
             {
-                dbContext.User.Add(new User
+                user = new User
                 {
                     UserId = userId,
                     FirstName = firstName,
                     LastName = lastName,
                     Email = email
-                });
+                };
+                dbContext.User.Add(user);
+            }
+            else
+            {
+                user.Email = email;
             }
 
-            if (!accountExists)
+            if (account == null)
             {
                 dbContext.Account.Add(new Account
                 {
@@ -304,6 +311,13 @@ namespace RetradeBE
                     Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString()
                 });
             }
+            else
+            {
+                account.Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString();
+                account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(plainPassword);
+                account.Provider = "LOCAL";
+                account.IsDeleted = false;
+            }
 
             if (!accountRoleExists)
             {
@@ -314,10 +328,7 @@ namespace RetradeBE
                 });
             }
 
-            if (!userExists || !accountExists || !accountRoleExists)
-            {
-                dbContext.SaveChanges();
-            }
+            dbContext.SaveChanges();
         }
 
         private static void SeedDemoOrders(AppDbContext dbContext)

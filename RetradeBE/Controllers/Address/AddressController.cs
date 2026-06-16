@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using RetradeBE.Models.DTOs;
 using RetradeBE.Services;
 using System.Security.Claims;
+using System.Threading.Tasks;
+using RetradeBE.Services.Ghn;
 
 namespace RetradeBE.Controllers.Address
 {
@@ -12,10 +14,12 @@ namespace RetradeBE.Controllers.Address
     public class AddressController : ControllerBase
     {
         private readonly IAddressService _addressService;
+        private readonly IGhnService _ghnService;
 
-        public AddressController(IAddressService addressService)
+        public AddressController(IAddressService addressService, IGhnService ghnService)
         {
             _addressService = addressService;
+            _ghnService = ghnService;
         }
 
         [HttpGet("my-addresses")]
@@ -73,6 +77,27 @@ namespace RetradeBE.Controllers.Address
             if (!deleted) return NotFound("Address not found.");
 
             return NoContent();
+        }
+
+        [AllowAnonymous]
+        [HttpGet("provinces")]
+        public async Task<IActionResult> GetProvinces()
+        {
+            return Ok(await _ghnService.GetProvincesAsync());
+        }
+
+        [AllowAnonymous]
+        [HttpGet("districts")]
+        public async Task<IActionResult> GetDistricts([FromQuery] int provinceId)
+        {
+            return Ok(await _ghnService.GetDistrictsAsync(provinceId));
+        }
+
+        [AllowAnonymous]
+        [HttpGet("wards")]
+        public async Task<IActionResult> GetWards([FromQuery] int districtId)
+        {
+            return Ok(await _ghnService.GetWardsAsync(districtId));
         }
     }
 }

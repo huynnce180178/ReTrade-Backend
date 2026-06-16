@@ -84,18 +84,61 @@ namespace RetradeBE.Mappings
             //Attribute -> AttributeDTO
             CreateMap<Role, RoleDto>();
 
-            // UserSearch Mappings
-            CreateMap<UserSearch, UserSearchResponseDto>()
-                .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category != null ? src.Category.Name : null));
-            CreateMap<UserSearchCreateDto, UserSearch>();
-
-            // UserFavorite Mappings
-            CreateMap<UserFavorite, UserFavoriteResponseDto>()
+            CreateMap<UserFavorite, UserFavoriteDto>()
                 .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category != null ? src.Category.Name : null))
                 .ForMember(dest => dest.CategoryImageUrl, opt => opt.MapFrom(src => src.Category != null 
                     ? src.Category.CategoryImage.OrderByDescending(ci => ci.CreatedAt).Select(ci => ci.Image != null ? ci.Image.ImageUrl : null).FirstOrDefault() 
                     : null));
             CreateMap<UserFavoriteCreateDto, UserFavorite>();
+
+            // Profile Mappings
+            CreateMap<Address, AddressDto>()
+                .ForMember(dest => dest.StreetAddress, opt => opt.MapFrom(src => src.Street));
+
+            CreateMap<Account, ProfileDetailDto>()
+                .ForMember(dest => dest.UserId, opt => opt.MapFrom(src => src.User.UserId))
+                .ForMember(dest => dest.Username, opt => opt.MapFrom(src => src.Username ?? string.Empty))
+                .ForMember(dest => dest.Email, opt => opt.MapFrom(src => src.User.Email))
+                .ForMember(dest => dest.FirstName, opt => opt.MapFrom(src => src.User.FirstName))
+                .ForMember(dest => dest.LastName, opt => opt.MapFrom(src => src.User.LastName))
+                .ForMember(dest => dest.Phone, opt => opt.MapFrom(src => src.User.Phone))
+                .ForMember(dest => dest.AvatarUrl, opt => opt.MapFrom(src => src.User.AvatarUrl))
+                .ForMember(dest => dest.IsDeleted, opt => opt.MapFrom(src => src.User.IsDeleted))
+                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.User.CreatedAt))
+                .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => src.User.UpdatedAt))
+                .ForMember(dest => dest.DefaultAddress, opt => opt.Ignore())
+                .ForMember(dest => dest.Addresses, opt => opt.Ignore())
+                .ForMember(dest => dest.Roles, opt => opt.Ignore());
+
+            CreateMap<User, SellerDetailDto>()
+                .ForMember(dest => dest.SellerId, opt => opt.MapFrom(src => src.UserId))
+                .ForMember(dest => dest.AccountId, opt => opt.Ignore())
+                .ForMember(dest => dest.Username, opt => opt.Ignore())
+                .ForMember(dest => dest.FollowersCount, opt => opt.Ignore())
+                .ForMember(dest => dest.FollowingCount, opt => opt.Ignore())
+                .ForMember(dest => dest.ProductCount, opt => opt.Ignore())
+                .ForMember(dest => dest.AverageRating, opt => opt.Ignore())
+                .ForMember(dest => dest.IsSeller, opt => opt.Ignore())
+                .ForMember(dest => dest.IsFollowing, opt => opt.Ignore())
+                .ForMember(dest => dest.IsOwnSeller, opt => opt.Ignore())
+                .ForMember(dest => dest.CanFollow, opt => opt.Ignore())
+                .ForMember(dest => dest.DefaultAddress, opt => opt.Ignore());
+
+            // Wishlist Mappings
+            CreateMap<Wishlist, WishlistDetailDto>()
+                .ForMember(dest => dest.Items, opt => opt.MapFrom(src => src.WishlistItem));
+
+            CreateMap<WishlistItem, WishlistItemDto>()
+                .ForMember(dest => dest.ProductName, opt => opt.MapFrom(src => src.Product.Name))
+                .ForMember(dest => dest.Price, opt => opt.MapFrom(src => src.Product.Price))
+                .ForMember(dest => dest.Condition, opt => opt.MapFrom(src => src.Product.Condition))
+                .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.Product.Status))
+                .ForMember(dest => dest.SellerId, opt => opt.MapFrom(src => src.Product.SellerId))
+                .ForMember(dest => dest.SellerName, opt => opt.MapFrom(src => src.Product.Seller != null ? $"{src.Product.Seller.FirstName} {src.Product.Seller.LastName}".Trim() : null))
+                .ForMember(dest => dest.AddedAt, opt => opt.MapFrom(src => src.CreatedAt))
+                .ForMember(dest => dest.MainImageUrl, opt => opt.MapFrom(src => 
+                    src.Product.ProductImage.Where(pi => pi.IsMain == true).Select(pi => pi.Image.ImageUrl).FirstOrDefault() ?? 
+                    src.Product.ProductImage.OrderBy(pi => pi.SortOrder).Select(pi => pi.Image.ImageUrl).FirstOrDefault()));
         }
     }
 }

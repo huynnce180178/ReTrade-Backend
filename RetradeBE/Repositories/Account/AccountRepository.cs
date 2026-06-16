@@ -66,7 +66,8 @@ namespace RetradeBE.Repositories.AccountRoleRepository
 
         public async Task<Account?> GetByUsernameAsync(string username)
         {
-            return await _context.Account.FirstOrDefaultAsync(a => a.Username == username);
+            if (string.IsNullOrEmpty(username)) return null;
+            return await _context.Account.FirstOrDefaultAsync(a => a.Username != null && a.Username.ToLower() == username.ToLower());
         }
 
         public async Task AssignRoleAsync(string accountId, string roleName)
