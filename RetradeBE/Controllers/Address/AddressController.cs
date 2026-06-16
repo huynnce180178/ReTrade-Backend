@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using RetradeBE.Models.DTOs;
 using RetradeBE.Services;
 using System.Security.Claims;
+using System.Threading.Tasks;
 
 namespace RetradeBE.Controllers.Address
 {
@@ -73,6 +74,42 @@ namespace RetradeBE.Controllers.Address
             if (!deleted) return NotFound("Address not found.");
 
             return NoContent();
+        }
+
+        [AllowAnonymous]
+        [HttpGet("provinces")]
+        public IActionResult GetProvinces()
+        {
+            var data = new[] { 
+                new { ProvinceID = 201, ProvinceName = "Hà Nội" }, 
+                new { ProvinceID = 202, ProvinceName = "Hồ Chí Minh" },
+                new { ProvinceID = 215, ProvinceName = "Vĩnh Long" }
+            };
+            return Ok(data);
+        }
+
+        [AllowAnonymous]
+        [HttpGet("districts")]
+        public IActionResult GetDistricts([FromQuery] int provinceId)
+        {
+            var data = new[] { 
+                new { DistrictID = 1442, DistrictName = "Quận 1" }, 
+                new { DistrictID = 1443, DistrictName = "Quận 2" },
+                new { DistrictID = 2034, DistrictName = "Trà Ôn" }
+            };
+            return Ok(data);
+        }
+
+        [AllowAnonymous]
+        [HttpGet("wards")]
+        public IActionResult GetWards([FromQuery] int districtId)
+        {
+            var data = new[] { 
+                new { WardCode = "20101", WardName = "Phường 1" }, 
+                new { WardCode = "20102", WardName = "Phường 2" },
+                new { WardCode = "570604", WardName = "Tân Thạnh" }
+            };
+            return Ok(data);
         }
     }
 }
