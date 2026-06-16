@@ -84,6 +84,13 @@ namespace RetradeBE.Mappings
             //Attribute -> AttributeDTO
             CreateMap<Role, RoleDto>();
 
+            CreateMap<UserFavorite, UserFavoriteDto>()
+                .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category != null ? src.Category.Name : null))
+                .ForMember(dest => dest.CategoryImageUrl, opt => opt.MapFrom(src => src.Category != null 
+                    ? src.Category.CategoryImage.OrderByDescending(ci => ci.CreatedAt).Select(ci => ci.Image != null ? ci.Image.ImageUrl : null).FirstOrDefault() 
+                    : null));
+            CreateMap<UserFavoriteCreateDto, UserFavorite>();
+
             // Profile Mappings
             CreateMap<Address, AddressDto>()
                 .ForMember(dest => dest.StreetAddress, opt => opt.MapFrom(src => src.Street));
