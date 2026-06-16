@@ -138,6 +138,21 @@ namespace RetradeBE
                     ValidAudience = jwtSettings.Audience,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.SecretKey))
                 };
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        var accessToken = context.Request.Query["access_token"];
+                        var path = context.HttpContext.Request.Path;
+
+                        if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                        {
+                            context.Token = accessToken;
+                        }
+
+                        return Task.CompletedTask;
+                    }
+                };
             });
 
             // Lấy đường dẫn Frontend từ appsettings.json
@@ -146,7 +161,9 @@ namespace RetradeBE
             {
                 frontendUrl,
                 "http://localhost:5173",
-                "http://127.0.0.1:5173"
+                "http://127.0.0.1:5173",
+                "http://localhost:5174",
+                "http://127.0.0.1:5174"
             }.Distinct().ToArray();
 
             // Thêm CORS để Frontend có thể gọi API (ví dụ: React, Vue, Angular chạy ở port khác)
@@ -202,6 +219,7 @@ namespace RetradeBE
             app.MapControllers();
             app.MapHub<RetradeBE.Hubs.AccountHub>("/hubs/accounts");
             app.MapHub<SellerHub>("/hubs/sellers");
+            app.MapHub<OrderHub>("/hubs/orders");
 
             app.Run();
         }
