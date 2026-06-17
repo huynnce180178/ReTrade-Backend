@@ -22,7 +22,8 @@ namespace RetradeBE.Repositories
                 .Include(o => o.Product)
                     .ThenInclude(p => p!.ProductImage)
                     .ThenInclude(pi => pi.Image)
-                .Include(o => o.Payment);
+                .Include(o => o.Payment)
+                .Include(o => o.Review);
         }
 
         public async Task<Order?> GetByIdAsync(string orderId)
@@ -40,6 +41,7 @@ namespace RetradeBE.Repositories
                     .ThenInclude(p => p!.ProductImage)
                     .ThenInclude(pi => pi.Image)
                 .Include(o => o.Payment)
+                .Include(o => o.Review)
                 .FirstOrDefaultAsync(o => o.OrderId == orderId);
         }
 

@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.OData.Query;
 using RetradeBE.Models.DTOs;
 using RetradeBE.Models.Enums;
 using RetradeBE.Services;
@@ -34,16 +33,6 @@ namespace RetradeBE.Controllers.Order
             if (string.IsNullOrWhiteSpace(sellerId)) return BadRequest("SellerId is required.");
 
             return Ok(await _orderService.GetSellerOrdersAsync(sellerId, query));
-        }
-
-        [HttpGet("seller-orders/odata")]
-        [Authorize(Roles = $"{nameof(RoleEnum.Seller)},{nameof(RoleEnum.Admin)}")]
-        [EnableQuery(PageSize = 20, MaxTop = 100)]
-        public IActionResult GetSellerOrdersOData([FromQuery] string sellerId)
-        {
-            if (string.IsNullOrWhiteSpace(sellerId)) return BadRequest("SellerId is required.");
-
-            return Ok(_orderService.QuerySellerOrders(sellerId));
         }
 
         [HttpGet("seller-orders/statistics")]

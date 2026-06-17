@@ -127,6 +127,8 @@ namespace RetradeBE.Services
             var isOwnSeller = currentUserId == seller.UserId;
             var isSeller = HasRole(sellerRoles, "Seller");
             var currentIsAdmin = HasRole(currentRoles, "Admin");
+            var reviewCount = await _repository.CountSellerReviewsAsync(seller.UserId);
+            var ratingCounts = await _repository.GetSellerRatingCountsAsync(seller.UserId);
 
             return new SellerDetailDto
             {
@@ -143,6 +145,20 @@ namespace RetradeBE.Services
                 FollowingCount = await _repository.CountFollowingAsync(seller.UserId),
                 ProductCount = await _repository.CountProductsAsync(seller.UserId),
                 AverageRating = await _repository.GetAverageSellerRatingAsync(seller.UserId),
+                ReviewCount = reviewCount,
+                RatingStats = Enumerable.Range(1, 5)
+                    .Reverse()
+                    .Select(rating =>
+                    {
+                        var count = ratingCounts.TryGetValue(rating, out var value) ? value : 0;
+                        return new SellerRatingStatDto
+                        {
+                            Rating = rating,
+                            Count = count,
+                            Percentage = reviewCount == 0 ? 0 : Math.Round((double)count / reviewCount * 100, 1)
+                        };
+                    })
+                    .ToList(),
                 IsSeller = isSeller,
                 IsFollowing = currentUserId != null && await _repository.FollowExistsAsync(currentUserId, seller.UserId),
                 IsOwnSeller = isOwnSeller,
