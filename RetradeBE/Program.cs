@@ -240,29 +240,29 @@ namespace RetradeBE
             SeedServiceSubscription(
                 dbContext,
                 "SERVICE_UPGRADE_SELLER",
-                "Gói Nâng Cấp Seller",
+                "Seller Upgrade Package",
                 "Buyer",
                 99000m,
                 30,
-                "Mở quyền trở thành Seller. Được phép đăng bán sản phẩm. Quản lý cửa hàng chuyên nghiệp.");
+                "Unlock Seller privileges. Allowed to list products for sale. Professional store management.");
 
             SeedServiceSubscription(
                 dbContext,
                 "SERVICE_VOUCHER_FEATURE",
-                "Gói Mã Giảm Giá",
+                "Discount Voucher Package",
                 "Seller",
                 49000m,
                 30,
-                "Kích hoạt quyền tạo mã giảm giá. Tự do tung các voucher cho shop. Thu hút nhiều khách hàng hơn.");
+                "Activate the right to create discount codes. Freely distribute vouchers for the shop. Attract more customers.");
 
             SeedServiceSubscription(
                 dbContext,
                 "SERVICE_PRIORITY_LISTING",
-                "Gói Đẩy Sản Phẩm Lên Đầu Trang",
+                "Priority Listing Package",
                 "Seller",
                 69000m,
                 30,
-                "Kích hoạt quyền ưu tiên hiển thị. Đưa sản phẩm lên top kết quả tìm kiếm. Tiếp cận hàng vạn người mua tiềm năng.");
+                "Activate priority display rights. Bring products to the top of search results. Reach tens of thousands of potential buyers.");
         }
 
         private static void SeedRole(AppDbContext dbContext, int roleId, string name)
