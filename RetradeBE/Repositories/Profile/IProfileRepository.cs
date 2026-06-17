@@ -22,6 +22,8 @@ namespace RetradeBE.Repositories
         Task<int> CountFollowingAsync(string userId);
         Task<int> CountProductsAsync(string sellerId);
         Task<double?> GetAverageSellerRatingAsync(string sellerId);
+        Task<int> CountSellerReviewsAsync(string sellerId);
+        Task<Dictionary<int, int>> GetSellerRatingCountsAsync(string sellerId);
         Task AddFollowAsync(UserFollow follow);
         Task<UserFollow?> GetFollowAsync(string followerId, string followedUserId);
         Task RemoveFollowAsync(UserFollow follow);

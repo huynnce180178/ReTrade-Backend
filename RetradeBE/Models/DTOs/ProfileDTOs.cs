@@ -106,11 +106,20 @@ namespace RetradeBE.Models.DTOs
         public int FollowingCount { get; set; }
         public int ProductCount { get; set; }
         public double? AverageRating { get; set; }
+        public int ReviewCount { get; set; }
+        public List<SellerRatingStatDto> RatingStats { get; set; } = new();
         public bool IsSeller { get; set; }
         public bool IsFollowing { get; set; }
         public bool IsOwnSeller { get; set; }
         public bool CanFollow { get; set; }
         public AddressDto? DefaultAddress { get; set; }
+    }
+
+    public class SellerRatingStatDto
+    {
+        public int Rating { get; set; }
+        public int Count { get; set; }
+        public double Percentage { get; set; }
     }
 
     public class FollowResultDto

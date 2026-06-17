@@ -70,7 +70,8 @@ namespace RetradeBE.Mappings
                     : null))
                 .ForMember(dest => dest.SellerName, opt => opt.MapFrom(src => src.Seller != null ? (src.Seller.FirstName + " " + src.Seller.LastName).Trim() : null))
                 .ForMember(dest => dest.SellerEmail, opt => opt.MapFrom(src => src.Seller != null ? src.Seller.Email : null))
-                .ForMember(dest => dest.SellerPhone, opt => opt.MapFrom(src => src.Seller != null ? src.Seller.Phone : null));
+                .ForMember(dest => dest.SellerPhone, opt => opt.MapFrom(src => src.Seller != null ? src.Seller.Phone : null))
+                .ForMember(dest => dest.HasReview, opt => opt.MapFrom(src => src.Review.Any()));
 
             CreateMap<Order, PurchaseDetailDto>()
                 .IncludeBase<Order, PurchaseListDto>()
@@ -78,9 +79,11 @@ namespace RetradeBE.Mappings
                 .ForMember(dest => dest.BuyerName, opt => opt.MapFrom(src => src.User != null ? (src.User.FirstName + " " + src.User.LastName).Trim() : null))
                 .ForMember(dest => dest.BuyerEmail, opt => opt.MapFrom(src => src.User != null ? src.User.Email : null))
                 .ForMember(dest => dest.BuyerPhone, opt => opt.MapFrom(src => src.User != null ? src.User.Phone : null))
+                .ForMember(dest => dest.HasReview, opt => opt.MapFrom(src => src.Review.Any()))
                 .ForMember(dest => dest.Payments, opt => opt.MapFrom(src => src.Payment.OrderByDescending(p => p.CreatedAt)));
 
             CreateMap<Payment, PaymentSummaryDto>();
+            CreateMap<Review, ReviewResponseDto>();
             //Attribute -> AttributeDTO
             CreateMap<Role, RoleDto>();
 
@@ -124,6 +127,8 @@ namespace RetradeBE.Mappings
                 .ForMember(dest => dest.FollowingCount, opt => opt.Ignore())
                 .ForMember(dest => dest.ProductCount, opt => opt.Ignore())
                 .ForMember(dest => dest.AverageRating, opt => opt.Ignore())
+                .ForMember(dest => dest.ReviewCount, opt => opt.Ignore())
+                .ForMember(dest => dest.RatingStats, opt => opt.Ignore())
                 .ForMember(dest => dest.IsSeller, opt => opt.Ignore())
                 .ForMember(dest => dest.IsFollowing, opt => opt.Ignore())
                 .ForMember(dest => dest.IsOwnSeller, opt => opt.Ignore())

@@ -84,6 +84,7 @@ namespace RetradeBE
             builder.Services.AddAutoMapper(cfg => cfg.AddProfile<AutoMapperProfile>());
             builder.Services.AddControllers();
             builder.Services.AddHostedService<SubscriptionExpirationService>();
+            builder.Services.AddHostedService<ShippingOutcomeSimulationService>();
             builder.Services.AddMemoryCache(); // Thêm bộ nhớ đệm (dùng lưu OTP)
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(c =>
