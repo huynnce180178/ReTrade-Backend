@@ -253,13 +253,13 @@ public class CategoryService : ICategoryService
     {
         var lastCategory = await _repository
             .Query()
+            .Where(x => x.CategoryId.StartsWith("CAT") && !x.CategoryId.Contains("_"))
             .OrderByDescending(x => x.CategoryId)
             .FirstOrDefaultAsync();
 
         int next = 1;
 
-        if (lastCategory != null
-            && lastCategory.CategoryId.StartsWith("CAT"))
+        if (lastCategory != null)
         {
             int.TryParse(
                 lastCategory.CategoryId.Substring(3),

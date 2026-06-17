@@ -476,12 +476,13 @@ namespace RetradeBE.Services
         {
             var lastProduct = await _context.Product
                 .IgnoreQueryFilters()
+                .Where(x => x.ProductId.StartsWith("PR") && !x.ProductId.Contains("_"))
                 .OrderByDescending(x => x.ProductId)
                 .FirstOrDefaultAsync();
 
             int next = 1;
 
-            if (lastProduct != null && lastProduct.ProductId.StartsWith("PR"))
+            if (lastProduct != null)
             {
                 if (int.TryParse(lastProduct.ProductId.Substring(2), out int lastNumber))
                 {
