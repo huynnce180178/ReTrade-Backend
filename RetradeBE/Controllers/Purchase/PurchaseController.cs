@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OData.Query;
+using Microsoft.EntityFrameworkCore;
 using RetradeBE.Services;
 
 namespace RetradeBE.Controllers.Purchase
@@ -18,10 +19,32 @@ namespace RetradeBE.Controllers.Purchase
         }
 
         [HttpGet("buyer/{buyerId}")]
-        [EnableQuery(PageSize = 20, MaxTop = 100)]
-        public IActionResult GetBuyerPurchases(string buyerId)
+        public async Task<IActionResult> GetBuyerPurchases(string buyerId, [FromQuery] int? page, [FromQuery] int? pageSize, [FromQuery] string? status)
         {
-            return Ok(_purchaseService.QueryByBuyerId(buyerId));
+            var query = _purchaseService.QueryByBuyerId(buyerId, status);
+            if (page.HasValue)
+            {
+                var ps = pageSize.GetValueOrDefault(20);
+                if (ps <= 0) ps = 20;
+                if (ps > 100) ps = 100; // protect too-large requests
+
+                var p = page.Value <= 0 ? 1 : page.Value;
+
+                var total = await query.CountAsync();
+                var items = await query.Skip((p - 1) * ps).Take(ps).ToListAsync();
+
+                return Ok(new
+                {
+                    totalCount = total,
+                    page = p,
+                    pageSize = ps,
+                    items
+                });
+            }
+
+            // Otherwise return full query results (ensure newest-first ordering on DTO)
+            var ordered = query.OrderByDescending(p => p.CreatedAt);
+            return Ok(ordered);
         }
 
         [HttpGet("buyer/{buyerId}/{orderId}")]

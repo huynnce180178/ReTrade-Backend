@@ -7,6 +7,7 @@ namespace RetradeBE.Models.Enums
         Confirmed,
         Shipping,
         Delivered,
+        Completed,
         Returned,
         Cancelled
     }
