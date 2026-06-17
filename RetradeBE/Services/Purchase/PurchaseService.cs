@@ -10,6 +10,7 @@ namespace RetradeBE.Services
         private const string AwaitingPaymentStatus = "AwaitingPayment";
         private const string PendingStatus = "Pending";
         private const string ConfirmedStatus = "Confirmed";
+        private const string DeliveredStatus = "Delivered";
         private const string CompletedStatus = "Completed";
         private const string CancelledStatus = "Cancelled";
 
@@ -24,16 +25,25 @@ namespace RetradeBE.Services
             _mapper = mapper;
         }
 
-        public IQueryable<PurchaseListDto> QueryByBuyerId(string buyerId)
+        public IQueryable<PurchaseListDto> QueryByBuyerId(string buyerId, string? status = null)
         {
             if (string.IsNullOrWhiteSpace(buyerId))
             {
                 return Enumerable.Empty<PurchaseListDto>().AsQueryable();
             }
 
-            return _orderRepository.Query()
-                .Where(o => o.UserId == buyerId)
-                .ProjectTo<PurchaseListDto>(_mapper.ConfigurationProvider);
+            var q = _orderRepository.Query()
+                .Where(o => o.UserId == buyerId);
+
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                q = q.Where(o => o.Status == status);
+            }
+
+            // Always order by CreatedAt descending (newest first)
+            q = q.OrderByDescending(o => o.CreatedAt);
+
+            return q.ProjectTo<PurchaseListDto>(_mapper.ConfigurationProvider);
         }
 
         public async Task<PurchaseDetailDto?> GetByIdAsync(string buyerId, string orderId)
@@ -65,9 +75,9 @@ namespace RetradeBE.Services
                 return null;
             }
 
-            if (!string.Equals(order.Status, PendingStatus, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(order.Status, DeliveredStatus , StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException("Purchase can only be completed from Pending status.");
+                throw new InvalidOperationException("Purchase can only be completed from Delivered status.");
             }
 
             order.Status = CompletedStatus;
