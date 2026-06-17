@@ -4,8 +4,10 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.SignalR;
 using RetradeBE.Config;
 using RetradeBE.Data;
+using RetradeBE.Hubs;
 using RetradeBE.Models;
 using RetradeBE.Models.DTOs;
 
@@ -17,15 +19,18 @@ public class PaymentService : IPaymentService
     private readonly AppDbContext _context;
     private readonly VnPaySettings _vnPaySettings;
     private readonly ILogger<PaymentService> _logger;
+    private readonly IHubContext<OrderHub> _orderHub;
 
     public PaymentService(
         AppDbContext context,
         IOptions<VnPaySettings> vnPaySettings,
-        ILogger<PaymentService> logger)
+        ILogger<PaymentService> logger,
+        IHubContext<OrderHub> orderHub)
     {
         _context = context;
         _vnPaySettings = vnPaySettings.Value;
         _logger = logger;
+        _orderHub = orderHub;
     }
 
     public async Task<CreateVnPayPaymentResponseDto> CreateVnPayPaymentUrlAsync(
@@ -180,17 +185,29 @@ public class PaymentService : IPaymentService
         }
 
         // Nếu là payment cho đơn hàng thì cập nhật trạng thái đơn hàng
+        Order? updatedOrder = null;
+
         if (isSuccess && !string.IsNullOrWhiteSpace(payment.OrderId))
         {
-            var order = await _context.Order.FirstOrDefaultAsync(o => o.OrderId == payment.OrderId);
+            var order = await _context.Order
+                .Include(o => o.User)
+                .Include(o => o.Product)
+                    .ThenInclude(p => p!.ProductImage)
+                    .ThenInclude(pi => pi.Image)
+                .FirstOrDefaultAsync(o => o.OrderId == payment.OrderId);
             if (order != null)
             {
                 order.Status = RetradeBE.Models.Enums.OrderStatusEnum.Pending.ToString();
                 order.UpdatedAt = DateTime.UtcNow;
+                updatedOrder = order;
             }
         }
 
         await _context.SaveChangesAsync();
+        if (updatedOrder != null)
+        {
+            await NotifySellerOrderChangedAsync(updatedOrder, "PaymentConfirmed");
+        }
 
         return new VnPayReturnResponseDto
         {
@@ -204,6 +221,51 @@ public class PaymentService : IPaymentService
             ResponseCode = responseCode,
             Amount = amount
         };
+    }
+
+    private async Task NotifySellerOrderChangedAsync(Order order, string eventType)
+    {
+        if (string.IsNullOrWhiteSpace(order.SellerId))
+        {
+            return;
+        }
+
+        var productImageUrl = order.Product?.ProductImage
+            .Where(pi => pi.IsMain == true)
+            .Select(pi => pi.Image.ImageUrl)
+            .FirstOrDefault()
+            ?? order.Product?.ProductImage
+                .OrderBy(pi => pi.SortOrder)
+                .Select(pi => pi.Image.ImageUrl)
+                .FirstOrDefault();
+
+        await _orderHub.Clients
+            .Group(OrderHub.GetSellerOrderGroupName(order.SellerId))
+            .SendAsync("SellerOrderStatusChanged", new
+            {
+                EventType = eventType,
+                order.OrderId,
+                order.OrderCode,
+                order.ProductId,
+                ProductName = order.Product?.Name,
+                ProductImageUrl = productImageUrl,
+                BuyerId = order.UserId,
+                BuyerName = order.User != null ? $"{order.User.FirstName} {order.User.LastName}".Trim() : null,
+                BuyerEmail = order.User?.Email,
+                order.SellerId,
+                order.Quantity,
+                order.UnitPrice,
+                order.TotalAmount,
+                order.ShippingFee,
+                order.DiscountAmount,
+                order.FinalAmount,
+                order.Status,
+                order.TrackingCode,
+                order.ShippingProvider,
+                order.ExpectedDeliveryTime,
+                order.CreatedAt,
+                order.UpdatedAt
+            });
     }
 
     /// <summary>

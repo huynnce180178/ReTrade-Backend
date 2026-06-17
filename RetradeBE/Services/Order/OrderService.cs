@@ -10,6 +10,8 @@ namespace RetradeBE.Services
 {
     public class OrderService : IOrderService
     {
+        private static readonly TimeSpan AwaitingPaymentCancelDelay = TimeSpan.FromMinutes(15);
+
         private readonly IOrderRepository _orderRepository;
         private readonly IHubContext<OrderHub> _orderHub;
 
@@ -41,6 +43,76 @@ namespace RetradeBE.Services
 
             var orders = ApplyFilters(_orderRepository.Query().Where(o => o.SellerId == sellerId), query);
             return await ToPagedListAsync(orders, query);
+        }
+
+        public IQueryable<OrderListDto> QuerySellerOrders(string sellerId)
+        {
+            if (string.IsNullOrWhiteSpace(sellerId))
+            {
+                return Enumerable.Empty<OrderListDto>().AsQueryable();
+            }
+
+            return ProjectToOrderListDto(_orderRepository.Query().Where(o => o.SellerId == sellerId));
+        }
+
+        public async Task<SellerSalesStatisticsDto> GetSellerSalesStatisticsAsync(string sellerId, int periodDays)
+        {
+            var normalizedPeriodDays = Math.Clamp(periodDays, 7, 365);
+            var periodEnd = DateTime.UtcNow;
+            var periodStart = periodEnd.AddDays(-normalizedPeriodDays);
+
+            if (string.IsNullOrWhiteSpace(sellerId))
+            {
+                return new SellerSalesStatisticsDto
+                {
+                    PeriodDays = normalizedPeriodDays,
+                    PeriodStart = periodStart,
+                    PeriodEnd = periodEnd
+                };
+            }
+
+            var orders = _orderRepository.Query()
+                .Where(o => o.SellerId == sellerId
+                    && o.CreatedAt.HasValue
+                    && o.CreatedAt.Value >= periodStart
+                    && o.CreatedAt.Value <= periodEnd);
+
+            var deliveredOrders = orders.Where(o => o.Status == nameof(OrderStatusEnum.Delivered));
+            var deliveredTrendSource = await deliveredOrders
+                .Select(o => new
+                {
+                    CreatedAt = o.CreatedAt!.Value,
+                    Revenue = o.FinalAmount ?? 0
+                })
+                .ToListAsync();
+
+            return new SellerSalesStatisticsDto
+            {
+                PeriodDays = normalizedPeriodDays,
+                PeriodStart = periodStart,
+                PeriodEnd = periodEnd,
+                TotalOrders = await orders.CountAsync(),
+                AwaitingPaymentOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.AwaitingPayment)),
+                PendingOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.Pending)),
+                ConfirmedOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.Confirmed)),
+                ShippingOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.Shipping)),
+                DeliveredOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.Delivered)),
+                ReturnedOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.Returned)),
+                CancelledOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.Cancelled)),
+                SoldItems = await deliveredOrders
+                    .SumAsync(o => o.Quantity ?? 0),
+                GrossSales = await deliveredOrders
+                    .SumAsync(o => o.TotalAmount ?? 0),
+                ShippingCollected = await deliveredOrders
+                    .SumAsync(o => o.ShippingFee ?? 0),
+                DiscountGiven = await deliveredOrders
+                    .SumAsync(o => o.DiscountAmount ?? 0),
+                NetSales = await deliveredOrders
+                    .SumAsync(o => o.FinalAmount ?? 0),
+                RevenueTrend = BuildRevenueTrend(periodStart, periodEnd, deliveredTrendSource
+                    .Select(o => (o.CreatedAt, o.Revenue))
+                    .ToList())
+            };
         }
 
         public async Task<PagedResultDto<OrderListDto>> GetAllOrdersAsync(OrderSearchQueryDto query)
@@ -92,7 +164,7 @@ namespace RetradeBE.Services
             }
 
             var currentStatus = ParseStatus(order.Status);
-            if (!CanMoveTo(currentStatus, nextStatus))
+            if (!CanMoveTo(order, currentStatus, nextStatus))
             {
                 throw new InvalidOperationException($"Cannot update order status from {currentStatus} to {nextStatus}.");
             }
@@ -120,6 +192,41 @@ namespace RetradeBE.Services
             await NotifySellerOrderStatusChangedAsync(updatedOrder);
 
             return updatedOrder;
+        }
+
+        private static List<SellerSalesTrendPointDto> BuildRevenueTrend(
+            DateTime periodStart,
+            DateTime periodEnd,
+            List<(DateTime CreatedAt, decimal Revenue)> deliveredOrders)
+        {
+            const int bucketCount = 7;
+            var trend = new List<SellerSalesTrendPointDto>();
+            var totalSeconds = Math.Max(1, (periodEnd - periodStart).TotalSeconds);
+            var bucketSeconds = totalSeconds / bucketCount;
+
+            for (var index = 0; index < bucketCount; index++)
+            {
+                var fromDate = periodStart.AddSeconds(bucketSeconds * index);
+                var toDate = index == bucketCount - 1
+                    ? periodEnd
+                    : periodStart.AddSeconds(bucketSeconds * (index + 1));
+
+                var bucketOrders = deliveredOrders
+                    .Where(o => o.CreatedAt >= fromDate
+                        && (index == bucketCount - 1 ? o.CreatedAt <= toDate : o.CreatedAt < toDate))
+                    .ToList();
+
+                trend.Add(new SellerSalesTrendPointDto
+                {
+                    Label = fromDate.ToString("dd/MM"),
+                    FromDate = fromDate,
+                    ToDate = toDate,
+                    OrderCount = bucketOrders.Count,
+                    Revenue = bucketOrders.Sum(o => o.Revenue)
+                });
+            }
+
+            return trend;
         }
 
         private static IQueryable<Order> ApplyFilters(IQueryable<Order> orders, OrderSearchQueryDto query)
@@ -160,47 +267,10 @@ namespace RetradeBE.Services
             var totalPages = (int)Math.Ceiling((double)totalItems / query.PageSize);
             if (totalPages == 0) totalPages = 1;
 
-            var items = await orders
+            var items = await ProjectToOrderListDto(orders)
                 .OrderByDescending(o => o.CreatedAt)
                 .Skip((query.Page - 1) * query.PageSize)
                 .Take(query.PageSize)
-                .Select(o => new OrderListDto
-                {
-                    OrderId = o.OrderId,
-                    OrderCode = o.OrderCode,
-                    ProductId = o.ProductId,
-                    ProductName = o.Product != null ? o.Product.Name : null,
-                    ProductImageUrl = o.Product != null
-                        ? o.Product.ProductImage
-                            .Where(pi => pi.IsMain == true)
-                            .Select(pi => pi.Image.ImageUrl)
-                            .FirstOrDefault()
-                          ?? o.Product.ProductImage
-                            .OrderBy(pi => pi.SortOrder)
-                            .Select(pi => pi.Image.ImageUrl)
-                            .FirstOrDefault()
-                        : null,
-                    BuyerId = o.UserId,
-                    BuyerName = o.User != null ? (o.User.FirstName + " " + o.User.LastName).Trim() : null,
-                    BuyerEmail = o.User != null ? o.User.Email : null,
-                    BuyerPhone = o.User != null ? o.User.Phone : null,
-                    SellerId = o.SellerId,
-                    SellerName = o.Seller != null ? (o.Seller.FirstName + " " + o.Seller.LastName).Trim() : null,
-                    SellerEmail = o.Seller != null ? o.Seller.Email : null,
-                    SellerPhone = o.Seller != null ? o.Seller.Phone : null,
-                    Quantity = o.Quantity,
-                    UnitPrice = o.UnitPrice,
-                    TotalAmount = o.TotalAmount,
-                    ShippingFee = o.ShippingFee,
-                    DiscountAmount = o.DiscountAmount,
-                    FinalAmount = o.FinalAmount,
-                    Status = o.Status,
-                    TrackingCode = o.TrackingCode,
-                    ShippingProvider = o.ShippingProvider,
-                    ExpectedDeliveryTime = o.ExpectedDeliveryTime,
-                    CreatedAt = o.CreatedAt,
-                    UpdatedAt = o.UpdatedAt
-                })
                 .ToListAsync();
 
             return new PagedResultDto<OrderListDto>
@@ -211,6 +281,47 @@ namespace RetradeBE.Services
                 PageSize = query.PageSize,
                 TotalPages = totalPages
             };
+        }
+
+        private static IQueryable<OrderListDto> ProjectToOrderListDto(IQueryable<Order> orders)
+        {
+            return orders.Select(o => new OrderListDto
+            {
+                OrderId = o.OrderId,
+                OrderCode = o.OrderCode,
+                ProductId = o.ProductId,
+                ProductName = o.Product != null ? o.Product.Name : null,
+                ProductImageUrl = o.Product != null
+                    ? o.Product.ProductImage
+                        .Where(pi => pi.IsMain == true)
+                        .Select(pi => pi.Image.ImageUrl)
+                        .FirstOrDefault()
+                      ?? o.Product.ProductImage
+                        .OrderBy(pi => pi.SortOrder)
+                        .Select(pi => pi.Image.ImageUrl)
+                        .FirstOrDefault()
+                    : null,
+                BuyerId = o.UserId,
+                BuyerName = o.User != null ? (o.User.FirstName + " " + o.User.LastName).Trim() : null,
+                BuyerEmail = o.User != null ? o.User.Email : null,
+                BuyerPhone = o.User != null ? o.User.Phone : null,
+                SellerId = o.SellerId,
+                SellerName = o.Seller != null ? (o.Seller.FirstName + " " + o.Seller.LastName).Trim() : null,
+                SellerEmail = o.Seller != null ? o.Seller.Email : null,
+                SellerPhone = o.Seller != null ? o.Seller.Phone : null,
+                Quantity = o.Quantity,
+                UnitPrice = o.UnitPrice,
+                TotalAmount = o.TotalAmount,
+                ShippingFee = o.ShippingFee,
+                DiscountAmount = o.DiscountAmount,
+                FinalAmount = o.FinalAmount,
+                Status = o.Status,
+                TrackingCode = o.TrackingCode,
+                ShippingProvider = o.ShippingProvider,
+                ExpectedDeliveryTime = o.ExpectedDeliveryTime,
+                CreatedAt = o.CreatedAt,
+                UpdatedAt = o.UpdatedAt
+            });
         }
 
         private static OrderDetailDto ToDetailDto(Order order)
@@ -234,7 +345,7 @@ namespace RetradeBE.Services
                 BuyerId = order.UserId,
                 BuyerName = order.User != null ? $"{order.User.FirstName} {order.User.LastName}".Trim() : null,
                 BuyerEmail = order.User?.Email,
-                BuyerPhone = order.User?.Phone,
+                BuyerPhone = ResolveBuyerPhone(order),
                 SellerId = order.SellerId,
                 SellerName = order.Seller != null ? $"{order.Seller.FirstName} {order.Seller.LastName}".Trim() : null,
                 SellerEmail = order.Seller?.Email,
@@ -278,26 +389,62 @@ namespace RetradeBE.Services
                 : OrderStatusEnum.Pending;
         }
 
-        private static bool CanMoveTo(OrderStatusEnum currentStatus, OrderStatusEnum nextStatus)
+        private static string? ResolveBuyerPhone(Order order)
+        {
+            if (!string.IsNullOrWhiteSpace(order.User?.Phone))
+            {
+                return order.User.Phone;
+            }
+
+            return ExtractReceiverPhone(order.AddressSnapshot);
+        }
+
+        private static string? ExtractReceiverPhone(string? addressSnapshot)
+        {
+            if (string.IsNullOrWhiteSpace(addressSnapshot))
+            {
+                return null;
+            }
+
+            return addressSnapshot
+                .Split(" - ", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .FirstOrDefault(part => part.Length is >= 9 and <= 12 && part.All(char.IsDigit));
+        }
+
+        private static bool CanMoveTo(Order order, OrderStatusEnum currentStatus, OrderStatusEnum nextStatus)
         {
             if (currentStatus == nextStatus)
             {
                 return true;
             }
 
-            if (currentStatus is OrderStatusEnum.Delivered or OrderStatusEnum.Returned or OrderStatusEnum.Cancelled)
+            if (currentStatus is OrderStatusEnum.Returned or OrderStatusEnum.Cancelled)
             {
                 return false;
             }
 
             return currentStatus switch
             {
-                OrderStatusEnum.AwaitingPayment => nextStatus is OrderStatusEnum.Cancelled,
+                OrderStatusEnum.AwaitingPayment => nextStatus is OrderStatusEnum.Cancelled && IsAwaitingPaymentExpired(order),
                 OrderStatusEnum.Pending => nextStatus is OrderStatusEnum.Confirmed or OrderStatusEnum.Cancelled,
                 OrderStatusEnum.Confirmed => nextStatus is OrderStatusEnum.Shipping or OrderStatusEnum.Cancelled,
-                OrderStatusEnum.Shipping => nextStatus is OrderStatusEnum.Delivered or OrderStatusEnum.Returned,
+                OrderStatusEnum.Shipping => nextStatus is OrderStatusEnum.Delivered,
                 _ => false
             };
+        }
+
+        private static bool IsAwaitingPaymentExpired(Order order)
+        {
+            if (!order.CreatedAt.HasValue)
+            {
+                return false;
+            }
+
+            var createdAt = order.CreatedAt.Value.Kind == DateTimeKind.Unspecified
+                ? DateTime.SpecifyKind(order.CreatedAt.Value, DateTimeKind.Utc)
+                : order.CreatedAt.Value.ToUniversalTime();
+
+            return DateTime.UtcNow - createdAt >= AwaitingPaymentCancelDelay;
         }
 
         private async Task NotifySellerOrderStatusChangedAsync(OrderDetailDto order)

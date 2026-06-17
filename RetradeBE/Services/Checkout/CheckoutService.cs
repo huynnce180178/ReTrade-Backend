@@ -2,7 +2,9 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
 using RetradeBE.Data;
+using RetradeBE.Hubs;
 using RetradeBE.Models;
 using RetradeBE.Models.DTOs;
 using RetradeBE.Services.Ghn;
@@ -13,11 +15,16 @@ namespace RetradeBE.Services.Checkout
     {
         private readonly AppDbContext _context;
         private readonly IGhnService _ghnService;
+        private readonly IHubContext<OrderHub> _orderHub;
 
-        public CheckoutService(AppDbContext context, IGhnService ghnService)
+        public CheckoutService(
+            AppDbContext context,
+            IGhnService ghnService,
+            IHubContext<OrderHub> orderHub)
         {
             _context = context;
             _ghnService = ghnService;
+            _orderHub = orderHub;
         }
 
         public async Task<CalculateFeeResponseDto> CalculateShippingFeeAsync(CalculateFeeRequestDto request)
@@ -171,8 +178,32 @@ namespace RetradeBE.Services.Checkout
             }
 
             await _context.SaveChangesAsync();
+            await NotifySellerOrderChangedAsync(order, "Created");
 
             return order.OrderId;
+        }
+
+        private async Task NotifySellerOrderChangedAsync(Order order, string eventType)
+        {
+            if (string.IsNullOrWhiteSpace(order.SellerId))
+            {
+                return;
+            }
+
+            await _orderHub.Clients
+                .Group(OrderHub.GetSellerOrderGroupName(order.SellerId))
+                .SendAsync("SellerOrderStatusChanged", new
+                {
+                    EventType = eventType,
+                    order.OrderId,
+                    order.OrderCode,
+                    order.SellerId,
+                    order.Status,
+                    order.TrackingCode,
+                    order.ShippingProvider,
+                    order.ExpectedDeliveryTime,
+                    order.UpdatedAt
+                });
         }
     }
 }

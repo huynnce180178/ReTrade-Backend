@@ -66,4 +66,34 @@ namespace RetradeBE.Models.DTOs
         public string? OfferId { get; set; }
         public List<PaymentSummaryDto> Payments { get; set; } = new();
     }
+
+    public class SellerSalesStatisticsDto
+    {
+        public int PeriodDays { get; set; }
+        public DateTime PeriodStart { get; set; }
+        public DateTime PeriodEnd { get; set; }
+        public int TotalOrders { get; set; }
+        public int AwaitingPaymentOrders { get; set; }
+        public int PendingOrders { get; set; }
+        public int ConfirmedOrders { get; set; }
+        public int ShippingOrders { get; set; }
+        public int DeliveredOrders { get; set; }
+        public int ReturnedOrders { get; set; }
+        public int CancelledOrders { get; set; }
+        public int SoldItems { get; set; }
+        public decimal GrossSales { get; set; }
+        public decimal ShippingCollected { get; set; }
+        public decimal DiscountGiven { get; set; }
+        public decimal NetSales { get; set; }
+        public List<SellerSalesTrendPointDto> RevenueTrend { get; set; } = new();
+    }
+
+    public class SellerSalesTrendPointDto
+    {
+        public string Label { get; set; } = null!;
+        public DateTime FromDate { get; set; }
+        public DateTime ToDate { get; set; }
+        public int OrderCount { get; set; }
+        public decimal Revenue { get; set; }
+    }
 }
