@@ -236,6 +236,11 @@ namespace RetradeBE
             SeedUserAccount(dbContext, "USER_ADMIN", "Admin", "System", "admin@retrade.com", "ACC_ADMIN", "admin", "Admin123@", 1);
             SeedUserAccount(dbContext, "USER_BUYER", "Demo", "Buyer", "buyer@retrade.com", "ACC_BUYER", "buyer", "Buyer123@", 2);
             SeedUserAccount(dbContext, "USER_SELLER", "Demo", "Seller", "seller@retrade.com", "ACC_SELLER", "seller", "Seller123@", 3);
+
+            SeedAddress(dbContext, "ADDR_ADMIN", "USER_ADMIN", "Admin", "0900000001", "Tân Thạnh", 215, 2034, "570604");
+            SeedAddress(dbContext, "ADDR_SELLER", "USER_SELLER", "Seller", "0900000002", "Đường số 1", 202, 3695, "90768");
+            SeedAddress(dbContext, "ADDR_BUYER", "USER_BUYER", "Buyer", "0900000003", "Đường số 2", 201, 3440, "13010");
+
             SeedDemoOrders(dbContext);
 
             SeedServiceSubscription(
@@ -330,6 +335,33 @@ namespace RetradeBE
             }
 
             dbContext.SaveChanges();
+        }
+
+        private static void SeedAddress(
+            AppDbContext dbContext,
+            string addressId, string userId, string receiverName, string receiverPhone,
+            string street, int provinceId, int districtId, string wardCode)
+        {
+            if (!dbContext.Address.Any(a => a.AddressId == addressId))
+            {
+                dbContext.Address.Add(new Address
+                {
+                    AddressId = addressId,
+                    UserId = userId,
+                    ReceiverName = receiverName,
+                    ReceiverPhone = receiverPhone,
+                    Street = street,
+                    ProvinceId = provinceId,
+                    DistrictId = districtId,
+                    WardCode = wardCode,
+                    IsDefault = true,
+                    Status = "Active",
+                    IsDeleted = false,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                });
+                dbContext.SaveChanges();
+            }
         }
 
         private static void SeedDemoOrders(AppDbContext dbContext)

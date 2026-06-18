@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.SignalR;
@@ -131,6 +132,8 @@ namespace RetradeBE.Services.Checkout
             var random = new Random().Next(10, 99).ToString();
             var orderCode = $"ORD{random}{now:yyyyMMddHHmm}";
 
+            var addressSnapshot = await GetAddressSnapshotAsync(address);
+
             var order = new Order
             {
                 OrderId = Guid.NewGuid().ToString(),
@@ -143,11 +146,12 @@ namespace RetradeBE.Services.Checkout
                 ShippingFee = feeResult.ShippingFee,
                 TotalAmount = totalAmount,
                 FinalAmount = totalAmount,
-                AddressSnapshot = $"{address.ReceiverName} - {address.ReceiverPhone} - {address.Street}, {address.WardCode}, {address.DistrictId}, {address.ProvinceId}",
+                AddressSnapshot = addressSnapshot,
                 Status = initialStatus,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
-                ShippingProvider = "GHN"
+                ShippingProvider = "GHN",
+                ExpectedDeliveryTime = DateTime.UtcNow.AddDays(5)
             };
 
             _context.Order.Add(order);
@@ -204,6 +208,100 @@ namespace RetradeBE.Services.Checkout
                     order.ExpectedDeliveryTime,
                     order.UpdatedAt
                 });
+        }
+
+        private async Task<string> GetAddressSnapshotAsync(Address address)
+        {
+            var receiverName = address.ReceiverName ?? "";
+            var receiverPhone = address.ReceiverPhone ?? "";
+            var street = address.Street ?? "";
+            var provinceName = address.ProvinceId?.ToString() ?? "";
+            var districtName = address.DistrictId?.ToString() ?? "";
+            var wardName = address.WardCode ?? "";
+
+            try
+            {
+                if (address.ProvinceId.HasValue)
+                {
+                    var provincesObj = await _ghnService.GetProvincesAsync();
+                    var provincesJson = JsonSerializer.Serialize(provincesObj);
+                    using var doc = JsonDocument.Parse(provincesJson);
+                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                    {
+                        var provinceEl = doc.RootElement.EnumerateArray()
+                            .FirstOrDefault(p => {
+                                if (p.TryGetProperty("ProvinceID", out var idProp) && idProp.TryGetInt32(out var id))
+                                    return id == address.ProvinceId.Value;
+                                if (p.TryGetProperty("provinceID", out var idProp2) && idProp2.TryGetInt32(out var id2))
+                                    return id2 == address.ProvinceId.Value;
+                                return false;
+                            });
+                        if (provinceEl.ValueKind != JsonValueKind.Undefined)
+                        {
+                            if (provinceEl.TryGetProperty("ProvinceName", out var nameProp))
+                                provinceName = nameProp.GetString() ?? provinceName;
+                            else if (provinceEl.TryGetProperty("provinceName", out var nameProp2))
+                                provinceName = nameProp2.GetString() ?? provinceName;
+                        }
+                    }
+                }
+
+                if (address.ProvinceId.HasValue && address.DistrictId.HasValue)
+                {
+                    var districtsObj = await _ghnService.GetDistrictsAsync(address.ProvinceId.Value);
+                    var districtsJson = JsonSerializer.Serialize(districtsObj);
+                    using var doc = JsonDocument.Parse(districtsJson);
+                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                    {
+                        var districtEl = doc.RootElement.EnumerateArray()
+                            .FirstOrDefault(d => {
+                                if (d.TryGetProperty("DistrictID", out var idProp) && idProp.TryGetInt32(out var id))
+                                    return id == address.DistrictId.Value;
+                                if (d.TryGetProperty("districtID", out var idProp2) && idProp2.TryGetInt32(out var id2))
+                                    return id2 == address.DistrictId.Value;
+                                return false;
+                            });
+                        if (districtEl.ValueKind != JsonValueKind.Undefined)
+                        {
+                            if (districtEl.TryGetProperty("DistrictName", out var nameProp))
+                                districtName = nameProp.GetString() ?? districtName;
+                            else if (districtEl.TryGetProperty("districtName", out var nameProp2))
+                                districtName = nameProp2.GetString() ?? districtName;
+                        }
+                    }
+                }
+
+                if (address.DistrictId.HasValue && !string.IsNullOrEmpty(address.WardCode))
+                {
+                    var wardsObj = await _ghnService.GetWardsAsync(address.DistrictId.Value);
+                    var wardsJson = JsonSerializer.Serialize(wardsObj);
+                    using var doc = JsonDocument.Parse(wardsJson);
+                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                    {
+                        var wardEl = doc.RootElement.EnumerateArray()
+                            .FirstOrDefault(w => {
+                                if (w.TryGetProperty("WardCode", out var codeProp))
+                                    return codeProp.GetString() == address.WardCode;
+                                if (w.TryGetProperty("wardCode", out var codeProp2))
+                                    return codeProp2.GetString() == address.WardCode;
+                                return false;
+                            });
+                        if (wardEl.ValueKind != JsonValueKind.Undefined)
+                        {
+                            if (wardEl.TryGetProperty("WardName", out var nameProp))
+                                wardName = nameProp.GetString() ?? wardName;
+                            else if (wardEl.TryGetProperty("wardName", out var nameProp2))
+                                wardName = nameProp2.GetString() ?? wardName;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error resolving address names from GHN: {ex.Message}");
+            }
+
+            return $"{receiverName} - {receiverPhone} - {street}, {wardName}, {districtName}, {provinceName}";
         }
     }
 }

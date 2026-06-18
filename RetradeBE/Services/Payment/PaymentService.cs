@@ -215,7 +215,7 @@ public class PaymentService : IPaymentService
             PaymentId = payment.PaymentId,
             OrderId = payment.OrderId,
             Status = payment.Status ?? string.Empty,
-            Message = isSuccess ? "Thanh toan thanh cong." : MapVnPayMessage(responseCode, transactionStatus),
+            Message = isSuccess ? "Payment completed successfully." : MapVnPayMessage(responseCode, transactionStatus),
             TransactionNo = transactionNo,
             TransactionStatus = transactionStatus,
             ResponseCode = responseCode,
@@ -402,23 +402,23 @@ public class PaymentService : IPaymentService
     {
         if (responseCode == "00" && transactionStatus == "00")
         {
-            return "Thanh toan thanh cong.";
+            return "Payment completed successfully.";
         }
 
         return responseCode switch
         {
-            "07" => "Giao dich bi nghi ngo.",
-            "09" => "Tai khoan khong du dieu kien giao dich.",
-            "10" => "Xac thuc thong tin the khong dung.",
-            "11" => "Da het han cho thanh toan.",
-            "12" => "The hoac tai khoan bi khoa.",
-            "13" => "Sai ma OTP.",
-            "24" => "Khach hang da huy giao dich.",
-            "51" => "Tai khoan khong du so du.",
-            "65" => "Tai khoan vuot qua han muc giao dich.",
-            "75" => "Ngan hang thanh toan dang bao tri.",
-            "79" => "Nhap sai mat khau thanh toan qua so lan quy dinh.",
-            _ => "Thanh toan that bai."
+            "07" => "Transaction suspected of fraud.",
+            "09" => "Account not eligible for transaction.",
+            "10" => "Incorrect card information verification.",
+            "11" => "Payment window expired.",
+            "12" => "Card or account is locked.",
+            "13" => "Incorrect OTP code.",
+            "24" => "Customer canceled the transaction.",
+            "51" => "Insufficient account balance.",
+            "65" => "Transaction limit exceeded.",
+            "75" => "Payment bank is under maintenance.",
+            "79" => "Incorrect payment password entered too many times.",
+            _ => "Payment failed."
         };
     }
 }

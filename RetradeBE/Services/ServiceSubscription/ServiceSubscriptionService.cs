@@ -76,7 +76,7 @@ public class ServiceSubscriptionService : IServiceSubscriptionService
         {
             ServiceId = service.ServiceId,
             Amount = service.Price.Value,
-            OrderDescription = $"Thanh toan goi {service.Name} ({service.ServiceId})",
+            OrderDescription = $"Payment for package {service.Name} ({service.ServiceId})",
             Locale = "vn"
         };
 
