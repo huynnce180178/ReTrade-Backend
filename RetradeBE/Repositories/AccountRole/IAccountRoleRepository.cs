@@ -9,4 +9,5 @@ namespace RetradeBE.Repositories.AccountRole
         Task<List<Role>> GetRolesByAccountIdAsync(string accountId);
         Task<List<Role>> GetAllRolesAsync();
     }
+
 }

@@ -101,6 +101,7 @@ namespace RetradeBE.Models.DTOs
         public string? Condition { get; set; }
         public string? Status { get; set; }
         public string? SellerId { get; set; }
+        public string? SortBy { get; set; }
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 12;
     }

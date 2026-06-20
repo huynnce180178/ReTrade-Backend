@@ -73,7 +73,8 @@ namespace RetradeBE.Controllers
             }
             catch (System.Exception ex)
             {
-                return BadRequest(ex.Message);
+                var details = ex.InnerException != null ? $"{ex.Message} -> Inner: {ex.InnerException.Message}" : ex.Message;
+                return BadRequest(details);
             }
         }
 

@@ -30,6 +30,8 @@ namespace RetradeBE
             builder.Services.Configure<RetradeBE.Config.CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
             builder.Services.Configure<RetradeBE.Config.GoogleSettings>(builder.Configuration.GetSection("GoogleSettings"));
             builder.Services.Configure<RetradeBE.Config.VnPaySettings>(builder.Configuration.GetSection("VNPAY"));
+            builder.Services.Configure<RetradeBE.Config.GhnSettings>(builder.Configuration.GetSection("GHN"));
+
             builder.Services.AddHttpClient();
             builder.Services.AddSignalR();
 
@@ -82,6 +84,7 @@ namespace RetradeBE
             builder.Services.AddAutoMapper(cfg => cfg.AddProfile<AutoMapperProfile>());
             builder.Services.AddControllers();
             builder.Services.AddHostedService<SubscriptionExpirationService>();
+            builder.Services.AddHostedService<ShippingOutcomeSimulationService>();
             builder.Services.AddMemoryCache(); // Thêm bộ nhớ đệm (dùng lưu OTP)
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(c =>
@@ -138,6 +141,21 @@ namespace RetradeBE
                     ValidAudience = jwtSettings.Audience,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.SecretKey))
                 };
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        var accessToken = context.Request.Query["access_token"];
+                        var path = context.HttpContext.Request.Path;
+
+                        if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                        {
+                            context.Token = accessToken;
+                        }
+
+                        return Task.CompletedTask;
+                    }
+                };
             });
 
             // Lấy đường dẫn Frontend từ appsettings.json
@@ -146,7 +164,9 @@ namespace RetradeBE
             {
                 frontendUrl,
                 "http://localhost:5173",
-                "http://127.0.0.1:5173"
+                "http://127.0.0.1:5173",
+                "http://localhost:5174",
+                "http://127.0.0.1:5174"
             }.Distinct().ToArray();
 
             // Thêm CORS để Frontend có thể gọi API (ví dụ: React, Vue, Angular chạy ở port khác)
@@ -202,6 +222,7 @@ namespace RetradeBE
             app.MapControllers();
             app.MapHub<RetradeBE.Hubs.AccountHub>("/hubs/accounts");
             app.MapHub<SellerHub>("/hubs/sellers");
+            app.MapHub<OrderHub>("/hubs/orders");
 
             app.Run();
         }
@@ -216,32 +237,38 @@ namespace RetradeBE
             SeedUserAccount(dbContext, "USER_BUYER", "Demo", "Buyer", "buyer@retrade.com", "ACC_BUYER", "buyer", "Buyer123@", 2);
             SeedUserAccount(dbContext, "USER_SELLER", "Demo", "Seller", "seller@retrade.com", "ACC_SELLER", "seller", "Seller123@", 3);
 
+            SeedAddress(dbContext, "ADDR_ADMIN", "USER_ADMIN", "Admin", "0900000001", "Tân Thạnh", 215, 2034, "570604");
+            SeedAddress(dbContext, "ADDR_SELLER", "USER_SELLER", "Seller", "0900000002", "Đường số 1", 202, 3695, "90768");
+            SeedAddress(dbContext, "ADDR_BUYER", "USER_BUYER", "Buyer", "0900000003", "Đường số 2", 201, 3440, "13010");
+
+            SeedDemoOrders(dbContext);
+
             SeedServiceSubscription(
                 dbContext,
                 "SERVICE_UPGRADE_SELLER",
-                "Gói Nâng Cấp Seller",
+                "Seller Upgrade Package",
                 "Buyer",
                 99000m,
                 30,
-                "Mở quyền trở thành Seller. Được phép đăng bán sản phẩm. Quản lý cửa hàng chuyên nghiệp.");
+                "Unlock Seller privileges. Allowed to list products for sale. Professional store management.");
 
             SeedServiceSubscription(
                 dbContext,
                 "SERVICE_VOUCHER_FEATURE",
-                "Gói Mã Giảm Giá",
+                "Discount Voucher Package",
                 "Seller",
                 49000m,
                 30,
-                "Kích hoạt quyền tạo mã giảm giá. Tự do tung các voucher cho shop. Thu hút nhiều khách hàng hơn.");
+                "Activate the right to create discount codes. Freely distribute vouchers for the shop. Attract more customers.");
 
             SeedServiceSubscription(
                 dbContext,
                 "SERVICE_PRIORITY_LISTING",
-                "Gói Đẩy Sản Phẩm Lên Đầu Trang",
+                "Priority Listing Package",
                 "Seller",
                 69000m,
                 30,
-                "Kích hoạt quyền ưu tiên hiển thị. Đưa sản phẩm lên top kết quả tìm kiếm. Tiếp cận hàng vạn người mua tiềm năng.");
+                "Activate priority display rights. Bring products to the top of search results. Reach tens of thousands of potential buyers.");
         }
 
         private static void SeedRole(AppDbContext dbContext, int roleId, string name)
@@ -258,22 +285,27 @@ namespace RetradeBE
             string userId, string firstName, string lastName, string email,
             string accountId, string username, string plainPassword, int roleId)
         {
-            var userExists = dbContext.User.Any(u => u.UserId == userId);
-            var accountExists = dbContext.Account.Any(a => a.AccountId == accountId);
+            var user = dbContext.User.FirstOrDefault(u => u.UserId == userId);
+            var account = dbContext.Account.FirstOrDefault(a => a.AccountId == accountId);
             var accountRoleExists = dbContext.AccountRole.Any(ar => ar.AccountId == accountId && ar.RoleId == roleId);
 
-            if (!userExists)
+            if (user == null)
             {
-                dbContext.User.Add(new User
+                user = new User
                 {
                     UserId = userId,
                     FirstName = firstName,
                     LastName = lastName,
                     Email = email
-                });
+                };
+                dbContext.User.Add(user);
+            }
+            else
+            {
+                user.Email = email;
             }
 
-            if (!accountExists)
+            if (account == null)
             {
                 dbContext.Account.Add(new Account
                 {
@@ -285,6 +317,13 @@ namespace RetradeBE
                     Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString()
                 });
             }
+            else
+            {
+                account.Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString();
+                account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(plainPassword);
+                account.Provider = "LOCAL";
+                account.IsDeleted = false;
+            }
 
             if (!accountRoleExists)
             {
@@ -295,9 +334,211 @@ namespace RetradeBE
                 });
             }
 
-            if (!userExists || !accountExists || !accountRoleExists)
+            dbContext.SaveChanges();
+        }
+
+        private static void SeedAddress(
+            AppDbContext dbContext,
+            string addressId, string userId, string receiverName, string receiverPhone,
+            string street, int provinceId, int districtId, string wardCode)
+        {
+            if (!dbContext.Address.Any(a => a.AddressId == addressId))
             {
+                dbContext.Address.Add(new Address
+                {
+                    AddressId = addressId,
+                    UserId = userId,
+                    ReceiverName = receiverName,
+                    ReceiverPhone = receiverPhone,
+                    Street = street,
+                    ProvinceId = provinceId,
+                    DistrictId = districtId,
+                    WardCode = wardCode,
+                    IsDefault = true,
+                    Status = "Active",
+                    IsDeleted = false,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                });
                 dbContext.SaveChanges();
+            }
+        }
+
+        private static void SeedDemoOrders(AppDbContext dbContext)
+        {
+            var now = DateTime.UtcNow;
+
+            if (!dbContext.Category.Any(c => c.CategoryId == "CAT_DEMO_ELECTRONICS"))
+            {
+                dbContext.Category.Add(new Category
+                {
+                    CategoryId = "CAT_DEMO_ELECTRONICS",
+                    Name = "Demo Electronics",
+                    Description = "Seed data for testing order list before checkout is available.",
+                    Status = "Active",
+                    CreatedAt = now,
+                    UpdatedAt = now
+                });
+            }
+
+            SeedDemoProduct(
+                dbContext,
+                "PROD_DEMO_PHONE",
+                "IMG_DEMO_PHONE",
+                "Vintage Demo Phone",
+                "Second-hand phone used for testing order list.",
+                1250000m,
+                "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&auto=format&fit=crop&q=80");
+
+            SeedDemoProduct(
+                dbContext,
+                "PROD_DEMO_HEADPHONE",
+                "IMG_DEMO_HEADPHONE",
+                "Demo Wireless Headphone",
+                "Wireless headphone sample for seller and buyer order testing.",
+                650000m,
+                "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&auto=format&fit=crop&q=80");
+
+            SeedDemoOrder(
+                dbContext,
+                "ORD_DEMO_001",
+                "RTD-2026-0001",
+                "PROD_DEMO_PHONE",
+                1,
+                1250000m,
+                30000m,
+                0m,
+                "Pending",
+                "PAY_DEMO_001",
+                "Pending",
+                now.AddDays(-2));
+
+            SeedDemoOrder(
+                dbContext,
+                "ORD_DEMO_002",
+                "RTD-2026-0002",
+                "PROD_DEMO_HEADPHONE",
+                2,
+                650000m,
+                25000m,
+                50000m,
+                "Shipping",
+                "PAY_DEMO_002",
+                "Paid",
+                now.AddDays(-1));
+
+            dbContext.SaveChanges();
+        }
+
+        private static void SeedDemoProduct(
+            AppDbContext dbContext,
+            string productId,
+            string imageId,
+            string name,
+            string description,
+            decimal price,
+            string imageUrl)
+        {
+            var now = DateTime.UtcNow;
+
+            if (!dbContext.Image.Any(i => i.ImageId == imageId))
+            {
+                dbContext.Image.Add(new Image
+                {
+                    ImageId = imageId,
+                    ImageUrl = imageUrl,
+                    AltText = name,
+                    CreatedAt = now
+                });
+            }
+
+            if (!dbContext.Product.Any(p => p.ProductId == productId))
+            {
+                dbContext.Product.Add(new Product
+                {
+                    ProductId = productId,
+                    SellerId = "USER_SELLER",
+                    CategoryId = "CAT_DEMO_ELECTRONICS",
+                    Name = name,
+                    Description = description,
+                    Condition = "Used",
+                    Price = price,
+                    StockQuantity = 5,
+                    Status = "Accepted",
+                    IsDeleted = false,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                });
+            }
+
+            if (!dbContext.ProductImage.Any(pi => pi.ProductId == productId && pi.ImageId == imageId))
+            {
+                dbContext.ProductImage.Add(new ProductImage
+                {
+                    ProductId = productId,
+                    ImageId = imageId,
+                    IsMain = true,
+                    SortOrder = 1,
+                    CreatedAt = now
+                });
+            }
+        }
+
+        private static void SeedDemoOrder(
+            AppDbContext dbContext,
+            string orderId,
+            string orderCode,
+            string productId,
+            int quantity,
+            decimal unitPrice,
+            decimal shippingFee,
+            decimal discountAmount,
+            string status,
+            string paymentId,
+            string paymentStatus,
+            DateTime createdAt)
+        {
+            var finalAmount = unitPrice * quantity + shippingFee - discountAmount;
+
+            if (!dbContext.Order.Any(o => o.OrderId == orderId))
+            {
+                dbContext.Order.Add(new Order
+                {
+                    OrderId = orderId,
+                    OrderCode = orderCode,
+                    UserId = "USER_BUYER",
+                    SellerId = "USER_SELLER",
+                    ProductId = productId,
+                    Quantity = quantity,
+                    UnitPrice = unitPrice,
+                    AddressSnapshot = "Demo Buyer, 123 Test Street, District 1, Ho Chi Minh City",
+                    TrackingCode = status == "Shipping" ? "DEMO-TRACK-002" : null,
+                    ShippingProvider = status == "Shipping" ? "Demo Express" : null,
+                    TotalAmount = unitPrice * quantity,
+                    ShippingFee = shippingFee,
+                    DiscountAmount = discountAmount,
+                    FinalAmount = finalAmount,
+                    ExpectedDeliveryTime = createdAt.AddDays(5),
+                    Status = status,
+                    CreatedAt = createdAt,
+                    UpdatedAt = createdAt
+                });
+            }
+
+            if (!dbContext.Payment.Any(p => p.PaymentId == paymentId))
+            {
+                dbContext.Payment.Add(new Payment
+                {
+                    PaymentId = paymentId,
+                    OrderId = orderId,
+                    UserId = "USER_BUYER",
+                    Amount = finalAmount,
+                    PaymentMethod = "VNPAY",
+                    ProviderTransactionId = paymentStatus == "Paid" ? "VNPAY-DEMO-002" : null,
+                    Status = paymentStatus,
+                    CreatedAt = createdAt,
+                    UpdatedAt = createdAt
+                });
             }
         }
 

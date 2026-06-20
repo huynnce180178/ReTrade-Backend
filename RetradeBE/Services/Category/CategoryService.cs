@@ -123,14 +123,10 @@ public class CategoryService : ICategoryService
             dto.ParentId ?? category.ParentId;
         category.UpdatedAt = DateTime.UtcNow;
 
-        Console.WriteLine($"[UpdateAsync] categoryId: {categoryId}");
-        Console.WriteLine($"[UpdateAsync] dto.Attributes count: {dto.Attributes?.Count ?? -1}");
-
         if (dto.Attributes != null)
         {
             foreach (var a in dto.Attributes)
             {
-                Console.WriteLine($"  - Id: '{a.AttributeId}', Name: '{a.Name}', DataType: '{a.DataType}', IsRequired: {a.IsRequired}");
             }
 
             var existingAttributes = category.Attributes.ToList();
@@ -257,13 +253,13 @@ public class CategoryService : ICategoryService
     {
         var lastCategory = await _repository
             .Query()
+            .Where(x => x.CategoryId.StartsWith("CAT") && !x.CategoryId.Contains("_"))
             .OrderByDescending(x => x.CategoryId)
             .FirstOrDefaultAsync();
 
         int next = 1;
 
-        if (lastCategory != null
-            && lastCategory.CategoryId.StartsWith("CAT"))
+        if (lastCategory != null)
         {
             int.TryParse(
                 lastCategory.CategoryId.Substring(3),

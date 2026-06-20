@@ -4,8 +4,10 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.SignalR;
 using RetradeBE.Config;
 using RetradeBE.Data;
+using RetradeBE.Hubs;
 using RetradeBE.Models;
 using RetradeBE.Models.DTOs;
 
@@ -17,15 +19,18 @@ public class PaymentService : IPaymentService
     private readonly AppDbContext _context;
     private readonly VnPaySettings _vnPaySettings;
     private readonly ILogger<PaymentService> _logger;
+    private readonly IHubContext<OrderHub> _orderHub;
 
     public PaymentService(
         AppDbContext context,
         IOptions<VnPaySettings> vnPaySettings,
-        ILogger<PaymentService> logger)
+        ILogger<PaymentService> logger,
+        IHubContext<OrderHub> orderHub)
     {
         _context = context;
         _vnPaySettings = vnPaySettings.Value;
         _logger = logger;
+        _orderHub = orderHub;
     }
 
     public async Task<CreateVnPayPaymentResponseDto> CreateVnPayPaymentUrlAsync(
@@ -179,7 +184,30 @@ public class PaymentService : IPaymentService
             await ActivateSubscriptionAsync(payment.UserId!, payment.ServiceId, payment.Amount ?? 0);
         }
 
+        // Nếu là payment cho đơn hàng thì cập nhật trạng thái đơn hàng
+        Order? updatedOrder = null;
+
+        if (isSuccess && !string.IsNullOrWhiteSpace(payment.OrderId))
+        {
+            var order = await _context.Order
+                .Include(o => o.User)
+                .Include(o => o.Product)
+                    .ThenInclude(p => p!.ProductImage)
+                    .ThenInclude(pi => pi.Image)
+                .FirstOrDefaultAsync(o => o.OrderId == payment.OrderId);
+            if (order != null)
+            {
+                order.Status = RetradeBE.Models.Enums.OrderStatusEnum.Pending.ToString();
+                order.UpdatedAt = DateTime.UtcNow;
+                updatedOrder = order;
+            }
+        }
+
         await _context.SaveChangesAsync();
+        if (updatedOrder != null)
+        {
+            await NotifySellerOrderChangedAsync(updatedOrder, "PaymentConfirmed");
+        }
 
         return new VnPayReturnResponseDto
         {
@@ -187,12 +215,57 @@ public class PaymentService : IPaymentService
             PaymentId = payment.PaymentId,
             OrderId = payment.OrderId,
             Status = payment.Status ?? string.Empty,
-            Message = isSuccess ? "Thanh toan thanh cong." : MapVnPayMessage(responseCode, transactionStatus),
+            Message = isSuccess ? "Payment completed successfully." : MapVnPayMessage(responseCode, transactionStatus),
             TransactionNo = transactionNo,
             TransactionStatus = transactionStatus,
             ResponseCode = responseCode,
             Amount = amount
         };
+    }
+
+    private async Task NotifySellerOrderChangedAsync(Order order, string eventType)
+    {
+        if (string.IsNullOrWhiteSpace(order.SellerId))
+        {
+            return;
+        }
+
+        var productImageUrl = order.Product?.ProductImage
+            .Where(pi => pi.IsMain == true)
+            .Select(pi => pi.Image.ImageUrl)
+            .FirstOrDefault()
+            ?? order.Product?.ProductImage
+                .OrderBy(pi => pi.SortOrder)
+                .Select(pi => pi.Image.ImageUrl)
+                .FirstOrDefault();
+
+        await _orderHub.Clients
+            .Group(OrderHub.GetSellerOrderGroupName(order.SellerId))
+            .SendAsync("SellerOrderStatusChanged", new
+            {
+                EventType = eventType,
+                order.OrderId,
+                order.OrderCode,
+                order.ProductId,
+                ProductName = order.Product?.Name,
+                ProductImageUrl = productImageUrl,
+                BuyerId = order.UserId,
+                BuyerName = order.User != null ? $"{order.User.FirstName} {order.User.LastName}".Trim() : null,
+                BuyerEmail = order.User?.Email,
+                order.SellerId,
+                order.Quantity,
+                order.UnitPrice,
+                order.TotalAmount,
+                order.ShippingFee,
+                order.DiscountAmount,
+                order.FinalAmount,
+                order.Status,
+                order.TrackingCode,
+                order.ShippingProvider,
+                order.ExpectedDeliveryTime,
+                order.CreatedAt,
+                order.UpdatedAt
+            });
     }
 
     /// <summary>
@@ -329,23 +402,23 @@ public class PaymentService : IPaymentService
     {
         if (responseCode == "00" && transactionStatus == "00")
         {
-            return "Thanh toan thanh cong.";
+            return "Payment completed successfully.";
         }
 
         return responseCode switch
         {
-            "07" => "Giao dich bi nghi ngo.",
-            "09" => "Tai khoan khong du dieu kien giao dich.",
-            "10" => "Xac thuc thong tin the khong dung.",
-            "11" => "Da het han cho thanh toan.",
-            "12" => "The hoac tai khoan bi khoa.",
-            "13" => "Sai ma OTP.",
-            "24" => "Khach hang da huy giao dich.",
-            "51" => "Tai khoan khong du so du.",
-            "65" => "Tai khoan vuot qua han muc giao dich.",
-            "75" => "Ngan hang thanh toan dang bao tri.",
-            "79" => "Nhap sai mat khau thanh toan qua so lan quy dinh.",
-            _ => "Thanh toan that bai."
+            "07" => "Transaction suspected of fraud.",
+            "09" => "Account not eligible for transaction.",
+            "10" => "Incorrect card information verification.",
+            "11" => "Payment window expired.",
+            "12" => "Card or account is locked.",
+            "13" => "Incorrect OTP code.",
+            "24" => "Customer canceled the transaction.",
+            "51" => "Insufficient account balance.",
+            "65" => "Transaction limit exceeded.",
+            "75" => "Payment bank is under maintenance.",
+            "79" => "Incorrect payment password entered too many times.",
+            _ => "Payment failed."
         };
     }
 }

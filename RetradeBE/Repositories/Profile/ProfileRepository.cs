@@ -113,10 +113,29 @@ namespace RetradeBE.Repositories
 
         public async Task<double?> GetAverageSellerRatingAsync(string sellerId)
         {
-            var ratings = _context.Review.Where(r => r.SellerId == sellerId && r.Rating != null);
+            var ratings = GetSellerReviewsQuery(sellerId);
             if (!await ratings.AnyAsync()) return null;
 
             return await ratings.AverageAsync(r => r.Rating!.Value);
+        }
+
+        public async Task<int> CountSellerReviewsAsync(string sellerId)
+        {
+            return await GetSellerReviewsQuery(sellerId).CountAsync();
+        }
+
+        public async Task<Dictionary<int, int>> GetSellerRatingCountsAsync(string sellerId)
+        {
+            return await GetSellerReviewsQuery(sellerId)
+                .GroupBy(r => r.Rating!.Value)
+                .ToDictionaryAsync(group => group.Key, group => group.Count());
+        }
+
+        private IQueryable<Review> GetSellerReviewsQuery(string sellerId)
+        {
+            return _context.Review
+                .Where(r => r.Rating != null
+                    && (r.SellerId == sellerId || (r.Order != null && r.Order.SellerId == sellerId)));
         }
 
         public async Task AddFollowAsync(UserFollow follow)

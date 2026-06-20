@@ -47,7 +47,8 @@ namespace RetradeBE.Repositories
 
         public async Task<User?> GetByEmailAsync(string email)
         {
-            return await _context.User.FirstOrDefaultAsync(u => u.Email == email);
+            if (string.IsNullOrEmpty(email)) return null;
+            return await _context.User.FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == email.ToLower());
         }
 
         public async Task UpdateAsync(User item)
