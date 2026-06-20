@@ -80,6 +80,8 @@ namespace RetradeBE.Models.DTOs
         public int ConfirmedOrders { get; set; }
         public int ShippingOrders { get; set; }
         public int DeliveredOrders { get; set; }
+        public int CompletedOrders { get; set; }
+        public int DeliveryFailedOrders { get; set; }
         public int ReturnedOrders { get; set; }
         public int CancelledOrders { get; set; }
         public int SoldItems { get; set; }
