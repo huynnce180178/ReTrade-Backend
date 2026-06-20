@@ -12,6 +12,7 @@ namespace RetradeBE.Services
     {
         private static readonly TimeSpan AwaitingPaymentCancelDelay = TimeSpan.FromMinutes(15);
         private static readonly TimeSpan ShippingOutcomeDelay = TimeSpan.FromSeconds(30);
+        private static readonly TimeSpan BusinessTimeZoneOffset = TimeSpan.FromHours(7);
         private const double ShippingFailureRate = 0.10;
 
         private readonly IOrderRepository _orderRepository;
@@ -50,27 +51,33 @@ namespace RetradeBE.Services
         public async Task<SellerSalesStatisticsDto> GetSellerSalesStatisticsAsync(string sellerId, int periodDays)
         {
             var normalizedPeriodDays = Math.Clamp(periodDays, 7, 365);
-            var periodEnd = DateTime.UtcNow;
-            var periodStart = periodEnd.AddDays(-normalizedPeriodDays);
+            var todayLocal = ToBusinessLocal(DateTime.UtcNow).Date;
+            var periodStartLocal = todayLocal.AddDays(-(normalizedPeriodDays - 1));
+            var periodEndExclusiveLocal = todayLocal.AddDays(1);
+            var periodEndLocal = periodEndExclusiveLocal.AddTicks(-1);
+            var periodStartUtc = FromBusinessLocal(periodStartLocal);
+            var periodEndExclusiveUtc = FromBusinessLocal(periodEndExclusiveLocal);
 
             if (string.IsNullOrWhiteSpace(sellerId))
             {
                 return new SellerSalesStatisticsDto
                 {
                     PeriodDays = normalizedPeriodDays,
-                    PeriodStart = periodStart,
-                    PeriodEnd = periodEnd
+                    PeriodStart = periodStartLocal,
+                    PeriodEnd = periodEndLocal
                 };
             }
 
             var orders = _orderRepository.Query()
                 .Where(o => o.SellerId == sellerId
                     && o.CreatedAt.HasValue
-                    && o.CreatedAt.Value >= periodStart
-                    && o.CreatedAt.Value <= periodEnd);
+                    && o.CreatedAt.Value >= periodStartUtc
+                    && o.CreatedAt.Value < periodEndExclusiveUtc);
 
-            var deliveredOrders = orders.Where(o => o.Status == nameof(OrderStatusEnum.Delivered));
-            var deliveredTrendSource = await deliveredOrders
+            var successfulOrders = orders.Where(o =>
+                o.Status == nameof(OrderStatusEnum.Delivered)
+                || o.Status == nameof(OrderStatusEnum.Completed));
+            var successfulTrendSource = await successfulOrders
                 .Select(o => new
                 {
                     CreatedAt = o.CreatedAt!.Value,
@@ -81,28 +88,30 @@ namespace RetradeBE.Services
             return new SellerSalesStatisticsDto
             {
                 PeriodDays = normalizedPeriodDays,
-                PeriodStart = periodStart,
-                PeriodEnd = periodEnd,
+                PeriodStart = periodStartLocal,
+                PeriodEnd = periodEndLocal,
                 TotalOrders = await orders.CountAsync(),
                 AwaitingPaymentOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.AwaitingPayment)),
                 PendingOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.Pending)),
                 ConfirmedOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.Confirmed)),
                 ShippingOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.Shipping)),
                 DeliveredOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.Delivered)),
+                CompletedOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.Completed)),
+                DeliveryFailedOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.DeliveryFailed)),
                 ReturnedOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.Returned)),
                 CancelledOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.Cancelled)),
-                SoldItems = await deliveredOrders
+                SoldItems = await successfulOrders
                     .SumAsync(o => o.Quantity ?? 0),
-                GrossSales = await deliveredOrders
+                GrossSales = await successfulOrders
                     .SumAsync(o => o.TotalAmount ?? 0),
-                ShippingCollected = await deliveredOrders
+                ShippingCollected = await successfulOrders
                     .SumAsync(o => o.ShippingFee ?? 0),
-                DiscountGiven = await deliveredOrders
+                DiscountGiven = await successfulOrders
                     .SumAsync(o => o.DiscountAmount ?? 0),
-                NetSales = await deliveredOrders
+                NetSales = await successfulOrders
                     .SumAsync(o => o.FinalAmount ?? 0),
-                RevenueTrend = BuildRevenueTrend(periodStart, periodEnd, deliveredTrendSource
-                    .Select(o => (o.CreatedAt, o.Revenue))
+                RevenueTrend = BuildRevenueTrend(periodStartLocal, periodEndExclusiveLocal, successfulTrendSource
+                    .Select(o => (ToBusinessLocal(o.CreatedAt), o.Revenue))
                     .ToList())
             };
         }
@@ -217,7 +226,7 @@ namespace RetradeBE.Services
                 var carrierSucceeded = Random.Shared.NextDouble() >= ShippingFailureRate;
                 order.Status = carrierSucceeded
                     ? nameof(OrderStatusEnum.Delivered)
-                    : nameof(OrderStatusEnum.Cancelled);
+                    : nameof(OrderStatusEnum.DeliveryFailed);
                 order.UpdatedAt = now;
 
                 await _orderRepository.UpdateAsync(order);
@@ -229,38 +238,57 @@ namespace RetradeBE.Services
         }
 
         private static List<SellerSalesTrendPointDto> BuildRevenueTrend(
-            DateTime periodStart,
-            DateTime periodEnd,
+            DateTime periodStartLocal,
+            DateTime periodEndExclusiveLocal,
             List<(DateTime CreatedAt, decimal Revenue)> deliveredOrders)
         {
-            const int bucketCount = 7;
+            var totalDays = Math.Max(1, (int)(periodEndExclusiveLocal.Date - periodStartLocal.Date).TotalDays);
+            var bucketCount = Math.Min(7, totalDays);
+            var baseBucketDays = totalDays / bucketCount;
+            var extraDays = totalDays % bucketCount;
             var trend = new List<SellerSalesTrendPointDto>();
-            var totalSeconds = Math.Max(1, (periodEnd - periodStart).TotalSeconds);
-            var bucketSeconds = totalSeconds / bucketCount;
+            var fromDate = periodStartLocal.Date;
 
             for (var index = 0; index < bucketCount; index++)
             {
-                var fromDate = periodStart.AddSeconds(bucketSeconds * index);
-                var toDate = index == bucketCount - 1
-                    ? periodEnd
-                    : periodStart.AddSeconds(bucketSeconds * (index + 1));
+                var bucketDays = baseBucketDays + (index < extraDays ? 1 : 0);
+                var toDateExclusive = fromDate.AddDays(bucketDays);
+                var toDateInclusive = toDateExclusive.AddTicks(-1);
 
                 var bucketOrders = deliveredOrders
                     .Where(o => o.CreatedAt >= fromDate
-                        && (index == bucketCount - 1 ? o.CreatedAt <= toDate : o.CreatedAt < toDate))
+                        && o.CreatedAt < toDateExclusive)
                     .ToList();
 
                 trend.Add(new SellerSalesTrendPointDto
                 {
-                    Label = fromDate.ToString("dd/MM"),
+                    Label = bucketDays == 1
+                        ? fromDate.ToString("dd/MM")
+                        : $"{fromDate:dd/MM}-{toDateInclusive:dd/MM}",
                     FromDate = fromDate,
-                    ToDate = toDate,
+                    ToDate = toDateInclusive,
                     OrderCount = bucketOrders.Count,
                     Revenue = bucketOrders.Sum(o => o.Revenue)
                 });
+
+                fromDate = toDateExclusive;
             }
 
             return trend;
+        }
+
+        private static DateTime ToBusinessLocal(DateTime dateTime)
+        {
+            var utc = dateTime.Kind == DateTimeKind.Unspecified
+                ? DateTime.SpecifyKind(dateTime, DateTimeKind.Utc)
+                : dateTime.ToUniversalTime();
+
+            return DateTime.SpecifyKind(utc.Add(BusinessTimeZoneOffset), DateTimeKind.Unspecified);
+        }
+
+        private static DateTime FromBusinessLocal(DateTime localDateTime)
+        {
+            return DateTime.SpecifyKind(localDateTime.Subtract(BusinessTimeZoneOffset), DateTimeKind.Utc);
         }
 
         private static IQueryable<Order> ApplyFilters(IQueryable<Order> orders, OrderSearchQueryDto query)
@@ -476,7 +504,7 @@ namespace RetradeBE.Services
                 return true;
             }
 
-            if (currentStatus is OrderStatusEnum.Returned or OrderStatusEnum.Cancelled)
+            if (currentStatus is OrderStatusEnum.DeliveryFailed or OrderStatusEnum.Returned or OrderStatusEnum.Cancelled)
             {
                 return false;
             }
