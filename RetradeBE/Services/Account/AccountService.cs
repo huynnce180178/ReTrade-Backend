@@ -69,7 +69,7 @@ namespace RetradeBE.Services
             var isCurrentlyInactive = account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Ban.ToString();
             account.Status = isCurrentlyInactive
                 ? RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString()
-                : RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString();
+                : RetradeBE.Models.Enums.AccountStatusEnum.Ban.ToString();
             account.UpdatedAt = DateTime.UtcNow;
             await _repository.UpdateAsync(account);
 

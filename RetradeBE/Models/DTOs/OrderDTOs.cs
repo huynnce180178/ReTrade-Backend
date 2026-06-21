@@ -45,6 +45,7 @@ namespace RetradeBE.Models.DTOs
         public string? TrackingCode { get; set; }
         public string? ShippingProvider { get; set; }
         public DateTime? ExpectedDeliveryTime { get; set; }
+        public string? ReturnReason { get; set; }
         public DateTime? CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
     }
@@ -81,6 +82,8 @@ namespace RetradeBE.Models.DTOs
         public int ShippingOrders { get; set; }
         public int DeliveredOrders { get; set; }
         public int CompletedOrders { get; set; }
+        public int ReturnRequestedOrders { get; set; }
+        public int ReturnRejectedOrders { get; set; }
         public int DeliveryFailedOrders { get; set; }
         public int ReturnedOrders { get; set; }
         public int CancelledOrders { get; set; }

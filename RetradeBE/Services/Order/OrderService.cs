@@ -97,6 +97,8 @@ namespace RetradeBE.Services
                 ShippingOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.Shipping)),
                 DeliveredOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.Delivered)),
                 CompletedOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.Completed)),
+                ReturnRequestedOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.ReturnRequested)),
+                ReturnRejectedOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.ReturnRejected)),
                 DeliveryFailedOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.DeliveryFailed)),
                 ReturnedOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.Returned)),
                 CancelledOrders = await orders.CountAsync(o => o.Status == nameof(OrderStatusEnum.Cancelled)),
@@ -192,6 +194,42 @@ namespace RetradeBE.Services
             {
                 order.ExpectedDeliveryTime = DateTime.UtcNow.Add(ShippingOutcomeDelay);
             }
+
+            await _orderRepository.UpdateAsync(order);
+            var updatedOrder = ToDetailDto(order);
+            await NotifySellerOrderStatusChangedAsync(updatedOrder);
+
+            return updatedOrder;
+        }
+
+        public async Task<OrderDetailDto?> ApproveReturnAsync(string sellerId, string orderId)
+        {
+            var order = await GetSellerReturnOrderForUpdateAsync(sellerId, orderId);
+            if (order == null)
+            {
+                return null;
+            }
+
+            order.Status = nameof(OrderStatusEnum.Returned);
+            order.UpdatedAt = DateTime.UtcNow;
+
+            await _orderRepository.UpdateAsync(order);
+            var updatedOrder = ToDetailDto(order);
+            await NotifySellerOrderStatusChangedAsync(updatedOrder);
+
+            return updatedOrder;
+        }
+
+        public async Task<OrderDetailDto?> RejectReturnAsync(string sellerId, string orderId)
+        {
+            var order = await GetSellerReturnOrderForUpdateAsync(sellerId, orderId);
+            if (order == null)
+            {
+                return null;
+            }
+
+            order.Status = nameof(OrderStatusEnum.ReturnRejected);
+            order.UpdatedAt = DateTime.UtcNow;
 
             await _orderRepository.UpdateAsync(order);
             var updatedOrder = ToDetailDto(order);
@@ -405,6 +443,7 @@ namespace RetradeBE.Services
                 TrackingCode = o.TrackingCode,
                 ShippingProvider = o.ShippingProvider,
                 ExpectedDeliveryTime = o.ExpectedDeliveryTime,
+                ReturnReason = o.ReturnReason,
                 CreatedAt = o.CreatedAt,
                 UpdatedAt = o.UpdatedAt
             });
@@ -446,6 +485,7 @@ namespace RetradeBE.Services
                 TrackingCode = order.TrackingCode,
                 ShippingProvider = order.ShippingProvider,
                 ExpectedDeliveryTime = order.ExpectedDeliveryTime,
+                ReturnReason = order.ReturnReason,
                 CreatedAt = order.CreatedAt,
                 UpdatedAt = order.UpdatedAt,
                 AddressSnapshot = order.AddressSnapshot,
@@ -504,7 +544,11 @@ namespace RetradeBE.Services
                 return true;
             }
 
-            if (currentStatus is OrderStatusEnum.DeliveryFailed or OrderStatusEnum.Returned or OrderStatusEnum.Cancelled)
+            if (currentStatus is OrderStatusEnum.DeliveryFailed
+                or OrderStatusEnum.ReturnRequested
+                or OrderStatusEnum.ReturnRejected
+                or OrderStatusEnum.Returned
+                or OrderStatusEnum.Cancelled)
             {
                 return false;
             }
@@ -517,6 +561,27 @@ namespace RetradeBE.Services
                 OrderStatusEnum.Shipping => false,
                 _ => false
             };
+        }
+
+        private async Task<Order?> GetSellerReturnOrderForUpdateAsync(string sellerId, string orderId)
+        {
+            if (string.IsNullOrWhiteSpace(sellerId))
+            {
+                return null;
+            }
+
+            var order = await _orderRepository.GetForUpdateAsync(orderId);
+            if (order == null || order.SellerId != sellerId)
+            {
+                return null;
+            }
+
+            if (ParseStatus(order.Status) != OrderStatusEnum.ReturnRequested)
+            {
+                throw new InvalidOperationException("Return can only be reviewed from ReturnRequested status.");
+            }
+
+            return order;
         }
 
         private static bool IsAwaitingPaymentExpired(Order order)
@@ -545,6 +610,7 @@ namespace RetradeBE.Services
                 order.TrackingCode,
                 order.ShippingProvider,
                 order.ExpectedDeliveryTime,
+                order.ReturnReason,
                 order.UpdatedAt
             };
 
