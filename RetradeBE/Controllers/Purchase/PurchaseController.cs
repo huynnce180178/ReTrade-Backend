@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OData.Query;
 using Microsoft.EntityFrameworkCore;
+using RetradeBE.Models.DTOs;
 using RetradeBE.Services;
 
 namespace RetradeBE.Controllers.Purchase
@@ -78,6 +79,22 @@ namespace RetradeBE.Controllers.Purchase
             try
             {
                 var purchase = await _purchaseService.CancelPurchaseAsync(buyerId, orderId);
+                if (purchase == null) return NotFound("Purchase not found.");
+
+                return Ok(purchase);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpPatch("buyer/{buyerId}/{orderId}/return")]
+        public async Task<IActionResult> RequestReturn(string buyerId, string orderId, ReturnPurchaseRequestDto dto)
+        {
+            try
+            {
+                var purchase = await _purchaseService.RequestReturnAsync(buyerId, orderId, dto);
                 if (purchase == null) return NotFound("Purchase not found.");
 
                 return Ok(purchase);

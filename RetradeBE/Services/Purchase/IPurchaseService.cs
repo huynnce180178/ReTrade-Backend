@@ -8,5 +8,6 @@ namespace RetradeBE.Services
         Task<PurchaseDetailDto?> GetByIdAsync(string buyerId, string orderId);
         Task<PurchaseDetailDto?> CompletePurchaseAsync(string buyerId, string orderId);
         Task<PurchaseDetailDto?> CancelPurchaseAsync(string buyerId, string orderId);
+        Task<PurchaseDetailDto?> RequestReturnAsync(string buyerId, string orderId, ReturnPurchaseRequestDto dto);
     }
 }

@@ -41,6 +41,8 @@ public partial class Order
 
     public DateTime? ExpectedDeliveryTime { get; set; }
 
+    public string? ReturnReason { get; set; }
+
     public string? Status { get; set; }
 
     public DateTime? CreatedAt { get; set; }

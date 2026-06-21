@@ -729,6 +729,7 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(100)
                 .HasColumnName("product_id");
             entity.Property(e => e.Quantity).HasColumnName("quantity");
+            entity.Property(e => e.ReturnReason).HasColumnName("return_reason");
             entity.Property(e => e.SellerId)
                 .HasMaxLength(100)
                 .HasColumnName("seller_id");

@@ -100,5 +100,43 @@ namespace RetradeBE.Controllers.Order
                 return BadRequest(ex.Message);
             }
         }
+
+        [HttpPatch("{orderId}/return/approve")]
+        [Authorize(Roles = nameof(RoleEnum.Seller))]
+        public async Task<IActionResult> ApproveReturn(string orderId, [FromQuery] string sellerId)
+        {
+            if (string.IsNullOrWhiteSpace(sellerId)) return BadRequest("SellerId is required.");
+
+            try
+            {
+                var order = await _orderService.ApproveReturnAsync(sellerId, orderId);
+                if (order == null) return NotFound("Order not found.");
+
+                return Ok(order);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpPatch("{orderId}/return/reject")]
+        [Authorize(Roles = nameof(RoleEnum.Seller))]
+        public async Task<IActionResult> RejectReturn(string orderId, [FromQuery] string sellerId)
+        {
+            if (string.IsNullOrWhiteSpace(sellerId)) return BadRequest("SellerId is required.");
+
+            try
+            {
+                var order = await _orderService.RejectReturnAsync(sellerId, orderId);
+                if (order == null) return NotFound("Order not found.");
+
+                return Ok(order);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
     }
 }

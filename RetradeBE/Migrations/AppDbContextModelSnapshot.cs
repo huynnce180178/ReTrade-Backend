@@ -894,6 +894,10 @@ namespace RetradeBE.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("quantity");
 
+                    b.Property<string>("ReturnReason")
+                        .HasColumnType("text")
+                        .HasColumnName("return_reason");
+
                     b.Property<string>("SellerId")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
