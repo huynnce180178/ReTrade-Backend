@@ -47,6 +47,23 @@ namespace RetradeBE.Controllers
             return Ok(result);
         }
 
+        [HttpGet("my-bids")]
+        public async Task<IActionResult> GetMyBids()
+        {
+            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(accountId)) return Unauthorized();
+
+            try
+            {
+                var result = await _auctionService.GetUserBidHistoryAsync(accountId);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
         [Authorize(Roles = $"{nameof(RoleEnum.Seller)},{nameof(RoleEnum.Admin)}")]
         [HttpGet("eligible-products")]
         public async Task<IActionResult> GetEligibleProducts([FromQuery] AuctionQueryDto query)

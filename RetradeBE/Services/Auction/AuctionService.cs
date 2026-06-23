@@ -308,8 +308,8 @@ namespace RetradeBE.Services
                 .FirstOrDefaultAsync();
             if (deposit == null || deposit.PolicyAccepted != true)
                 throw new Exception("A paid deposit and accepted policy are required before bidding.");
-            if (dto.BidAmount > (deposit.DepositAmount ?? 0))
-                throw new Exception("Bid amount cannot exceed your deposit amount.");
+            if (dto.BidAmount > ((deposit.DepositAmount ?? 0) - MinimumDepositAmount))
+                throw new Exception($"Bid amount cannot exceed your bidding limit (deposit - {MinimumDepositAmount:N0} VND).");
 
             var currentPrice = GetCurrentPrice(auction);
             var minimumBid = GetMinimumNextBid(auction);
@@ -516,7 +516,7 @@ namespace RetradeBE.Services
                 PolicyAccepted = deposit.PolicyAccepted == true,
                 Status = deposit.Status,
                 CreatedAt = deposit.CreatedAt,
-                MaxBidAmount = deposit.DepositAmount ?? 0,
+                MaxBidAmount = Math.Max(0, (deposit.DepositAmount ?? 0) - MinimumDepositAmount),
                 CanBid = paid
             };
         }
@@ -644,7 +644,7 @@ namespace RetradeBE.Services
 
         private async Task CreateWinnerRemainderRefundAsync(RetradeBE.Models.Auction auction, AuctionDeposit winnerDeposit, decimal winningAmount)
         {
-            var remainder = (winnerDeposit.DepositAmount ?? 0) - winningAmount;
+            var remainder = (winnerDeposit.DepositAmount ?? 0) - winningAmount - MinimumDepositAmount;
             if (remainder <= 0 || string.IsNullOrWhiteSpace(winnerDeposit.UserId))
                 return;
 
@@ -790,6 +790,37 @@ namespace RetradeBE.Services
                 .ToList();
 
             return dto;
+        }
+
+        public async Task<List<UserBidHistoryDto>> GetUserBidHistoryAsync(string accountId)
+        {
+            var account = await GetAccountAsync(accountId);
+            var userId = account.UserId ?? throw new Exception("Account is not linked to a user.");
+
+            var bids = await _context.Bid
+                .AsNoTracking()
+                .Include(b => b.Auction)
+                    .ThenInclude(a => a!.Product)
+                        .ThenInclude(p => p!.ProductImage)
+                            .ThenInclude(pi => pi.Image)
+                .Where(b => b.UserId == userId)
+                .OrderByDescending(b => b.CreatedAt)
+                .ToListAsync();
+
+            return bids.Select(b => new UserBidHistoryDto
+            {
+                BidId = b.BidId,
+                BidAmount = b.BidAmount ?? 0,
+                BidStatus = b.Status ?? string.Empty,
+                CreatedAt = b.CreatedAt ?? DateTime.MinValue,
+                AuctionId = b.AuctionId ?? string.Empty,
+                AuctionStatus = b.Auction != null ? ResolveStatus(b.Auction) ?? string.Empty : string.Empty,
+                ProductId = b.Auction?.ProductId ?? string.Empty,
+                ProductName = b.Auction?.Product?.Name ?? string.Empty,
+                ProductImageUrl = b.Auction?.Product != null ? GetMainImageUrl(b.Auction.Product) ?? string.Empty : string.Empty,
+                CurrentPrice = b.Auction?.CurrentPrice ?? b.Auction?.StartingPrice ?? 0,
+                EndTime = b.Auction?.EndTime ?? DateTime.MinValue
+            }).ToList();
         }
 
         private static void ValidateAuctionValues(

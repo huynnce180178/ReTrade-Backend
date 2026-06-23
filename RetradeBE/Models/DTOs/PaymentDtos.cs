@@ -43,6 +43,8 @@ public class VnPayReturnResponseDto
 
     public string? OrderId { get; set; }
 
+    public string? AuctionId { get; set; }
+
     public string Status { get; set; } = string.Empty;
 
     public string Message { get; set; } = string.Empty;

@@ -72,6 +72,11 @@ public class PaymentController : ControllerBase
             redirectUrl += $"&orderId={Uri.EscapeDataString(result.OrderId)}";
         }
 
+        if (!string.IsNullOrWhiteSpace(result.AuctionId))
+        {
+            redirectUrl += $"&auctionId={Uri.EscapeDataString(result.AuctionId)}";
+        }
+
         if (!string.IsNullOrWhiteSpace(result.TransactionNo))
         {
             redirectUrl += $"&transactionNo={Uri.EscapeDataString(result.TransactionNo)}";

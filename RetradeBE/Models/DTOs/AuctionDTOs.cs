@@ -113,4 +113,19 @@ namespace RetradeBE.Models.DTOs
         public string? Status { get; set; }
         public DateTime? CreatedAt { get; set; }
     }
+
+    public class UserBidHistoryDto
+    {
+        public string BidId { get; set; } = string.Empty;
+        public decimal BidAmount { get; set; }
+        public string BidStatus { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public string AuctionId { get; set; } = string.Empty;
+        public string AuctionStatus { get; set; } = string.Empty;
+        public string ProductId { get; set; } = string.Empty;
+        public string ProductName { get; set; } = string.Empty;
+        public string ProductImageUrl { get; set; } = string.Empty;
+        public decimal CurrentPrice { get; set; }
+        public DateTime EndTime { get; set; }
+    }
 }
