@@ -85,6 +85,7 @@ namespace RetradeBE
             builder.Services.AddControllers();
             builder.Services.AddHostedService<SubscriptionExpirationService>();
             builder.Services.AddHostedService<ShippingOutcomeSimulationService>();
+            builder.Services.AddHostedService<AuctionClosingService>();
             builder.Services.AddMemoryCache(); // Thêm bộ nhớ đệm (dùng lưu OTP)
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(c =>
@@ -223,6 +224,7 @@ namespace RetradeBE
             app.MapHub<RetradeBE.Hubs.AccountHub>("/hubs/accounts");
             app.MapHub<SellerHub>("/hubs/sellers");
             app.MapHub<OrderHub>("/hubs/orders");
+            app.MapHub<AuctionHub>("/hubs/auctions");
 
             app.Run();
         }

@@ -17,8 +17,6 @@ public partial class Auction
 
     public decimal? MinIncrement { get; set; }
 
-    public decimal? ReservePrice { get; set; }
-
     public decimal? BuyNowPrice { get; set; }
 
     public DateTime? StartTime { get; set; }
