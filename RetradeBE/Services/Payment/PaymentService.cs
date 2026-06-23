@@ -218,6 +218,7 @@ public class PaymentService : IPaymentService
 
         // Nếu là payment cho đơn hàng thì cập nhật trạng thái đơn hàng
         AuctionDeposit? updatedDeposit = null;
+        string? auctionId = null;
 
         if (!string.IsNullOrWhiteSpace(auctionDepositRef))
         {
@@ -227,6 +228,7 @@ public class PaymentService : IPaymentService
             {
                 deposit.Status = isSuccess ? "Paid" : "Failed";
                 updatedDeposit = deposit;
+                auctionId = deposit.AuctionId;
             }
         }
 
@@ -263,6 +265,7 @@ public class PaymentService : IPaymentService
             IsSuccess = isSuccess,
             PaymentId = payment.PaymentId,
             OrderId = payment.OrderId,
+            AuctionId = auctionId,
             Status = payment.Status ?? string.Empty,
             Message = isSuccess ? "Payment completed successfully." : MapVnPayMessage(responseCode, transactionStatus),
             TransactionNo = transactionNo,
@@ -338,7 +341,7 @@ public class PaymentService : IPaymentService
                     PolicyAccepted = deposit.PolicyAccepted == true,
                     deposit.Status,
                     deposit.CreatedAt,
-                    MaxBidAmount = deposit.DepositAmount ?? 0,
+                    MaxBidAmount = Math.Max(0, (deposit.DepositAmount ?? 0) - 20000m),
                     CanBid = deposit.Status == "Paid" && deposit.PolicyAccepted == true
                 }
             });
