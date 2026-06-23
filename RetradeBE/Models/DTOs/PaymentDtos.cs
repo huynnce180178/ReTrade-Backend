@@ -6,6 +6,8 @@ public class CreateVnPayPaymentRequestDto
 {
     public string? OrderId { get; set; }
 
+    public string? AuctionDepositId { get; set; }
+
     /// <summary>
     /// ServiceId của gói subscription (nếu thanh toán nâng cấp gói, không cùng lúc với OrderId)
     /// </summary>
