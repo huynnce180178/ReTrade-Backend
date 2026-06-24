@@ -13,6 +13,11 @@ namespace RetradeBE.Repositories
             _context = context;
         }
 
+        public IQueryable<Offer> Query()
+        {
+            return _context.Offer.AsQueryable();
+        }
+
         public async Task<List<Offer>> GetAllAsync()
         {
             return await _context.Offer
