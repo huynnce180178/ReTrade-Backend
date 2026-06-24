@@ -13,6 +13,11 @@ namespace RetradeBE.Repositories
             _context = context;
         }
 
+        public IQueryable<Address> Query()
+        {
+            return _context.Address.AsQueryable();
+        }
+
         public async Task<string?> GetUserIdByAccountIdAsync(string accountId)
         {
             var account = await _context.Account

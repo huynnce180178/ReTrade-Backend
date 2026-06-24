@@ -4,6 +4,7 @@ namespace RetradeBE.Repositories
 {
     public interface IAddressRepository
     {
+        IQueryable<Address> Query();
         Task<string?> GetUserIdByAccountIdAsync(string accountId);
         Task<List<Address>> GetActiveByUserIdAsync(string userId);
         Task<Address?> GetOwnedActiveAsync(string userId, string addressId);
