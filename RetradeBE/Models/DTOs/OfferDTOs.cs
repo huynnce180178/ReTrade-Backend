@@ -8,6 +8,11 @@ namespace RetradeBE.Models.DTOs
         /// <summary>Hours until this offer expires (default 48h)</summary>
         public int ExpiresInHours { get; set; } = 48;
     }
+    public class CounterOfferDto
+    {
+        public string OfferId { get; set; } = null!;
+        public decimal CounterPrice { get; set; }
+    }
 
     public class OfferDto
     {
