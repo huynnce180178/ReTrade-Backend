@@ -308,14 +308,16 @@ namespace RetradeBE.Services
                 .FirstOrDefaultAsync();
             if (deposit == null || deposit.PolicyAccepted != true)
                 throw new Exception("A paid deposit and accepted policy are required before bidding.");
-            if (dto.BidAmount > ((deposit.DepositAmount ?? 0) - MinimumDepositAmount))
+            var depositAmount = deposit.DepositAmount ?? 0;
+            var isBuyNowBid = auction.BuyNowPrice.HasValue && dto.BidAmount == auction.BuyNowPrice.Value;
+            if (dto.BidAmount > (depositAmount - MinimumDepositAmount))
                 throw new Exception($"Bid amount cannot exceed your bidding limit (deposit - {MinimumDepositAmount:N0} VND).");
 
             var currentPrice = GetCurrentPrice(auction);
             var minimumBid = GetMinimumNextBid(auction);
             if (dto.BidAmount <= currentPrice)
                 throw new Exception("Bid amount must be greater than the current bid.");
-            if (dto.BidAmount < minimumBid)
+            if (!isBuyNowBid && dto.BidAmount < minimumBid)
                 throw new Exception($"Bid amount must be at least {minimumBid:N0} VND.");
             if (auction.BuyNowPrice.HasValue && dto.BidAmount > auction.BuyNowPrice.Value)
                 throw new Exception("Bid amount cannot be greater than the buy now price.");
@@ -339,7 +341,7 @@ namespace RetradeBE.Services
             auction.CurrentPrice = dto.BidAmount;
             auction.UpdatedAt = GetAuctionNow();
 
-            var endedByBuyNow = auction.BuyNowPrice.HasValue && dto.BidAmount == auction.BuyNowPrice.Value;
+            var endedByBuyNow = isBuyNowBid;
             string? orderId = null;
 
             if (endedByBuyNow)
@@ -836,7 +838,9 @@ namespace RetradeBE.Services
                 throw new Exception("Bid step must be greater than 0.");
             if (endTime <= startTime)
                 throw new Exception("Auction end time must be after start time.");
-            if (buyNowPrice.HasValue && buyNowPrice.Value <= startingPrice)
+            if (!buyNowPrice.HasValue)
+                throw new Exception("Buy now price is required.");
+            if (buyNowPrice.Value <= startingPrice)
                 throw new Exception("Buy now price must be greater than starting bid.");
         }
 
@@ -924,7 +928,7 @@ namespace RetradeBE.Services
 
         private static DateTime GetAuctionNow()
         {
-            return DateTime.UtcNow.AddHours(7);
+            return DateTime.SpecifyKind(DateTime.UtcNow.AddHours(7), DateTimeKind.Unspecified);
         }
 
         private static bool IsTerminalStatus(string? status)
