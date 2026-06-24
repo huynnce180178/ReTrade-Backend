@@ -261,7 +261,8 @@ namespace RetradeBE.Services
                     continue;
                 }
 
-                var carrierSucceeded = Random.Shared.NextDouble() >= ShippingFailureRate;
+                var carrierSucceeded = !string.IsNullOrWhiteSpace(order.AuctionId)
+                    || Random.Shared.NextDouble() >= ShippingFailureRate;
                 order.Status = carrierSucceeded
                     ? nameof(OrderStatusEnum.Delivered)
                     : nameof(OrderStatusEnum.DeliveryFailed);
