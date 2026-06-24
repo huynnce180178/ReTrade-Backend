@@ -5,7 +5,7 @@ using RetradeBE.Hubs;
 using RetradeBE.Models;
 using RetradeBE.Models.DTOs;
 using RetradeBE.Services.Checkout;
-
+using RetradeBE.Repositories;
 namespace RetradeBE.Services.Offer
 {
     public class OfferService : IOfferService
@@ -13,12 +13,14 @@ namespace RetradeBE.Services.Offer
         private readonly AppDbContext _context;
         private readonly ICheckoutService _checkoutService;
         private readonly IHubContext<OrderHub> _orderHub;
+        private readonly IOfferRepository _repo;
 
-        public OfferService(AppDbContext context, ICheckoutService checkoutService, IHubContext<OrderHub> orderHub)
+        public OfferService(AppDbContext context, ICheckoutService checkoutService, IHubContext<OrderHub> orderHub, IOfferRepository repo)
         {
             _context = context;
             _checkoutService = checkoutService;
             _orderHub = orderHub;
+            _repo = repo;
         }
 
         public async Task<OfferDto> MakeOfferAsync(string accountId, MakeOfferRequestDto request)
@@ -128,19 +130,14 @@ namespace RetradeBE.Services.Offer
 
         public async Task<OfferDto> AcceptOfferAsync(string sellerId, string offerId)
         {
-            var offer = await _context.Offer
-                .Include(o => o.Product)
-                    .ThenInclude(p => p!.ProductImage)
-                        .ThenInclude(pi => pi.Image)
-                .Include(o => o.Buyer)
-                .FirstOrDefaultAsync(o => o.OfferId == offerId);
+            var offer = await _repo.GetByIdAsync(offerId);
 
             if (offer == null) throw new Exception("Offer not found.");
             if (offer.Product?.SellerId != sellerId) throw new Exception("You are not authorized to manage this offer.");
             if (offer.Status != "Pending") throw new Exception("Only pending offers can be accepted.");
 
             offer.Status = "Accepted";
-            await _context.SaveChangesAsync();
+            await _repo.UpdateAsync(offer);
 
             var mainImage = offer.Product?.ProductImage
                 .OrderBy(pi => pi.SortOrder)
@@ -152,19 +149,13 @@ namespace RetradeBE.Services.Offer
 
         public async Task<OfferDto> RejectOfferAsync(string sellerId, string offerId)
         {
-            var offer = await _context.Offer
-                .Include(o => o.Product)
-                    .ThenInclude(p => p!.ProductImage)
-                        .ThenInclude(pi => pi.Image)
-                .Include(o => o.Buyer)
-                .FirstOrDefaultAsync(o => o.OfferId == offerId);
-
+            var offer = await _repo.GetByIdAsync(offerId);
             if (offer == null) throw new Exception("Offer not found.");
             if (offer.Product?.SellerId != sellerId) throw new Exception("You are not authorized to manage this offer.");
             if (offer.Status != "Pending") throw new Exception("Only pending offers can be rejected.");
 
             offer.Status = "Rejected";
-            await _context.SaveChangesAsync();
+            await _repo.UpdateAsync(offer);
 
             var mainImage = offer.Product?.ProductImage
                 .OrderBy(pi => pi.SortOrder)
@@ -176,19 +167,13 @@ namespace RetradeBE.Services.Offer
 
         public async Task<OfferDto> CancelOfferAsync(string buyerUserId, string offerId)
         {
-            var offer = await _context.Offer
-                .Include(o => o.Product)
-                    .ThenInclude(p => p!.ProductImage)
-                        .ThenInclude(pi => pi.Image)
-                .Include(o => o.Buyer)
-                .FirstOrDefaultAsync(o => o.OfferId == offerId);
-
+            var offer = await _repo.GetByIdAsync(offerId);
             if (offer == null) throw new Exception("Offer not found.");
             if (offer.BuyerId != buyerUserId) throw new Exception("You are not authorized to cancel this offer.");
             if (offer.Status != "Pending") throw new Exception("Only pending offers can be cancelled.");
 
             offer.Status = "Cancelled";
-            await _context.SaveChangesAsync();
+            await _repo.UpdateAsync(offer);
 
             var mainImage = offer.Product?.ProductImage
                 .OrderBy(pi => pi.SortOrder)
@@ -292,6 +277,70 @@ namespace RetradeBE.Services.Offer
             await _context.SaveChangesAsync();
 
             return order.OrderId;
+        }
+        public async Task<List<OfferDto>> GetOffersBySellerAsync(string sellerUserId)
+        {
+            var offers = await _repo
+                .GetOffersBySellerAsync(sellerUserId);
+            return offers
+                .OrderByDescending(x => x.CreatedAt)
+                .Select(o =>
+                {
+                    var mainImage = o.Product?
+                        .ProductImage
+                        .OrderBy(pi => pi.SortOrder)
+                        .Select(pi => pi.Image!.ImageUrl)
+                        .FirstOrDefault();
+
+                    return MapToDto(
+                        o,
+                        o.Buyer,
+                        o.Product,
+                        mainImage);
+                })
+                .ToList();
+        }
+
+        public async Task<OfferDto> CounterOfferAsync(string sellerId, CounterOfferDto request)
+        {
+            var offer = await _repo.GetByIdAsync(request.OfferId);
+
+            if (offer == null)
+                throw new Exception("Offer not found.");
+
+            if (offer.Product == null)
+                throw new Exception("Product not found.");
+
+            if (offer.Product.SellerId != sellerId)
+                throw new Exception("You are not authorized to manage this offer.");
+
+            if (offer.Status != "Pending" &&
+                offer.Status != "CounterOffer")
+                throw new Exception("Only pending offers can be countered.");
+
+            if (request.CounterPrice <= 0)
+                throw new Exception("Counter price must be greater than 0.");
+            if (request.CounterPrice <= offer.OfferPrice)
+                throw new Exception("Counter offer price must be greater than the buyer's offer.");
+
+            if (request.CounterPrice >= offer.Product!.Price)
+                throw new Exception("Counter offer price must be lower than the product price.");
+
+            offer.OfferPrice = request.CounterPrice;
+            offer.Status = "CounterOffer";
+
+            await _repo.UpdateAsync(offer);
+
+            var mainImage = offer.Product?.ProductImage
+                .OrderBy(pi => pi.SortOrder)
+                .Select(pi => pi.Image?.ImageUrl)
+                .FirstOrDefault();
+
+            return MapToDto(
+                offer,
+                offer.Buyer,
+                offer.Product,
+                mainImage);
         }
 
         private static OfferDto MapToDto(RetradeBE.Models.Offer offer, User? buyer, Product? product, string? mainImageUrl)

@@ -11,5 +11,7 @@ namespace RetradeBE.Services.Offer
         Task<OfferDto> RejectOfferAsync(string sellerId, string offerId);
         Task<OfferDto> CancelOfferAsync(string buyerUserId, string offerId);
         Task<string> CheckoutFromOfferAsync(OfferCheckoutRequestDto request, string accountId);
+        Task<List<OfferDto>> GetOffersBySellerAsync(string sellerId);
+        Task<OfferDto> CounterOfferAsync(string sellerId, CounterOfferDto request);
     }
 }
