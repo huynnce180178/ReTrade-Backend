@@ -45,6 +45,12 @@ namespace RetradeBE.Repositories
                 .FirstOrDefaultAsync(o => o.OrderId == orderId);
         }
 
+        public async Task AddAsync(Order order)
+        {
+            await _context.Order.AddAsync(order);
+            await _context.SaveChangesAsync();
+        }
+
         public async Task UpdateAsync(Order order)
         {
             _context.Order.Update(order);

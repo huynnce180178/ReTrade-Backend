@@ -10,28 +10,47 @@ namespace RetradeBE.Services.Offer
 {
     public class OfferService : IOfferService
     {
-        private readonly AppDbContext _context;
         private readonly ICheckoutService _checkoutService;
         private readonly IHubContext<OrderHub> _orderHub;
         private readonly IOfferRepository _repo;
+        private readonly IAccountRepository _accountRepo;
+        private readonly IProductRepository _productRepo;
+        private readonly IUserRepository _userRepo;
+        private readonly IAddressRepository _addressRepo;
+        private readonly IOrderRepository _orderRepo;
+        private readonly IWishlistRepository _wishlistRepo;
 
-        public OfferService(AppDbContext context, ICheckoutService checkoutService, IHubContext<OrderHub> orderHub, IOfferRepository repo)
+        public OfferService(
+            ICheckoutService checkoutService, 
+            IHubContext<OrderHub> orderHub, 
+            IOfferRepository repo,
+            IAccountRepository accountRepo,
+            IProductRepository productRepo,
+            IUserRepository userRepo,
+            IAddressRepository addressRepo,
+            IOrderRepository orderRepo,
+            IWishlistRepository wishlistRepo)
         {
-            _context = context;
             _checkoutService = checkoutService;
             _orderHub = orderHub;
             _repo = repo;
+            _accountRepo = accountRepo;
+            _productRepo = productRepo;
+            _userRepo = userRepo;
+            _addressRepo = addressRepo;
+            _orderRepo = orderRepo;
+            _wishlistRepo = wishlistRepo;
         }
 
         public async Task<OfferDto> MakeOfferAsync(string accountId, MakeOfferRequestDto request)
         {
-            var account = await _context.Account.FirstOrDefaultAsync(a => a.AccountId == accountId);
+            var account = await _accountRepo.Query().FirstOrDefaultAsync(a => a.AccountId == accountId);
             if (account == null || string.IsNullOrEmpty(account.UserId))
                 throw new Exception("Account not found or not linked to a user.");
 
             var buyerUserId = account.UserId;
 
-            var product = await _context.Product
+            var product = await _productRepo.Query()
                 .Include(p => p.ProductImage)
                     .ThenInclude(pi => pi.Image)
                 .FirstOrDefaultAsync(p => p.ProductId == request.ProductId);
@@ -43,7 +62,7 @@ namespace RetradeBE.Services.Offer
                 throw new Exception($"Your offer must be lower than the listed price ({product.Price.Value:N0} VND). Offers are for bargaining only.");
 
             // Check if buyer already has a Pending offer for this product
-            var existingOffer = await _context.Offer.FirstOrDefaultAsync(o =>
+            var existingOffer = await _repo.Query().FirstOrDefaultAsync(o =>
                 o.BuyerId == buyerUserId && o.ProductId == request.ProductId && o.Status == "Pending");
             if (existingOffer != null)
                 throw new Exception("You already have a pending offer for this product. Cancel it before making a new one.");
@@ -61,10 +80,9 @@ namespace RetradeBE.Services.Offer
                 CreatedAt = now
             };
 
-            _context.Offer.Add(offer);
-            await _context.SaveChangesAsync();
+            await _repo.AddAsync(offer);
 
-            var buyer = await _context.User.FirstOrDefaultAsync(u => u.UserId == buyerUserId);
+            var buyer = await _userRepo.GetByIdAsync(buyerUserId);
             var mainImage = product.ProductImage
                 .OrderBy(pi => pi.SortOrder)
                 .Select(pi => pi.Image?.ImageUrl)
@@ -75,13 +93,13 @@ namespace RetradeBE.Services.Offer
 
         public async Task<List<OfferDto>> GetMyOffersAsync(string accountId, string? productId = null)
         {
-            var account = await _context.Account.FirstOrDefaultAsync(a => a.AccountId == accountId);
+            var account = await _accountRepo.Query().FirstOrDefaultAsync(a => a.AccountId == accountId);
             if (account == null || string.IsNullOrEmpty(account.UserId))
                 return new List<OfferDto>();
 
             var buyerUserId = account.UserId;
 
-            var query = _context.Offer
+            var query = _repo.Query()
                 .Include(o => o.Buyer)
                 .Include(o => o.Product)
                     .ThenInclude(p => p.ProductImage)
@@ -105,11 +123,11 @@ namespace RetradeBE.Services.Offer
 
         public async Task<List<OfferDto>> GetOffersForProductAsync(string sellerId, string productId)
         {
-            var product = await _context.Product.FirstOrDefaultAsync(p => p.ProductId == productId);
+            var product = await _productRepo.Query().FirstOrDefaultAsync(p => p.ProductId == productId);
             if (product == null || product.SellerId != sellerId)
                 throw new Exception("Product not found or you are not the seller.");
 
-            var offers = await _context.Offer
+            var offers = await _repo.Query()
                 .Include(o => o.Buyer)
                 .Include(o => o.Product)
                     .ThenInclude(p => p.ProductImage)
@@ -185,24 +203,24 @@ namespace RetradeBE.Services.Offer
 
         public async Task<string> CheckoutFromOfferAsync(OfferCheckoutRequestDto request, string accountId)
         {
-            var account = await _context.Account.FirstOrDefaultAsync(a => a.AccountId == accountId);
+            var account = await _accountRepo.Query().FirstOrDefaultAsync(a => a.AccountId == accountId);
             if (account == null || string.IsNullOrEmpty(account.UserId))
                 throw new Exception("Account not found.");
 
             var buyerUserId = account.UserId;
 
-            var offer = await _context.Offer
+            var offer = await _repo.Query()
                 .Include(o => o.Product)
                 .FirstOrDefaultAsync(o => o.OfferId == request.OfferId);
 
             if (offer == null) throw new Exception("Offer not found.");
             if (offer.BuyerId != buyerUserId) throw new Exception("This offer does not belong to you.");
-            if (offer.Status != "Accepted") throw new Exception("Offer must be accepted before checkout.");
+            if (offer.Status != "Accepted" && offer.Status != "CounterOffer") throw new Exception("Offer must be accepted or counter-offered before checkout.");
             if (offer.ExpiresAt.HasValue && offer.ExpiresAt.Value < DateTime.UtcNow)
                 throw new Exception("This offer has expired.");
 
             var product = offer.Product ?? throw new Exception("Product not found.");
-            var address = await _context.Address.FirstOrDefaultAsync(a => a.AddressId == request.AddressId);
+            var address = await _addressRepo.Query().FirstOrDefaultAsync(a => a.AddressId == request.AddressId);
             if (address == null) throw new Exception("Address not found.");
 
             // Calculate shipping fee using checkout service
@@ -247,7 +265,7 @@ namespace RetradeBE.Services.Offer
                 ExpectedDeliveryTime = DateTime.UtcNow.AddDays(5)
             };
 
-            _context.Order.Add(order);
+            await _orderRepo.AddAsync(order);
 
             // Mark product as sold / decrement stock
             if (product.StockQuantity.HasValue)
@@ -258,23 +276,20 @@ namespace RetradeBE.Services.Offer
                     product.StockQuantity = 0;
                     product.Status = RetradeBE.Models.Enums.ProductStatusEnum.Sold.ToString();
                 }
-                _context.Product.Update(product);
+                await _productRepo.UpdateAsync(product);
             }
 
             // Mark offer as completed
             offer.Status = "Completed";
+            await _repo.UpdateAsync(offer);
 
             // Remove from wishlist
-            var wishlist = await _context.Wishlist
-                .FirstOrDefaultAsync(w => w.UserId == buyerUserId && w.Status == "Active" && w.IsDeleted != true);
+            var wishlist = await _wishlistRepo.GetOrCreateActiveWishlistAsync(buyerUserId);
             if (wishlist != null)
             {
-                var wishlistItem = await _context.WishlistItem
-                    .FirstOrDefaultAsync(wi => wi.WishlistId == wishlist.WishlistId && wi.ProductId == product.ProductId);
-                if (wishlistItem != null) _context.WishlistItem.Remove(wishlistItem);
+                var wishlistItem = await _wishlistRepo.GetItemByProductAsync(wishlist.WishlistId, product.ProductId);
+                if (wishlistItem != null) await _wishlistRepo.RemoveItemAsync(wishlistItem);
             }
-
-            await _context.SaveChangesAsync();
 
             return order.OrderId;
         }
