@@ -285,11 +285,6 @@ namespace RetradeBE.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("product_id");
 
-                    b.Property<decimal?>("ReservePrice")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)")
-                        .HasColumnName("reserve_price");
-
                     b.Property<string>("SellerId")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
@@ -893,6 +888,10 @@ namespace RetradeBE.Migrations
                     b.Property<int?>("Quantity")
                         .HasColumnType("integer")
                         .HasColumnName("quantity");
+
+                    b.Property<string>("ReturnReason")
+                        .HasColumnType("text")
+                        .HasColumnName("return_reason");
 
                     b.Property<string>("SellerId")
                         .HasMaxLength(100)

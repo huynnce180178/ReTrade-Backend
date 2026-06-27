@@ -211,6 +211,9 @@ namespace RetradeBE.Services.Checkout
         }
 
         private async Task<string> GetAddressSnapshotAsync(Address address)
+            => await GetAddressSnapshotPublicAsync(address);
+
+        public async Task<string> GetAddressSnapshotPublicAsync(Address address)
         {
             var receiverName = address.ReceiverName ?? "";
             var receiverPhone = address.ReceiverPhone ?? "";

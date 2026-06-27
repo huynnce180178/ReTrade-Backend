@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace RetradeBE.Models.DTOs
 {
     public class PurchaseListDto
@@ -21,6 +23,7 @@ namespace RetradeBE.Models.DTOs
         public string? TrackingCode { get; set; }
         public string? ShippingProvider { get; set; }
         public DateTime? ExpectedDeliveryTime { get; set; }
+        public string? ReturnReason { get; set; }
         public DateTime? CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public bool HasReview { get; set; }
@@ -37,5 +40,11 @@ namespace RetradeBE.Models.DTOs
         public string? AuctionId { get; set; }
         public string? OfferId { get; set; }
         public List<PaymentSummaryDto> Payments { get; set; } = new();
+    }
+
+    public class ReturnPurchaseRequestDto
+    {
+        [StringLength(500, MinimumLength = 10)]
+        public string Reason { get; set; } = null!;
     }
 }

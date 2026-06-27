@@ -9,6 +9,8 @@ namespace RetradeBE.Models.Enums
         Delivered,
         DeliveryFailed,
         Completed,
+        ReturnRequested,
+        ReturnRejected,
         Returned,
         Cancelled
     }

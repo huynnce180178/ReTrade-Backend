@@ -11,6 +11,8 @@ namespace RetradeBE.Services
         Task<OrderDetailDto?> GetOrderDetailAsync(string sellerId, string orderId);
         Task<OrderDetailDto?> ConfirmOrderAsync(string sellerId, string orderId);
         Task<OrderDetailDto?> UpdateStatusAsync(string sellerId, string orderId, OrderStatusUpdateDto dto);
+        Task<OrderDetailDto?> ApproveReturnAsync(string sellerId, string orderId);
+        Task<OrderDetailDto?> RejectReturnAsync(string sellerId, string orderId);
         Task<int> ProcessDueShippingOutcomesAsync(CancellationToken cancellationToken = default);
     }
 }

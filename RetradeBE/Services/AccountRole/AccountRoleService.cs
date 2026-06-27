@@ -41,11 +41,33 @@ namespace RetradeBE.Services.AccountRole
 
         public async Task<bool> AssignRoleAsync(string accountId, int roleId)
         {
+            if (string.IsNullOrEmpty(accountId))
+                return false;
+
+            var account = await _accountRepository.GetByIdAsync(accountId);
+            if (account == null)
+                return false;
+
+            var allRoles = await _repository.GetAllRolesAsync();
+            if (!allRoles.Any(r => r.RoleId == roleId))
+                return false;
+
             return await _repository.AssignRoleAsync(accountId, roleId);
         }
 
         public async Task<bool> RemoveRoleAsync(string accountId, int roleId)
         {
+            if (string.IsNullOrEmpty(accountId))
+                return false;
+
+            var account = await _accountRepository.GetByIdAsync(accountId);
+            if (account == null)
+                return false;
+
+            var allRoles = await _repository.GetAllRolesAsync();
+            if (!allRoles.Any(r => r.RoleId == roleId))
+                return false;
+
             return await _repository.RemoveRoleAsync(accountId, roleId);
         }
     }

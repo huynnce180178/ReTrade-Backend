@@ -16,6 +16,8 @@ namespace RetradeBE.Services
         private const string DeliveredStatus = "Delivered";
         private const string CompletedStatus = "Completed";
         private const string CancelledStatus = "Cancelled";
+        private const string ReturnRequestedStatus = "ReturnRequested";
+        private static readonly TimeSpan ReturnRequestWindow = TimeSpan.FromDays(7);
 
         private readonly IOrderRepository _orderRepository;
         private readonly IMapper _mapper;
@@ -122,6 +124,45 @@ namespace RetradeBE.Services
             return _mapper.Map<PurchaseDetailDto>(order);
         }
 
+        public async Task<PurchaseDetailDto?> RequestReturnAsync(string buyerId, string orderId, ReturnPurchaseRequestDto dto)
+        {
+            if (string.IsNullOrWhiteSpace(buyerId))
+            {
+                return null;
+            }
+
+            var reason = dto?.Reason?.Trim();
+            if (string.IsNullOrWhiteSpace(reason))
+            {
+                throw new InvalidOperationException("Return reason is required.");
+            }
+
+            var order = await _orderRepository.GetForUpdateAsync(orderId);
+            if (order == null || order.UserId != buyerId)
+            {
+                return null;
+            }
+
+            if (!string.Equals(order.Status, CompletedStatus, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Purchase can only request return from Completed status.");
+            }
+
+            if (!IsWithinReturnRequestWindow(order))
+            {
+                throw new InvalidOperationException("Purchase can only request return within 7 days after receiving the order.");
+            }
+
+            order.Status = ReturnRequestedStatus;
+            order.ReturnReason = reason;
+            order.UpdatedAt = DateTime.UtcNow;
+
+            await _orderRepository.UpdateAsync(order);
+            await NotifyOrderStatusChangedAsync(order);
+
+            return _mapper.Map<PurchaseDetailDto>(order);
+        }
+
         private async Task NotifyOrderStatusChangedAsync(Order order)
         {
             var payload = new
@@ -134,6 +175,7 @@ namespace RetradeBE.Services
                 order.TrackingCode,
                 order.ShippingProvider,
                 order.ExpectedDeliveryTime,
+                order.ReturnReason,
                 order.UpdatedAt
             };
 
@@ -157,6 +199,29 @@ namespace RetradeBE.Services
             return string.Equals(status, AwaitingPaymentStatus, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(status, PendingStatus, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(status, ConfirmedStatus, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsWithinReturnRequestWindow(Order order)
+        {
+            var receivedAt = NormalizeUtc(order.UpdatedAt ?? order.CreatedAt);
+            if (!receivedAt.HasValue)
+            {
+                return false;
+            }
+
+            return DateTime.UtcNow - receivedAt.Value <= ReturnRequestWindow;
+        }
+
+        private static DateTime? NormalizeUtc(DateTime? value)
+        {
+            if (!value.HasValue)
+            {
+                return null;
+            }
+
+            return value.Value.Kind == DateTimeKind.Unspecified
+                ? DateTime.SpecifyKind(value.Value, DateTimeKind.Utc)
+                : value.Value.ToUniversalTime();
         }
     }
 }

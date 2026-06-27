@@ -16,21 +16,25 @@ namespace RetradeBE.Services;
 public class PaymentService : IPaymentService
 {
     private const string PaymentMethod = "VNPAY";
+    private const string AuctionDepositPaymentPrefix = "AUCTION_DEPOSIT:";
     private readonly AppDbContext _context;
     private readonly VnPaySettings _vnPaySettings;
     private readonly ILogger<PaymentService> _logger;
     private readonly IHubContext<OrderHub> _orderHub;
+    private readonly IHubContext<AuctionHub> _auctionHub;
 
     public PaymentService(
         AppDbContext context,
         IOptions<VnPaySettings> vnPaySettings,
         ILogger<PaymentService> logger,
-        IHubContext<OrderHub> orderHub)
+        IHubContext<OrderHub> orderHub,
+        IHubContext<AuctionHub> auctionHub)
     {
         _context = context;
         _vnPaySettings = vnPaySettings.Value;
         _logger = logger;
         _orderHub = orderHub;
+        _auctionHub = auctionHub;
     }
 
     public async Task<CreateVnPayPaymentResponseDto> CreateVnPayPaymentUrlAsync(
@@ -69,6 +73,27 @@ public class PaymentService : IPaymentService
             }
         }
 
+        if (!string.IsNullOrWhiteSpace(request.AuctionDepositId))
+        {
+            var deposit = await _context.AuctionDeposit
+                .FirstOrDefaultAsync(x => x.AuctionDepositId == request.AuctionDepositId && x.UserId == account.UserId);
+
+            if (deposit == null)
+            {
+                throw new InvalidOperationException("Auction deposit not found.");
+            }
+
+            if (deposit.Status == "Paid")
+            {
+                throw new InvalidOperationException("Auction deposit is already paid.");
+            }
+
+            if (deposit.DepositAmount != request.Amount)
+            {
+                throw new InvalidOperationException("Payment amount does not match auction deposit.");
+            }
+        }
+
         var paymentId = $"PAY_{Guid.NewGuid():N}";
         var createDate = DateTime.UtcNow.AddHours(7);
         var amount = Convert.ToInt64(decimal.Round(request.Amount * 100, 0, MidpointRounding.AwayFromZero));
@@ -82,7 +107,9 @@ public class PaymentService : IPaymentService
             UserId = account.UserId,
             Amount = request.Amount,
             PaymentMethod = PaymentMethod,
-            ProviderTransactionId = null,
+            ProviderTransactionId = string.IsNullOrWhiteSpace(request.AuctionDepositId)
+                ? null
+                : $"{AuctionDepositPaymentPrefix}{request.AuctionDepositId}",
             Status = "Pending",
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -174,6 +201,11 @@ public class PaymentService : IPaymentService
         }
 
         var isSuccess = responseCode == "00" && transactionStatus == "00";
+        var auctionDepositRef = payment.ProviderTransactionId != null
+            && payment.ProviderTransactionId.StartsWith(AuctionDepositPaymentPrefix, StringComparison.OrdinalIgnoreCase)
+                ? payment.ProviderTransactionId.Substring(AuctionDepositPaymentPrefix.Length)
+                : null;
+
         payment.Status = isSuccess ? "Success" : "Failed";
         payment.ProviderTransactionId = transactionNo;
         payment.UpdatedAt = DateTime.UtcNow;
@@ -185,6 +217,21 @@ public class PaymentService : IPaymentService
         }
 
         // Nếu là payment cho đơn hàng thì cập nhật trạng thái đơn hàng
+        AuctionDeposit? updatedDeposit = null;
+        string? auctionId = null;
+
+        if (!string.IsNullOrWhiteSpace(auctionDepositRef))
+        {
+            var deposit = await _context.AuctionDeposit
+                .FirstOrDefaultAsync(x => x.AuctionDepositId == auctionDepositRef);
+            if (deposit != null)
+            {
+                deposit.Status = isSuccess ? "Paid" : "Failed";
+                updatedDeposit = deposit;
+                auctionId = deposit.AuctionId;
+            }
+        }
+
         Order? updatedOrder = null;
 
         if (isSuccess && !string.IsNullOrWhiteSpace(payment.OrderId))
@@ -208,12 +255,17 @@ public class PaymentService : IPaymentService
         {
             await NotifySellerOrderChangedAsync(updatedOrder, "PaymentConfirmed");
         }
+        if (updatedDeposit != null)
+        {
+            await NotifyAuctionDepositChangedAsync(updatedDeposit, isSuccess ? "DepositPaid" : "DepositFailed");
+        }
 
         return new VnPayReturnResponseDto
         {
             IsSuccess = isSuccess,
             PaymentId = payment.PaymentId,
             OrderId = payment.OrderId,
+            AuctionId = auctionId,
             Status = payment.Status ?? string.Empty,
             Message = isSuccess ? "Payment completed successfully." : MapVnPayMessage(responseCode, transactionStatus),
             TransactionNo = transactionNo,
@@ -265,6 +317,33 @@ public class PaymentService : IPaymentService
                 order.ExpectedDeliveryTime,
                 order.CreatedAt,
                 order.UpdatedAt
+            });
+    }
+
+    private async Task NotifyAuctionDepositChangedAsync(AuctionDeposit deposit, string eventType)
+    {
+        if (string.IsNullOrWhiteSpace(deposit.AuctionId) || string.IsNullOrWhiteSpace(deposit.UserId))
+        {
+            return;
+        }
+
+        await _auctionHub.Clients
+            .Group(AuctionHub.GetAuctionUserGroupName(deposit.AuctionId, deposit.UserId))
+            .SendAsync("AuctionDepositChanged", new
+            {
+                EventType = eventType,
+                Deposit = new
+                {
+                    deposit.AuctionDepositId,
+                    deposit.AuctionId,
+                    deposit.UserId,
+                    deposit.DepositAmount,
+                    PolicyAccepted = deposit.PolicyAccepted == true,
+                    deposit.Status,
+                    deposit.CreatedAt,
+                    MaxBidAmount = Math.Max(0, (deposit.DepositAmount ?? 0) - 20000m),
+                    CanBid = deposit.Status == "Paid" && deposit.PolicyAccepted == true
+                }
             });
     }
 
