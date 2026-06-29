@@ -33,6 +33,8 @@ public partial class Auction
 
     public virtual ICollection<AuctionDeposit> AuctionDeposit { get; set; } = new List<AuctionDeposit>();
 
+    public virtual ICollection<AuctionDepositTransaction> AuctionDepositTransaction { get; set; } = new List<AuctionDepositTransaction>();
+
     public virtual ICollection<Bid> Bid { get; set; } = new List<Bid>();
 
     public virtual ICollection<Order> Order { get; set; } = new List<Order>();

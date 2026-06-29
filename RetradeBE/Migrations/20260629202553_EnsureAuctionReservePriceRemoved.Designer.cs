@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RetradeBE.Data;
@@ -11,9 +12,11 @@ using RetradeBE.Data;
 namespace RetradeBE.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260629202553_EnsureAuctionReservePriceRemoved")]
+    partial class EnsureAuctionReservePriceRemoved
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -368,80 +371,6 @@ namespace RetradeBE.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("auction_deposit", (string)null);
-                });
-
-            modelBuilder.Entity("RetradeBE.Models.AuctionDepositTransaction", b =>
-                {
-                    b.Property<string>("AuctionDepositTransactionId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("auction_deposit_transaction_id");
-
-                    b.Property<decimal?>("Amount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)")
-                        .HasColumnName("amount");
-
-                    b.Property<string>("AuctionDepositId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("auction_deposit_id");
-
-                    b.Property<string>("AuctionId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("auction_id");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("completed_at");
-
-                    b.Property<DateTime?>("CreatedAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("Note")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("note");
-
-                    b.Property<string>("PaymentId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("payment_id");
-
-                    b.Property<string>("ProviderTransactionNo")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("provider_transaction_no");
-
-                    b.Property<string>("Status")
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("status");
-
-                    b.Property<string>("TransactionType")
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("transaction_type");
-
-                    b.Property<string>("UserId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("user_id");
-
-                    b.HasKey("AuctionDepositTransactionId")
-                        .HasName("auction_deposit_transaction_pkey");
-
-                    b.HasIndex(new[] { "AuctionId" }, "IX_auction_deposit_transaction_auction_id");
-
-                    b.HasIndex(new[] { "AuctionDepositId" }, "IX_auction_deposit_transaction_deposit_id");
-
-                    b.HasIndex(new[] { "PaymentId" }, "IX_auction_deposit_transaction_payment_id");
-
-                    b.HasIndex(new[] { "UserId" }, "IX_auction_deposit_transaction_user_id");
-
-                    b.ToTable("auction_deposit_transaction", (string)null);
                 });
 
             modelBuilder.Entity("RetradeBE.Models.Banner", b =>
@@ -1876,37 +1805,6 @@ namespace RetradeBE.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("RetradeBE.Models.AuctionDepositTransaction", b =>
-                {
-                    b.HasOne("RetradeBE.Models.AuctionDeposit", "AuctionDeposit")
-                        .WithMany("AuctionDepositTransaction")
-                        .HasForeignKey("AuctionDepositId")
-                        .HasConstraintName("fk_adt_deposit");
-
-                    b.HasOne("RetradeBE.Models.Auction", "Auction")
-                        .WithMany("AuctionDepositTransaction")
-                        .HasForeignKey("AuctionId")
-                        .HasConstraintName("fk_adt_auction");
-
-                    b.HasOne("RetradeBE.Models.Payment", "Payment")
-                        .WithMany("AuctionDepositTransaction")
-                        .HasForeignKey("PaymentId")
-                        .HasConstraintName("fk_adt_payment");
-
-                    b.HasOne("RetradeBE.Models.User", "User")
-                        .WithMany("AuctionDepositTransaction")
-                        .HasForeignKey("UserId")
-                        .HasConstraintName("fk_adt_user");
-
-                    b.Navigation("Auction");
-
-                    b.Navigation("AuctionDeposit");
-
-                    b.Navigation("Payment");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("RetradeBE.Models.Bid", b =>
                 {
                     b.HasOne("RetradeBE.Models.Auction", "Auction")
@@ -2330,16 +2228,9 @@ namespace RetradeBE.Migrations
                 {
                     b.Navigation("AuctionDeposit");
 
-                    b.Navigation("AuctionDepositTransaction");
-
                     b.Navigation("Bid");
 
                     b.Navigation("Order");
-                });
-
-            modelBuilder.Entity("RetradeBE.Models.AuctionDeposit", b =>
-                {
-                    b.Navigation("AuctionDepositTransaction");
                 });
 
             modelBuilder.Entity("RetradeBE.Models.Category", b =>
@@ -2383,11 +2274,6 @@ namespace RetradeBE.Migrations
                     b.Navigation("Review");
                 });
 
-            modelBuilder.Entity("RetradeBE.Models.Payment", b =>
-                {
-                    b.Navigation("AuctionDepositTransaction");
-                });
-
             modelBuilder.Entity("RetradeBE.Models.Product", b =>
                 {
                     b.Navigation("Auction");
@@ -2422,8 +2308,6 @@ namespace RetradeBE.Migrations
                     b.Navigation("Address");
 
                     b.Navigation("AuctionDeposit");
-
-                    b.Navigation("AuctionDepositTransaction");
 
                     b.Navigation("AuctionSeller");
 

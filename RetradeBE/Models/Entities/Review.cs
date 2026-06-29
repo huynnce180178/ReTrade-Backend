@@ -23,6 +23,8 @@ public partial class Review
 
     public virtual Order? Order { get; set; }
 
+    public virtual ICollection<ReviewReport> ReviewReport { get; set; } = new List<ReviewReport>();
+
     public virtual User? Reviewer { get; set; }
 
     public virtual User? Seller { get; set; }

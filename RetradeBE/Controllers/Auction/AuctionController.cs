@@ -64,6 +64,23 @@ namespace RetradeBE.Controllers
             }
         }
 
+        [HttpGet("my-deposit-history")]
+        public async Task<IActionResult> GetMyDepositHistory([FromQuery] string? auctionId)
+        {
+            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(accountId)) return Unauthorized();
+
+            try
+            {
+                var result = await _auctionService.GetMyDepositHistoryAsync(accountId, auctionId);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
         [Authorize(Roles = $"{nameof(RoleEnum.Seller)},{nameof(RoleEnum.Admin)}")]
         [HttpGet("eligible-products")]
         public async Task<IActionResult> GetEligibleProducts([FromQuery] AuctionQueryDto query)
@@ -121,6 +138,41 @@ namespace RetradeBE.Controllers
             {
                 var deposit = await _auctionService.GetMyDepositAsync(accountId, id);
                 return Ok(deposit);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpGet("{id}/my-deposit-history")]
+        public async Task<IActionResult> GetMyAuctionDepositHistory(string id)
+        {
+            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(accountId)) return Unauthorized();
+
+            try
+            {
+                var result = await _auctionService.GetMyDepositHistoryAsync(accountId, id);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [Authorize(Roles = $"{nameof(RoleEnum.Seller)},{nameof(RoleEnum.Admin)}")]
+        [HttpGet("{id}/deposit-history")]
+        public async Task<IActionResult> GetAuctionDepositHistory(string id)
+        {
+            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(accountId)) return Unauthorized();
+
+            try
+            {
+                var result = await _auctionService.GetAuctionDepositHistoryAsync(accountId, id);
+                return Ok(result);
             }
             catch (Exception ex)
             {

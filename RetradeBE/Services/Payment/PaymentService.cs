@@ -17,6 +17,8 @@ public class PaymentService : IPaymentService
 {
     private const string PaymentMethod = "VNPAY";
     private const string AuctionDepositPaymentPrefix = "AUCTION_DEPOSIT:";
+    private const string AuctionDepositTransactionPaymentPrefix = "AUCTION_DEPOSIT_TX:";
+    private const decimal AuctionMinimumDepositAmount = 20000m;
     private readonly AppDbContext _context;
     private readonly VnPaySettings _vnPaySettings;
     private readonly ILogger<PaymentService> _logger;
@@ -73,22 +75,66 @@ public class PaymentService : IPaymentService
             }
         }
 
+        AuctionDeposit? auctionDeposit = null;
+        AuctionDepositTransaction? auctionDepositTransaction = null;
+
+        if (!string.IsNullOrWhiteSpace(request.AuctionDepositTransactionId))
+        {
+            auctionDepositTransaction = await _context.AuctionDepositTransaction
+                .Include(x => x.AuctionDeposit)
+                    .ThenInclude(d => d!.Auction)
+                .FirstOrDefaultAsync(x => x.AuctionDepositTransactionId == request.AuctionDepositTransactionId
+                    && x.UserId == account.UserId);
+
+            if (auctionDepositTransaction == null)
+            {
+                throw new InvalidOperationException("Auction deposit transaction not found.");
+            }
+
+            if (auctionDepositTransaction.Status != "Pending" || !string.IsNullOrWhiteSpace(auctionDepositTransaction.PaymentId))
+            {
+                throw new InvalidOperationException("Auction deposit transaction is not available for payment.");
+            }
+
+            if (auctionDepositTransaction.Amount != request.Amount)
+            {
+                throw new InvalidOperationException("Payment amount does not match auction deposit transaction.");
+            }
+
+            auctionDeposit = auctionDepositTransaction.AuctionDeposit;
+            request.AuctionDepositId = auctionDepositTransaction.AuctionDepositId;
+        }
+
         if (!string.IsNullOrWhiteSpace(request.AuctionDepositId))
         {
-            var deposit = await _context.AuctionDeposit
+            auctionDeposit ??= await _context.AuctionDeposit
+                .Include(x => x.Auction)
                 .FirstOrDefaultAsync(x => x.AuctionDepositId == request.AuctionDepositId && x.UserId == account.UserId);
 
-            if (deposit == null)
+            if (auctionDeposit == null)
             {
                 throw new InvalidOperationException("Auction deposit not found.");
             }
 
-            if (deposit.Status == "Paid")
+            if (auctionDeposit.Status != "Pending" && auctionDeposit.Status != "Paid")
             {
-                throw new InvalidOperationException("Auction deposit is already paid.");
+                throw new InvalidOperationException("Auction deposit is not available for payment.");
             }
 
-            if (deposit.DepositAmount != request.Amount)
+            var now = DateTime.UtcNow.AddHours(7);
+            if (auctionDeposit.Auction == null
+                || auctionDeposit.Auction.Status is "Ended" or "EndedByBuyNow" or "EndedByTime" or "EndedNoBid" or "Cancelled"
+                || (auctionDeposit.Auction.EndTime.HasValue && auctionDeposit.Auction.EndTime.Value <= now))
+            {
+                throw new InvalidOperationException("This auction is not available for deposit payment.");
+            }
+
+            if (request.Amount < AuctionMinimumDepositAmount)
+            {
+                throw new InvalidOperationException("Deposit amount must be at least 20,000 VND.");
+            }
+
+            if (auctionDepositTransaction == null && auctionDeposit.Status == "Pending" && auctionDeposit.DepositAmount != request.Amount)
             {
                 throw new InvalidOperationException("Payment amount does not match auction deposit.");
             }
@@ -107,15 +153,21 @@ public class PaymentService : IPaymentService
             UserId = account.UserId,
             Amount = request.Amount,
             PaymentMethod = PaymentMethod,
-            ProviderTransactionId = string.IsNullOrWhiteSpace(request.AuctionDepositId)
-                ? null
-                : $"{AuctionDepositPaymentPrefix}{request.AuctionDepositId}",
+            ProviderTransactionId = !string.IsNullOrWhiteSpace(request.AuctionDepositTransactionId)
+                ? $"{AuctionDepositTransactionPaymentPrefix}{request.AuctionDepositTransactionId}"
+                : string.IsNullOrWhiteSpace(request.AuctionDepositId)
+                    ? null
+                    : $"{AuctionDepositPaymentPrefix}{request.AuctionDepositId}",
             Status = "Pending",
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
 
         _context.Payment.Add(payment);
+        if (auctionDepositTransaction != null)
+        {
+            auctionDepositTransaction.PaymentId = paymentId;
+        }
         await _context.SaveChangesAsync();
 
         var queryParams = new SortedDictionary<string, string>(StringComparer.Ordinal)
@@ -201,11 +253,16 @@ public class PaymentService : IPaymentService
         }
 
         var isSuccess = responseCode == "00" && transactionStatus == "00";
+        var auctionDepositTransactionRef = payment.ProviderTransactionId != null
+            && payment.ProviderTransactionId.StartsWith(AuctionDepositTransactionPaymentPrefix, StringComparison.OrdinalIgnoreCase)
+                ? payment.ProviderTransactionId.Substring(AuctionDepositTransactionPaymentPrefix.Length)
+                : null;
         var auctionDepositRef = payment.ProviderTransactionId != null
             && payment.ProviderTransactionId.StartsWith(AuctionDepositPaymentPrefix, StringComparison.OrdinalIgnoreCase)
                 ? payment.ProviderTransactionId.Substring(AuctionDepositPaymentPrefix.Length)
                 : null;
 
+        var paymentWasFinalized = payment.Status is "Success" or "Failed";
         payment.Status = isSuccess ? "Success" : "Failed";
         payment.ProviderTransactionId = transactionNo;
         payment.UpdatedAt = DateTime.UtcNow;
@@ -218,15 +275,69 @@ public class PaymentService : IPaymentService
 
         // Nếu là payment cho đơn hàng thì cập nhật trạng thái đơn hàng
         AuctionDeposit? updatedDeposit = null;
+        var wasAuctionDepositAlreadyPaid = false;
         string? auctionId = null;
 
-        if (!string.IsNullOrWhiteSpace(auctionDepositRef))
+        if (!string.IsNullOrWhiteSpace(auctionDepositTransactionRef))
+        {
+            var transaction = await _context.AuctionDepositTransaction
+                .Include(x => x.AuctionDeposit)
+                .FirstOrDefaultAsync(x => x.AuctionDepositTransactionId == auctionDepositTransactionRef);
+
+            if (transaction?.AuctionDeposit != null)
+            {
+                var deposit = transaction.AuctionDeposit;
+                var transactionWasFinalized = transaction.Status is "Success" or "Failed";
+                wasAuctionDepositAlreadyPaid = deposit.Status == "Paid";
+
+                if (!transactionWasFinalized && !paymentWasFinalized)
+                {
+                    transaction.Status = isSuccess ? "Success" : "Failed";
+                    transaction.CompletedAt = DateTime.UtcNow.AddHours(7);
+                    transaction.ProviderTransactionNo = transactionNo;
+                    transaction.PaymentId ??= payment.PaymentId;
+
+                    if (isSuccess)
+                    {
+                        if (wasAuctionDepositAlreadyPaid || transaction.TransactionType == "TopUp")
+                        {
+                            deposit.DepositAmount = (deposit.DepositAmount ?? 0) + (transaction.Amount ?? payment.Amount ?? amount);
+                        }
+                        else
+                        {
+                            deposit.DepositAmount = transaction.Amount ?? payment.Amount ?? amount;
+                        }
+                        deposit.Status = "Paid";
+                    }
+                    else if (!wasAuctionDepositAlreadyPaid)
+                    {
+                        deposit.Status = "Failed";
+                    }
+                }
+
+                updatedDeposit = deposit;
+                auctionId = deposit.AuctionId;
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(auctionDepositRef))
         {
             var deposit = await _context.AuctionDeposit
                 .FirstOrDefaultAsync(x => x.AuctionDepositId == auctionDepositRef);
             if (deposit != null)
             {
-                deposit.Status = isSuccess ? "Paid" : "Failed";
+                wasAuctionDepositAlreadyPaid = deposit.Status == "Paid";
+                if (!paymentWasFinalized && isSuccess)
+                {
+                    if (wasAuctionDepositAlreadyPaid)
+                    {
+                        deposit.DepositAmount = (deposit.DepositAmount ?? 0) + (payment.Amount ?? amount);
+                    }
+                    deposit.Status = "Paid";
+                }
+                else if (!paymentWasFinalized && !wasAuctionDepositAlreadyPaid)
+                {
+                    deposit.Status = "Failed";
+                }
                 updatedDeposit = deposit;
                 auctionId = deposit.AuctionId;
             }
@@ -257,7 +368,10 @@ public class PaymentService : IPaymentService
         }
         if (updatedDeposit != null)
         {
-            await NotifyAuctionDepositChangedAsync(updatedDeposit, isSuccess ? "DepositPaid" : "DepositFailed");
+            var eventType = isSuccess
+                ? (wasAuctionDepositAlreadyPaid ? "DepositToppedUp" : "DepositPaid")
+                : (wasAuctionDepositAlreadyPaid ? "DepositTopUpFailed" : "DepositFailed");
+            await NotifyAuctionDepositChangedAsync(updatedDeposit, eventType);
         }
 
         return new VnPayReturnResponseDto

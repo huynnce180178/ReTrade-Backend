@@ -83,6 +83,25 @@ namespace RetradeBE.Models.DTOs
         public bool CanBid { get; set; }
     }
 
+    public class AuctionDepositTransactionDto
+    {
+        public string AuctionDepositTransactionId { get; set; } = string.Empty;
+        public string AuctionDepositId { get; set; } = string.Empty;
+        public string AuctionId { get; set; } = string.Empty;
+        public string UserId { get; set; } = string.Empty;
+        public string? UserName { get; set; }
+        public string? ProductName { get; set; }
+        public string? ProductImageUrl { get; set; }
+        public string? PaymentId { get; set; }
+        public string TransactionType { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public string? ProviderTransactionNo { get; set; }
+        public string? Note { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime? CompletedAt { get; set; }
+    }
+
     public class AuctionDepositPaymentRequestDto
     {
         public decimal DepositAmount { get; set; }
