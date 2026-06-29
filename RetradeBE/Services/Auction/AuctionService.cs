@@ -13,6 +13,10 @@ namespace RetradeBE.Services
     {
         private static readonly string[] VisibleStatuses = { "Upcoming", "Ongoing" };
         private const decimal MinimumDepositAmount = 20000m;
+        private const string DepositTransactionInitial = "InitialDeposit";
+        private const string DepositTransactionTopUp = "TopUp";
+        private const string DepositTransactionAppliedToOrder = "AppliedToOrder";
+        private const string DepositTransactionRefundPending = "RefundPending";
         private readonly IAuctionRepository _auctionRepository;
         private readonly IAccountRepository _accountRepository;
         private readonly AppDbContext _context;
@@ -226,6 +230,45 @@ namespace RetradeBE.Services
             return deposit == null ? null : MapDepositDto(deposit);
         }
 
+        public async Task<List<AuctionDepositTransactionDto>> GetMyDepositHistoryAsync(string accountId, string? auctionId = null)
+        {
+            var account = await GetAccountAsync(accountId);
+            var userId = account.UserId ?? throw new Exception("Account is not linked to a user.");
+
+            var transactions = QueryDepositTransactions()
+                .Where(x => x.UserId == userId);
+
+            if (!string.IsNullOrWhiteSpace(auctionId))
+            {
+                transactions = transactions.Where(x => x.AuctionId == auctionId);
+            }
+
+            var results = await transactions
+                .OrderByDescending(x => x.CreatedAt)
+                .ToListAsync();
+            return results.Select(MapDepositTransactionDto).ToList();
+        }
+
+        public async Task<List<AuctionDepositTransactionDto>> GetAuctionDepositHistoryAsync(string accountId, string auctionId)
+        {
+            var account = await GetAccountAsync(accountId);
+            var roles = await _accountRepository.GetRolesAsync(accountId);
+            var isAdmin = HasRole(roles, "Admin");
+            var userId = account.UserId ?? throw new Exception("Account is not linked to a user.");
+
+            var auction = await _auctionRepository.GetByIdAsync(auctionId);
+            if (auction == null)
+                throw new Exception("Auction not found.");
+            if (!isAdmin && auction.SellerId != userId)
+                throw new Exception("You can only view deposit history for your own auctions.");
+
+            var results = await QueryDepositTransactions()
+                .Where(x => x.AuctionId == auctionId)
+                .OrderByDescending(x => x.CreatedAt)
+                .ToListAsync();
+            return results.Select(MapDepositTransactionDto).ToList();
+        }
+
         public async Task<CreateVnPayPaymentResponseDto> CreateDepositPaymentUrlAsync(
             string accountId,
             string auctionId,
@@ -250,12 +293,14 @@ namespace RetradeBE.Services
             if (IsTerminalStatus(status))
                 throw new Exception("This auction is not available for deposit.");
 
-            var existingPaid = await _context.AuctionDeposit
-                .AnyAsync(x => x.AuctionId == auctionId && x.UserId == userId && x.Status == "Paid");
-            if (existingPaid)
-                throw new Exception("You already have a paid deposit for this auction.");
-
             var deposit = await _context.AuctionDeposit
+                .Where(x => x.AuctionId == auctionId && x.UserId == userId && x.Status == "Paid")
+                .OrderByDescending(x => x.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            var isTopUp = deposit != null;
+
+            deposit ??= await _context.AuctionDeposit
                 .Where(x => x.AuctionId == auctionId && x.UserId == userId && x.Status == "Pending")
                 .OrderByDescending(x => x.CreatedAt)
                 .FirstOrDefaultAsync();
@@ -273,15 +318,35 @@ namespace RetradeBE.Services
                 _context.AuctionDeposit.Add(deposit);
             }
 
-            deposit.DepositAmount = dto.DepositAmount;
-            deposit.PolicyAccepted = dto.PolicyAccepted;
+            if (!isTopUp)
+            {
+                deposit.DepositAmount = dto.DepositAmount;
+                deposit.PolicyAccepted = dto.PolicyAccepted;
+            }
+
+            var transaction = new AuctionDepositTransaction
+            {
+                AuctionDepositTransactionId = $"ADTX_{Guid.NewGuid():N}",
+                AuctionDepositId = deposit.AuctionDepositId,
+                AuctionId = auctionId,
+                UserId = userId,
+                TransactionType = isTopUp ? DepositTransactionTopUp : DepositTransactionInitial,
+                Amount = dto.DepositAmount,
+                Status = "Pending",
+                Note = isTopUp ? "Auction deposit top-up payment created." : "Initial auction deposit payment created.",
+                CreatedAt = GetAuctionNow()
+            };
+            _context.AuctionDepositTransaction.Add(transaction);
             await _context.SaveChangesAsync();
 
             return await _paymentService.CreateVnPayPaymentUrlAsync(accountId, new CreateVnPayPaymentRequestDto
             {
                 AuctionDepositId = deposit.AuctionDepositId,
+                AuctionDepositTransactionId = transaction.AuctionDepositTransactionId,
                 Amount = dto.DepositAmount,
-                OrderDescription = $"Auction deposit for {auction.Product?.Name ?? auction.AuctionId}",
+                OrderDescription = isTopUp
+                    ? $"Auction deposit top-up for {auction.Product?.Name ?? auction.AuctionId}"
+                    : $"Auction deposit for {auction.Product?.Name ?? auction.AuctionId}",
                 BankCode = dto.BankCode,
                 Locale = dto.Locale
             }, ipAddress);
@@ -523,6 +588,39 @@ namespace RetradeBE.Services
             };
         }
 
+        private IQueryable<AuctionDepositTransaction> QueryDepositTransactions()
+        {
+            return _context.AuctionDepositTransaction
+                .AsNoTracking()
+                .Include(x => x.User)
+                .Include(x => x.Auction)
+                    .ThenInclude(a => a!.Product)
+                        .ThenInclude(p => p!.ProductImage)
+                            .ThenInclude(pi => pi.Image);
+        }
+
+        private AuctionDepositTransactionDto MapDepositTransactionDto(AuctionDepositTransaction transaction)
+        {
+            return new AuctionDepositTransactionDto
+            {
+                AuctionDepositTransactionId = transaction.AuctionDepositTransactionId,
+                AuctionDepositId = transaction.AuctionDepositId ?? string.Empty,
+                AuctionId = transaction.AuctionId ?? string.Empty,
+                UserId = transaction.UserId ?? string.Empty,
+                UserName = GetUserName(transaction.User),
+                ProductName = transaction.Auction?.Product?.Name,
+                ProductImageUrl = transaction.Auction?.Product != null ? GetMainImageUrl(transaction.Auction.Product) : null,
+                PaymentId = transaction.PaymentId,
+                TransactionType = transaction.TransactionType ?? string.Empty,
+                Amount = transaction.Amount ?? 0,
+                Status = transaction.Status ?? string.Empty,
+                ProviderTransactionNo = transaction.ProviderTransactionNo,
+                Note = transaction.Note,
+                CreatedAt = transaction.CreatedAt ?? DateTime.MinValue,
+                CompletedAt = transaction.CompletedAt
+            };
+        }
+
         private async Task<string?> CompleteAuctionAsync(RetradeBE.Models.Auction auction, Bid winnerBid, string status)
         {
             if (string.IsNullOrWhiteSpace(winnerBid.UserId) || !winnerBid.BidAmount.HasValue)
@@ -588,7 +686,7 @@ namespace RetradeBE.Services
             };
             _context.Order.Add(order);
 
-            _context.Payment.Add(new Payment
+            var depositPayment = new Payment
             {
                 PaymentId = $"PAY_AUC_{Guid.NewGuid():N}",
                 OrderId = order.OrderId,
@@ -599,6 +697,22 @@ namespace RetradeBE.Services
                 Status = "Success",
                 CreatedAt = now,
                 UpdatedAt = now
+            };
+            _context.Payment.Add(depositPayment);
+
+            _context.AuctionDepositTransaction.Add(new AuctionDepositTransaction
+            {
+                AuctionDepositTransactionId = $"ADTX_{Guid.NewGuid():N}",
+                AuctionDepositId = winnerDeposit.AuctionDepositId,
+                AuctionId = auction.AuctionId,
+                UserId = winnerBid.UserId,
+                PaymentId = depositPayment.PaymentId,
+                TransactionType = DepositTransactionAppliedToOrder,
+                Amount = appliedDeposit,
+                Status = "Completed",
+                Note = $"Deposit applied to order {order.OrderCode}.",
+                CreatedAt = now,
+                CompletedAt = now
             });
 
             await CreateRefundsForLosersAsync(auction, winnerBid.UserId);
@@ -641,6 +755,19 @@ namespace RetradeBE.Services
                     CreatedAt = GetAuctionNow(),
                     UpdatedAt = GetAuctionNow()
                 });
+
+                _context.AuctionDepositTransaction.Add(new AuctionDepositTransaction
+                {
+                    AuctionDepositTransactionId = $"ADTX_{Guid.NewGuid():N}",
+                    AuctionDepositId = deposit.AuctionDepositId,
+                    AuctionId = auction.AuctionId,
+                    UserId = deposit.UserId,
+                    TransactionType = DepositTransactionRefundPending,
+                    Amount = refundAmount,
+                    Status = "Pending",
+                    Note = note,
+                    CreatedAt = GetAuctionNow()
+                });
             }
         }
 
@@ -668,6 +795,19 @@ namespace RetradeBE.Services
                 RequestedAt = GetAuctionNow(),
                 CreatedAt = GetAuctionNow(),
                 UpdatedAt = GetAuctionNow()
+            });
+
+            _context.AuctionDepositTransaction.Add(new AuctionDepositTransaction
+            {
+                AuctionDepositTransactionId = $"ADTX_{Guid.NewGuid():N}",
+                AuctionDepositId = winnerDeposit.AuctionDepositId,
+                AuctionId = auction.AuctionId,
+                UserId = winnerDeposit.UserId,
+                TransactionType = DepositTransactionRefundPending,
+                Amount = remainder,
+                Status = "Pending",
+                Note = note,
+                CreatedAt = GetAuctionNow()
             });
         }
 
@@ -809,19 +949,23 @@ namespace RetradeBE.Services
                 .OrderByDescending(b => b.CreatedAt)
                 .ToListAsync();
 
-            return bids.Select(b => new UserBidHistoryDto
+            return bids.Select(b =>
             {
-                BidId = b.BidId,
-                BidAmount = b.BidAmount ?? 0,
-                BidStatus = b.Status ?? string.Empty,
-                CreatedAt = b.CreatedAt ?? DateTime.MinValue,
-                AuctionId = b.AuctionId ?? string.Empty,
-                AuctionStatus = b.Auction != null ? ResolveStatus(b.Auction) ?? string.Empty : string.Empty,
-                ProductId = b.Auction?.ProductId ?? string.Empty,
-                ProductName = b.Auction?.Product?.Name ?? string.Empty,
-                ProductImageUrl = b.Auction?.Product != null ? GetMainImageUrl(b.Auction.Product) ?? string.Empty : string.Empty,
-                CurrentPrice = b.Auction?.CurrentPrice ?? b.Auction?.StartingPrice ?? 0,
-                EndTime = b.Auction?.EndTime ?? DateTime.MinValue
+                var auctionStatus = b.Auction != null ? ResolveStatus(b.Auction) ?? string.Empty : string.Empty;
+                return new UserBidHistoryDto
+                {
+                    BidId = b.BidId,
+                    BidAmount = b.BidAmount ?? 0,
+                    BidStatus = ResolveUserBidHistoryStatus(b.Status, auctionStatus),
+                    CreatedAt = b.CreatedAt ?? DateTime.MinValue,
+                    AuctionId = b.AuctionId ?? string.Empty,
+                    AuctionStatus = auctionStatus,
+                    ProductId = b.Auction?.ProductId ?? string.Empty,
+                    ProductName = b.Auction?.Product?.Name ?? string.Empty,
+                    ProductImageUrl = b.Auction?.Product != null ? GetMainImageUrl(b.Auction.Product) ?? string.Empty : string.Empty,
+                    CurrentPrice = b.Auction?.CurrentPrice ?? b.Auction?.StartingPrice ?? 0,
+                    EndTime = b.Auction?.EndTime ?? DateTime.MinValue
+                };
             }).ToList();
         }
 
@@ -871,6 +1015,34 @@ namespace RetradeBE.Services
                     .Group(AuctionHub.GetSellerAuctionGroupName(auction.SellerId))
                     .SendAsync("SellerAuctionChanged", payload);
             }
+        }
+
+        private static string ResolveUserBidHistoryStatus(string? bidStatus, string? auctionStatus)
+        {
+            var normalizedBidStatus = (bidStatus ?? string.Empty).ToLowerInvariant();
+            var normalizedAuctionStatus = (auctionStatus ?? string.Empty).ToLowerInvariant();
+            var isTerminal = normalizedAuctionStatus is "ended" or "endedbybuynow" or "endedbytime" or "endednobid";
+
+            if (normalizedAuctionStatus == "cancelled")
+                return "Cancelled";
+
+            if (isTerminal)
+            {
+                if (normalizedBidStatus is "highest" or "winning" or "won")
+                    return "Won";
+                if (normalizedBidStatus is "outbid" or "lost")
+                    return "Lost";
+            }
+
+            if (normalizedAuctionStatus == "ongoing")
+            {
+                if (normalizedBidStatus is "highest" or "winning" or "won")
+                    return "Winning";
+                if (normalizedBidStatus is "outbid" or "lost")
+                    return "Outbid";
+            }
+
+            return bidStatus ?? string.Empty;
         }
 
         private async Task<Account> GetAccountAsync(string accountId)

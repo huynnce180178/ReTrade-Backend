@@ -31,6 +31,8 @@ public partial class User
 
     public virtual ICollection<AuctionDeposit> AuctionDeposit { get; set; } = new List<AuctionDeposit>();
 
+    public virtual ICollection<AuctionDepositTransaction> AuctionDepositTransaction { get; set; } = new List<AuctionDepositTransaction>();
+
     public virtual ICollection<Auction> AuctionSeller { get; set; } = new List<Auction>();
 
     public virtual ICollection<Auction> AuctionWinner { get; set; } = new List<Auction>();
@@ -62,6 +64,10 @@ public partial class User
     public virtual ICollection<RefundRequest> RefundRequest { get; set; } = new List<RefundRequest>();
 
     public virtual ICollection<Review> ReviewReviewer { get; set; } = new List<Review>();
+
+    public virtual ICollection<ReviewReport> ReviewReportReporter { get; set; } = new List<ReviewReport>();
+
+    public virtual ICollection<ReviewReport> ReviewReportReviewedByNavigation { get; set; } = new List<ReviewReport>();
 
     public virtual ICollection<Review> ReviewSeller { get; set; } = new List<Review>();
 
