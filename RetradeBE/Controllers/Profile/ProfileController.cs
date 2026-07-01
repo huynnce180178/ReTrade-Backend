@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OData.Query;
 using RetradeBE.Models.DTOs;
 using RetradeBE.Services;
 using System.Security.Claims;
@@ -54,6 +55,48 @@ namespace RetradeBE.Controllers.Profile
                 return Ok(profile);
             }
             catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [Authorize]
+        [HttpGet("my-vouchers")]
+        [EnableQuery]
+        public async Task<IActionResult> GetMyVouchers()
+        {
+            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(accountId)) return Unauthorized();
+
+            try
+            {
+                var result = await _profileService.GetMyVouchersQueryAsync(accountId);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [Authorize]
+        [HttpGet("my-vouchers/{userVoucherId}")]
+        public async Task<IActionResult> GetMyVoucherDetail(string userVoucherId)
+        {
+            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(accountId)) return Unauthorized();
+
+            try
+            {
+                var result = await _profileService.GetMyVoucherDetailAsync(accountId, userVoucherId);
+                if (result == null) return NotFound("Voucher not found or access denied.");
+                return Ok(result);
+            }
+            catch (Exception ex)
             {
                 return BadRequest(ex.Message);
             }

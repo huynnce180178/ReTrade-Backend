@@ -1,9 +1,12 @@
-﻿using RetradeBE.Models;
+using RetradeBE.Models;
 using RetradeBE.Models.DTOs;
 using RetradeBE.Repositories;
 using RetradeBE.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using AutoMapper;
+using AutoMapper.QueryableExtensions;
+using RetradeBE.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace RetradeBE.Services
 {
@@ -13,13 +16,20 @@ namespace RetradeBE.Services
         private readonly IAccountRepository _accountRepository;
         private readonly IHubContext<SellerHub> _sellerHub;
         private readonly IMapper _mapper;
+        private readonly AppDbContext _context;
 
-        public ProfileService(IProfileRepository repository, IAccountRepository accountRepository, IHubContext<SellerHub> sellerHub, IMapper mapper)
+        public ProfileService(
+            IProfileRepository repository,
+            IAccountRepository accountRepository,
+            IHubContext<SellerHub> sellerHub,
+            IMapper mapper,
+            AppDbContext context)
         {
             _repository = repository;
             _accountRepository = accountRepository;
             _sellerHub = sellerHub;
             _mapper = mapper;
+            _context = context;
         }
 
         public async Task<ProfileDetailDto?> GetMyProfileAsync(string accountId)
@@ -336,6 +346,34 @@ namespace RetradeBE.Services
         {
             var address = addresses.FirstOrDefault(a => a.IsDefault == true) ?? addresses.FirstOrDefault();
             return address == null ? null : _mapper.Map<AddressDto>(address);
+        }
+
+        public async Task<IQueryable<MyVoucherDto>> GetMyVouchersQueryAsync(string accountId)
+        {
+            var account = await _repository.GetAccountWithUserAsync(accountId);
+            if (account?.User == null)
+            {
+                throw new KeyNotFoundException("User profile not found.");
+            }
+
+            return _context.MyVoucher
+                .Where(mv => mv.UserId == account.User.UserId)
+                .ProjectTo<MyVoucherDto>(_mapper.ConfigurationProvider);
+        }
+
+        public async Task<MyVoucherDto?> GetMyVoucherDetailAsync(string accountId, string userVoucherId)
+        {
+            var account = await _repository.GetAccountWithUserAsync(accountId);
+            if (account?.User == null) return null;
+
+            var myVoucher = await _context.MyVoucher
+                .Include(mv => mv.Voucher)
+                .ThenInclude(v => v.Seller)
+                .FirstOrDefaultAsync(mv => mv.UserVoucherId == userVoucherId && mv.UserId == account.User.UserId);
+
+            if (myVoucher == null) return null;
+
+            return _mapper.Map<MyVoucherDto>(myVoucher);
         }
     }
 }

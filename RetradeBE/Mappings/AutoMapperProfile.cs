@@ -150,6 +150,19 @@ namespace RetradeBE.Mappings
                 .ForMember(dest => dest.MainImageUrl, opt => opt.MapFrom(src => 
                     src.Product.ProductImage.Where(pi => pi.IsMain == true).Select(pi => pi.Image.ImageUrl).FirstOrDefault() ?? 
                     src.Product.ProductImage.OrderBy(pi => pi.SortOrder).Select(pi => pi.Image.ImageUrl).FirstOrDefault()));
+
+            // MyVoucher Mappings
+            CreateMap<MyVoucher, MyVoucherDto>()
+                .ForMember(dest => dest.Code, opt => opt.MapFrom(src => src.Voucher != null ? src.Voucher.Code : null))
+                .ForMember(dest => dest.DiscountType, opt => opt.MapFrom(src => src.Voucher != null ? src.Voucher.DiscountType : null))
+                .ForMember(dest => dest.DiscountValue, opt => opt.MapFrom(src => src.Voucher != null ? src.Voucher.DiscountValue : null))
+                .ForMember(dest => dest.MinOrderValue, opt => opt.MapFrom(src => src.Voucher != null ? src.Voucher.MinOrderValue : null))
+                .ForMember(dest => dest.MaxDiscountValue, opt => opt.MapFrom(src => src.Voucher != null ? src.Voucher.MaxDiscountValue : null))
+                .ForMember(dest => dest.StartDate, opt => opt.MapFrom(src => src.Voucher != null ? src.Voucher.StartDate : null))
+                .ForMember(dest => dest.ExpirationDate, opt => opt.MapFrom(src => src.Voucher != null ? src.Voucher.ExpirationDate : null))
+                .ForMember(dest => dest.VoucherStatus, opt => opt.MapFrom(src => src.Voucher != null ? src.Voucher.Status : null))
+                .ForMember(dest => dest.SellerId, opt => opt.MapFrom(src => src.Voucher != null ? src.Voucher.SellerId : null))
+                .ForMember(dest => dest.SellerName, opt => opt.MapFrom(src => src.Voucher != null && src.Voucher.Seller != null ? $"{src.Voucher.Seller.FirstName} {src.Voucher.Seller.LastName}".Trim() : null));
         }
     }
 }
