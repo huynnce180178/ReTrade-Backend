@@ -277,6 +277,13 @@ namespace RetradeBE
             SeedVoucher(dbContext, "voc_20260701_100003", "SAVE10", "Percentage", 10m, 150000m, 50000m, 100);
             SeedVoucher(dbContext, "voc_20260701_100004", "FREESHIP", "Fixed", 30000m, 50000m, null, 100);
             SeedVoucher(dbContext, "voc_20260701_100005", "WELCOME", "Percentage", 20m, 100000m, 100000m, 100);
+            SeedVoucher(dbContext, "voc_20260701_100006", "EXPIRED20", "Fixed", 20000m, 50000m, null, 100, -20, -5);
+
+            // Link vouchers to Demo Buyer (usr_20260701_100002)
+            SeedMyVoucher(dbContext, "mvo_20260701_100001", "usr_20260701_100002", "voc_20260701_100001", "Active");
+            SeedMyVoucher(dbContext, "mvo_20260701_100002", "usr_20260701_100002", "voc_20260701_100002", "Active");
+            SeedMyVoucher(dbContext, "mvo_20260701_100003", "usr_20260701_100002", "voc_20260701_100003", "Used", DateTime.UtcNow.AddDays(-2));
+            SeedMyVoucher(dbContext, "mvo_20260701_100004", "usr_20260701_100002", "voc_20260701_100006", "Active");
         }
 
         private static void SeedRole(AppDbContext dbContext, int roleId, string name)
@@ -607,7 +614,9 @@ namespace RetradeBE
             decimal discountValue,
             decimal minOrderValue,
             decimal? maxDiscountValue,
-            int quantity)
+            int quantity,
+            int startDaysOffset = -10,
+            int expiryDaysOffset = 30)
         {
             var now = DateTime.UtcNow;
             var existing = dbContext.Voucher.FirstOrDefault(v => v.VoucherId == voucherId);
@@ -619,6 +628,8 @@ namespace RetradeBE
                 existing.MinOrderValue = minOrderValue;
                 existing.MaxDiscountValue = maxDiscountValue;
                 existing.Quantity = quantity;
+                existing.StartDate = now.AddDays(startDaysOffset);
+                existing.ExpirationDate = now.AddDays(expiryDaysOffset);
             }
             else
             {
@@ -632,11 +643,41 @@ namespace RetradeBE
                     MinOrderValue = minOrderValue,
                     MaxDiscountValue = maxDiscountValue,
                     Quantity = quantity,
-                    StartDate = now.AddDays(-10),
-                    ExpirationDate = now.AddDays(30),
+                    StartDate = now.AddDays(startDaysOffset),
+                    ExpirationDate = now.AddDays(expiryDaysOffset),
                     Status = "Active",
                     CreatedAt = now,
                     UpdatedAt = now
+                });
+            }
+            dbContext.SaveChanges();
+        }
+
+        private static void SeedMyVoucher(
+            AppDbContext dbContext,
+            string userVoucherId,
+            string userId,
+            string voucherId,
+            string status,
+            DateTime? usedAt = null)
+        {
+            var existing = dbContext.MyVoucher.FirstOrDefault(mv => mv.UserVoucherId == userVoucherId);
+            if (existing != null)
+            {
+                existing.Status = status;
+                existing.UsedAt = usedAt;
+            }
+            else
+            {
+                dbContext.MyVoucher.Add(new MyVoucher
+                {
+                    UserVoucherId = userVoucherId,
+                    UserId = userId,
+                    VoucherId = voucherId,
+                    Status = status,
+                    UsedAt = usedAt,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
                 });
             }
             dbContext.SaveChanges();
