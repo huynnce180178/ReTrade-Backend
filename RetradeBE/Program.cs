@@ -284,6 +284,12 @@ namespace RetradeBE
             SeedMyVoucher(dbContext, "mvo_20260701_100002", "usr_20260701_100002", "voc_20260701_100002", "Active");
             SeedMyVoucher(dbContext, "mvo_20260701_100003", "usr_20260701_100002", "voc_20260701_100003", "Used", DateTime.UtcNow.AddDays(-2));
             SeedMyVoucher(dbContext, "mvo_20260701_100004", "usr_20260701_100002", "voc_20260701_100006", "Active");
+
+            // Seeding Refund Requests for Demo Buyer (usr_20260701_100002)
+            SeedRefundRequest(dbContext, "ref_20260701_200001", "usr_20260701_100002", 150000m, "NotReady", "Auction refund for AUC_20260701_990001. Fee 10,000 VND retained.");
+            SeedRefundRequest(dbContext, "ref_20260701_200002", "usr_20260701_100002", 200000m, "Pending", "Auction refund for AUC_20260701_990002. Fee 10,000 VND retained.", "Vietcombank", "0123456789", "BUYER TEST");
+            SeedRefundRequest(dbContext, "ref_20260701_200003", "usr_20260701_100002", 50000m, "Processed", "Auction refund for AUC_20260701_990003. Fee 10,000 VND retained.", "Vietcombank", "0123456789", "BUYER TEST");
+            SeedRefundRequest(dbContext, "ref_20260701_200004", "usr_20260701_100002", 300000m, "Completed", "Auction refund for AUC_20260701_990004.", "Vietcombank", "0123456789", "BUYER TEST");
         }
 
         private static void SeedRole(AppDbContext dbContext, int roleId, string name)
@@ -678,6 +684,47 @@ namespace RetradeBE
                     UsedAt = usedAt,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
+                });
+            }
+            dbContext.SaveChanges();
+        }
+
+        private static void SeedRefundRequest(
+            AppDbContext dbContext,
+            string refundRequestId,
+            string userId,
+            decimal amount,
+            string status,
+            string note,
+            string? bankName = null,
+            string? bankAccountNumber = null,
+            string? bankAccountHolder = null)
+        {
+            var existing = dbContext.RefundRequest.FirstOrDefault(r => r.RefundRequestId == refundRequestId);
+            if (existing != null)
+            {
+                existing.Status = status;
+                existing.Amount = amount;
+                existing.Note = note;
+                existing.BankName = bankName;
+                existing.BankAccountNumber = bankAccountNumber;
+                existing.BankAccountHolder = bankAccountHolder;
+            }
+            else
+            {
+                dbContext.RefundRequest.Add(new RefundRequest
+                {
+                    RefundRequestId = refundRequestId,
+                    UserId = userId,
+                    Amount = amount,
+                    Status = status,
+                    Note = note,
+                    BankName = bankName,
+                    BankAccountNumber = bankAccountNumber,
+                    BankAccountHolder = bankAccountHolder,
+                    RequestedAt = DateTime.UtcNow.AddDays(-2),
+                    CreatedAt = DateTime.UtcNow.AddDays(-2),
+                    UpdatedAt = DateTime.UtcNow.AddDays(-2)
                 });
             }
             dbContext.SaveChanges();
