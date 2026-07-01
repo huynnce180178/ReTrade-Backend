@@ -17,7 +17,6 @@ public class PaymentService : IPaymentService
 {
     private const string PaymentMethod = "VNPAY";
     private const string AuctionDepositPaymentPrefix = "AUCTION_DEPOSIT:";
-    private const string AuctionDepositTransactionPaymentPrefix = "AUCTION_DEPOSIT_TX:";
     private const decimal AuctionMinimumDepositAmount = 20000m;
     private readonly AppDbContext _context;
     private readonly VnPaySettings _vnPaySettings;
@@ -76,34 +75,6 @@ public class PaymentService : IPaymentService
         }
 
         AuctionDeposit? auctionDeposit = null;
-        AuctionDepositTransaction? auctionDepositTransaction = null;
-
-        if (!string.IsNullOrWhiteSpace(request.AuctionDepositTransactionId))
-        {
-            auctionDepositTransaction = await _context.AuctionDepositTransaction
-                .Include(x => x.AuctionDeposit)
-                    .ThenInclude(d => d!.Auction)
-                .FirstOrDefaultAsync(x => x.AuctionDepositTransactionId == request.AuctionDepositTransactionId
-                    && x.UserId == account.UserId);
-
-            if (auctionDepositTransaction == null)
-            {
-                throw new InvalidOperationException("Auction deposit transaction not found.");
-            }
-
-            if (auctionDepositTransaction.Status != "Pending" || !string.IsNullOrWhiteSpace(auctionDepositTransaction.PaymentId))
-            {
-                throw new InvalidOperationException("Auction deposit transaction is not available for payment.");
-            }
-
-            if (auctionDepositTransaction.Amount != request.Amount)
-            {
-                throw new InvalidOperationException("Payment amount does not match auction deposit transaction.");
-            }
-
-            auctionDeposit = auctionDepositTransaction.AuctionDeposit;
-            request.AuctionDepositId = auctionDepositTransaction.AuctionDepositId;
-        }
 
         if (!string.IsNullOrWhiteSpace(request.AuctionDepositId))
         {
@@ -134,7 +105,7 @@ public class PaymentService : IPaymentService
                 throw new InvalidOperationException("Deposit amount must be at least 20,000 VND.");
             }
 
-            if (auctionDepositTransaction == null && auctionDeposit.Status == "Pending" && auctionDeposit.DepositAmount != request.Amount)
+            if (auctionDeposit.Status == "Pending" && auctionDeposit.DepositAmount != request.Amount)
             {
                 throw new InvalidOperationException("Payment amount does not match auction deposit.");
             }
@@ -153,21 +124,15 @@ public class PaymentService : IPaymentService
             UserId = account.UserId,
             Amount = request.Amount,
             PaymentMethod = PaymentMethod,
-            ProviderTransactionId = !string.IsNullOrWhiteSpace(request.AuctionDepositTransactionId)
-                ? $"{AuctionDepositTransactionPaymentPrefix}{request.AuctionDepositTransactionId}"
-                : string.IsNullOrWhiteSpace(request.AuctionDepositId)
-                    ? null
-                    : $"{AuctionDepositPaymentPrefix}{request.AuctionDepositId}",
+            ProviderTransactionId = string.IsNullOrWhiteSpace(request.AuctionDepositId)
+                ? null
+                : $"{AuctionDepositPaymentPrefix}{request.AuctionDepositId}",
             Status = "Pending",
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
 
         _context.Payment.Add(payment);
-        if (auctionDepositTransaction != null)
-        {
-            auctionDepositTransaction.PaymentId = paymentId;
-        }
         await _context.SaveChangesAsync();
 
         var queryParams = new SortedDictionary<string, string>(StringComparer.Ordinal)
@@ -253,10 +218,6 @@ public class PaymentService : IPaymentService
         }
 
         var isSuccess = responseCode == "00" && transactionStatus == "00";
-        var auctionDepositTransactionRef = payment.ProviderTransactionId != null
-            && payment.ProviderTransactionId.StartsWith(AuctionDepositTransactionPaymentPrefix, StringComparison.OrdinalIgnoreCase)
-                ? payment.ProviderTransactionId.Substring(AuctionDepositTransactionPaymentPrefix.Length)
-                : null;
         var auctionDepositRef = payment.ProviderTransactionId != null
             && payment.ProviderTransactionId.StartsWith(AuctionDepositPaymentPrefix, StringComparison.OrdinalIgnoreCase)
                 ? payment.ProviderTransactionId.Substring(AuctionDepositPaymentPrefix.Length)
@@ -278,48 +239,7 @@ public class PaymentService : IPaymentService
         var wasAuctionDepositAlreadyPaid = false;
         string? auctionId = null;
 
-        if (!string.IsNullOrWhiteSpace(auctionDepositTransactionRef))
-        {
-            var transaction = await _context.AuctionDepositTransaction
-                .Include(x => x.AuctionDeposit)
-                .FirstOrDefaultAsync(x => x.AuctionDepositTransactionId == auctionDepositTransactionRef);
-
-            if (transaction?.AuctionDeposit != null)
-            {
-                var deposit = transaction.AuctionDeposit;
-                var transactionWasFinalized = transaction.Status is "Success" or "Failed";
-                wasAuctionDepositAlreadyPaid = deposit.Status == "Paid";
-
-                if (!transactionWasFinalized && !paymentWasFinalized)
-                {
-                    transaction.Status = isSuccess ? "Success" : "Failed";
-                    transaction.CompletedAt = DateTime.UtcNow.AddHours(7);
-                    transaction.ProviderTransactionNo = transactionNo;
-                    transaction.PaymentId ??= payment.PaymentId;
-
-                    if (isSuccess)
-                    {
-                        if (wasAuctionDepositAlreadyPaid || transaction.TransactionType == "TopUp")
-                        {
-                            deposit.DepositAmount = (deposit.DepositAmount ?? 0) + (transaction.Amount ?? payment.Amount ?? amount);
-                        }
-                        else
-                        {
-                            deposit.DepositAmount = transaction.Amount ?? payment.Amount ?? amount;
-                        }
-                        deposit.Status = "Paid";
-                    }
-                    else if (!wasAuctionDepositAlreadyPaid)
-                    {
-                        deposit.Status = "Failed";
-                    }
-                }
-
-                updatedDeposit = deposit;
-                auctionId = deposit.AuctionId;
-            }
-        }
-        else if (!string.IsNullOrWhiteSpace(auctionDepositRef))
+        if (!string.IsNullOrWhiteSpace(auctionDepositRef))
         {
             var deposit = await _context.AuctionDeposit
                 .FirstOrDefaultAsync(x => x.AuctionDepositId == auctionDepositRef);
@@ -441,6 +361,13 @@ public class PaymentService : IPaymentService
             return;
         }
 
+        var spentBidAmount = await _context.Bid
+            .AsNoTracking()
+            .Where(b => b.AuctionId == deposit.AuctionId && b.UserId == deposit.UserId)
+            .SumAsync(b => b.BidAmount ?? 0);
+        var totalDepositAmount = deposit.DepositAmount ?? 0;
+        var availableDepositAmount = Math.Max(0, totalDepositAmount - spentBidAmount);
+
         await _auctionHub.Clients
             .Group(AuctionHub.GetAuctionUserGroupName(deposit.AuctionId, deposit.UserId))
             .SendAsync("AuctionDepositChanged", new
@@ -451,11 +378,13 @@ public class PaymentService : IPaymentService
                     deposit.AuctionDepositId,
                     deposit.AuctionId,
                     deposit.UserId,
-                    deposit.DepositAmount,
+                    DepositAmount = availableDepositAmount,
+                    TotalDepositAmount = deposit.DepositAmount,
+                    HeldBidAmount = spentBidAmount,
                     PolicyAccepted = deposit.PolicyAccepted == true,
                     deposit.Status,
                     deposit.CreatedAt,
-                    MaxBidAmount = Math.Max(0, (deposit.DepositAmount ?? 0) - 20000m),
+                    MaxBidAmount = Math.Max(0, availableDepositAmount - AuctionMinimumDepositAmount),
                     CanBid = deposit.Status == "Paid" && deposit.PolicyAccepted == true
                 }
             });
