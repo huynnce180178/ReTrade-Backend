@@ -55,7 +55,7 @@ public class CategoryService : ICategoryService
             Name = dto.Name,
             Description = dto.Description,
             ParentId = dto.ParentId,
-            Status = "Active",
+            Status = dto.Status ?? "Active",
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
             Attributes = new List<Attributes>()
