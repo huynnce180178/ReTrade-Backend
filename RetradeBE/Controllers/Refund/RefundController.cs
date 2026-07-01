@@ -82,14 +82,20 @@ namespace RetradeBE.Controllers.Refund
 
             if (refund.UserId != account.UserId) return Forbid();
 
-            if (refund.Status != "Pending")
+            if (refund.Status != "NotReady" && refund.Status != "Pending")
             {
-                return BadRequest("Bank details can only be edited for pending refund requests.");
+                return BadRequest("Bank details can only be edited for NotReady or Pending refund requests.");
             }
 
             refund.BankName = dto.BankName.Trim();
             refund.BankAccountNumber = dto.BankAccountNumber.Trim();
             refund.BankAccountHolder = dto.BankAccountHolder.Trim();
+
+            if (refund.Status == "NotReady")
+            {
+                refund.Status = "Pending";
+            }
+
             refund.UpdatedAt = DateTime.UtcNow.AddHours(7);
 
             await _context.SaveChangesAsync();

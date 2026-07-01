@@ -680,7 +680,7 @@ namespace RetradeBE.Services
                     UserId = deposit.UserId,
                     Amount = refundAmount,
                     Note = note,
-                    Status = "Pending",
+                    Status = "NotReady",
                     RequestedAt = GetAuctionNow(),
                     CreatedAt = GetAuctionNow(),
                     UpdatedAt = GetAuctionNow()
@@ -709,7 +709,7 @@ namespace RetradeBE.Services
                 UserId = winnerDeposit.UserId,
                 Amount = remainder,
                 Note = note,
-                Status = "Pending",
+                Status = "NotReady",
                 RequestedAt = GetAuctionNow(),
                 CreatedAt = GetAuctionNow(),
                 UpdatedAt = GetAuctionNow()

@@ -5,6 +5,7 @@ using RetradeBE.Models.DTOs;
 using RetradeBE.Models.Enums;
 using RetradeBE.Services;
 using System.Threading.Tasks;
+using System.Linq;
 
 namespace RetradeBE.Controllers.AdminProduct
 {
@@ -21,10 +22,18 @@ namespace RetradeBE.Controllers.AdminProduct
         }
 
         [HttpGet]
-        [EnableQuery(PageSize = 20, MaxTop = 100)]
-        public IActionResult GetAll()
+        public IActionResult GetAll(ODataQueryOptions<ProductListDto> options)
         {
-            return Ok(_service.Query());
+            var query = _service.Query();
+            
+            // Apply filter only to get the total count
+            var filtered = options.Filter != null ? options.Filter.ApplyTo(query, new ODataQuerySettings()) : query;
+            long count = (filtered as IQueryable<ProductListDto>)?.Count() ?? 0;
+            
+            // Apply everything (Top, Skip, Filter, OrderBy)
+            var paginated = options.ApplyTo(query);
+
+            return Ok(new { items = paginated, totalCount = count });
         }
 
         [HttpGet("{id}")]

@@ -10,5 +10,7 @@ namespace RetradeBE.Services
         Task<SellerDetailDto?> GetSellerInformationAsync(string sellerId, string? currentAccountId = null);
         Task<FollowResultDto?> FollowSellerAsync(string accountId, string sellerId);
         Task<FollowResultDto?> UnfollowSellerAsync(string accountId, string sellerId);
+        Task<IQueryable<MyVoucherDto>> GetMyVouchersQueryAsync(string accountId);
+        Task<MyVoucherDto?> GetMyVoucherDetailAsync(string accountId, string userVoucherId);
     }
 }
