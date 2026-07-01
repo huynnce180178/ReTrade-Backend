@@ -36,18 +36,18 @@ namespace RetradeBE.Services
             // 1. Map accountId to UserId
             var account = await _accountRepository.GetByIdAsync(accountId);
             if (account == null)
-                throw new Exception("Tài khoản không tồn tại.");
+                throw new Exception("Account does not exist.");
 
             var userId = account.UserId;
             if (string.IsNullOrEmpty(userId))
-                throw new Exception("Tài khoản không liên kết với thông tin người dùng.");
+                throw new Exception("Account is not linked to user information.");
 
             // 2. Validate Category
             var category = await _context.Category
                 .Include(c => c.Attributes)
                 .FirstOrDefaultAsync(c => c.CategoryId == dto.CategoryId);
             if (category == null)
-                throw new Exception("Danh mục không tồn tại.");
+                throw new Exception("Category does not exist.");
 
             // 3. Generate ProductId
             var productId = await GenerateProductIdAsync();
@@ -67,9 +67,27 @@ namespace RetradeBE.Services
             {
                 initialStatus = ProductStatusEnum.Pending.ToString();
                 if (finalPrice <= 0)
-                    throw new Exception("Giá sản phẩm phải lớn hơn 0.");
+                    throw new Exception("Product price must be greater than 0.");
                 if (finalStock <= 0)
-                    throw new Exception("Số lượng sản phẩm phải lớn hơn 0.");
+                    throw new Exception("Product stock quantity must be greater than 0.");
+            }
+
+            if (!string.IsNullOrEmpty(dto.Condition))
+            {
+                var validConditions = new[] { 
+                    ProductConditionEnum.New.ToString(), 
+                    ProductConditionEnum.LikeNew.ToString(), 
+                    ProductConditionEnum.Excellent.ToString(), 
+                    ProductConditionEnum.Good.ToString(), 
+                    ProductConditionEnum.Fair.ToString(), 
+                    ProductConditionEnum.Used.ToString(), 
+                    ProductConditionEnum.Damaged.ToString(), 
+                    ProductConditionEnum.ForParts.ToString() 
+                };
+                if (!validConditions.Contains(dto.Condition!))
+                {
+                    throw new Exception("Invalid product condition.");
+                }
             }
 
             var product = new Product
@@ -128,7 +146,7 @@ namespace RetradeBE.Services
             }
             else
             {
-                throw new Exception("Sản phẩm phải có ít nhất một hình ảnh.");
+                throw new Exception("Product must have at least one image.");
             }
 
             // 6. Handle Dynamic Attributes
@@ -169,11 +187,11 @@ namespace RetradeBE.Services
             // 1. Map accountId to UserId
             var account = await _accountRepository.GetByIdAsync(accountId);
             if (account == null)
-                throw new Exception("Tài khoản không tồn tại.");
+                throw new Exception("Account does not exist.");
 
             var userId = account.UserId;
             if (string.IsNullOrEmpty(userId))
-                throw new Exception("Tài khoản không liên kết với thông tin người dùng.");
+                throw new Exception("Account is not linked to user information.");
 
             // 2. Fetch existing Product
             var product = await _context.Product
@@ -185,14 +203,32 @@ namespace RetradeBE.Services
                 .FirstOrDefaultAsync(p => p.ProductId == productId && p.IsDeleted != true);
 
             if (product == null)
-                throw new Exception("Sản phẩm không tồn tại.");
+                throw new Exception("Product does not exist.");
 
             if (product.SellerId != userId)
-                throw new Exception("Bạn không có quyền chỉnh sửa sản phẩm này.");
+                throw new Exception("You do not have permission to edit this product.");
 
             // 3. Update standard fields
             product.Name = dto.Name;
             product.Description = dto.Description;
+            if (!string.IsNullOrEmpty(dto.Condition))
+            {
+                var validConditions = new[] { 
+                    ProductConditionEnum.New.ToString(), 
+                    ProductConditionEnum.LikeNew.ToString(), 
+                    ProductConditionEnum.Excellent.ToString(), 
+                    ProductConditionEnum.Good.ToString(), 
+                    ProductConditionEnum.Fair.ToString(), 
+                    ProductConditionEnum.Used.ToString(), 
+                    ProductConditionEnum.Damaged.ToString(), 
+                    ProductConditionEnum.ForParts.ToString() 
+                };
+                if (!validConditions.Contains(dto.Condition!))
+                {
+                    throw new Exception("Invalid product condition.");
+                }
+            }
+
             product.Condition = dto.Condition;
             product.WeightGram = dto.WeightGram;
             product.LengthCm = dto.LengthCm;
@@ -214,9 +250,9 @@ namespace RetradeBE.Services
             else
             {
                 if (dto.Price <= 0)
-                    throw new Exception("Giá sản phẩm phải lớn hơn 0.");
+                    throw new Exception("Product price must be greater than 0.");
                 if (dto.StockQuantity <= 0)
-                    throw new Exception("Số lượng sản phẩm phải lớn hơn 0.");
+                    throw new Exception("Product stock quantity must be greater than 0.");
 
                 product.Price = dto.Price;
                 product.StockQuantity = dto.StockQuantity;
@@ -225,7 +261,7 @@ namespace RetradeBE.Services
 
             // 4. Synchronize Images
             if (dto.Images == null || !dto.Images.Any())
-                throw new Exception("Sản phẩm phải có ít nhất một hình ảnh.");
+                throw new Exception("Product must have at least one image.");
 
             // Differential Image synchronization to avoid EF Core tracking conflicts
             var incomingImages = dto.Images;
@@ -440,18 +476,18 @@ namespace RetradeBE.Services
         {
             var account = await _accountRepository.GetByIdAsync(accountId);
             if (account == null)
-                throw new Exception("Tài khoản không tồn tại.");
+                throw new Exception("Account does not exist.");
 
             var product = await _context.Product.FirstOrDefaultAsync(p => p.ProductId == productId && p.IsDeleted != true);
             if (product == null)
-                throw new Exception("Sản phẩm không tồn tại.");
+                throw new Exception("Product does not exist.");
 
             // Admin can delete, or Seller owns the product
             var isSellerOwner = product.SellerId == account.UserId;
             var isAdmin = account.AccountRole.Any(ar => ar.Role != null && ar.Role.Name == "Admin");
 
             if (!isSellerOwner && !isAdmin)
-                throw new Exception("Bạn không có quyền xóa sản phẩm này.");
+                throw new Exception("You do not have permission to delete this product.");
 
             product.IsDeleted = true;
             product.UpdatedAt = DateTime.UtcNow;
@@ -552,7 +588,7 @@ namespace RetradeBE.Services
 
                 if (isRequired && !isProvided)
                 {
-                    throw new Exception($"Thuộc tính '{attribute.Name}' là bắt buộc.");
+                    throw new Exception($"Attribute '{attribute.Name}' is required.");
                 }
 
                 if (isProvided)
@@ -561,17 +597,17 @@ namespace RetradeBE.Services
                     {
                         if (!decimal.TryParse(value, out decimal numericValue))
                         {
-                            throw new Exception($"Thuộc tính '{attribute.Name}' phải là một số hợp lệ.");
+                            throw new Exception($"Attribute '{attribute.Name}' must be a valid number.");
                         }
 
                         if (attribute.MinValue.HasValue && numericValue < attribute.MinValue.Value)
                         {
-                            throw new Exception($"Thuộc tính '{attribute.Name}' phải lớn hơn hoặc bằng {attribute.MinValue.Value}.");
+                            throw new Exception($"Attribute '{attribute.Name}' must be greater than or equal to {attribute.MinValue.Value}.");
                         }
 
                         if (attribute.MaxValue.HasValue && numericValue > attribute.MaxValue.Value)
                         {
-                            throw new Exception($"Thuộc tính '{attribute.Name}' phải nhỏ hơn hoặc bằng {attribute.MaxValue.Value}.");
+                            throw new Exception($"Attribute '{attribute.Name}' must be less than or equal to {attribute.MaxValue.Value}.");
                         }
                     }
                 }

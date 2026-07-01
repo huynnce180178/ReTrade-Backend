@@ -25,6 +25,7 @@ namespace RetradeBE.Models.DTOs
         public string? Name { get; set; }
         public string? Description { get; set; }
         public string? ParentId { get; set; }
+        public string? Status { get; set; }
         public List<AttributeCreateDto>? Attributes { get; set; } = new List<AttributeCreateDto>();
     }
 

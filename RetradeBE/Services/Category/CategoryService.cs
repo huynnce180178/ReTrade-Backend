@@ -47,7 +47,7 @@ public class CategoryService : ICategoryService
                     $"Parent category '{dto.ParentId}' không tồn tại");
         }
 
-        var categoryId = await GenerateCategoryIdAsync();
+        var categoryId = await GenerateCategoryIdAsync(dto.Name);
 
         var category = new Category
         {
@@ -55,7 +55,7 @@ public class CategoryService : ICategoryService
             Name = dto.Name,
             Description = dto.Description,
             ParentId = dto.ParentId,
-            Status = "Active",
+            Status = dto.Status ?? "Active",
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
             Attributes = new List<Attributes>()
@@ -67,9 +67,10 @@ public class CategoryService : ICategoryService
 
             foreach (var attr in dto.Attributes)
             {
+                var cleanedName = RetradeBE.Utils.IdGenerator.CleanNameForId(attr.Name);
                 category.Attributes.Add(new Attributes
                 {
-                    AttributeId = $"{categoryId}_ATTR{index:D3}",
+                    AttributeId = $"{categoryId}_attr_{cleanedName}_{index:D3}",
                     CategoryId = categoryId,
                     Name = attr.Name,
                     DataType = attr.DataType,
@@ -177,9 +178,14 @@ public class CategoryService : ICategoryService
                 int nextIndex = 1;
                 foreach (var attr in existingAttributes)
                 {
-                    if (attr.AttributeId.StartsWith(categoryId + "_ATTR"))
+                    var lastUnderscore = attr.AttributeId.LastIndexOf('_');
+                    if (lastUnderscore >= 0)
                     {
-                        var suffix = attr.AttributeId.Substring((categoryId + "_ATTR").Length);
+                        var suffix = attr.AttributeId.Substring(lastUnderscore + 1);
+                        if (suffix.StartsWith("ATTR", StringComparison.OrdinalIgnoreCase))
+                        {
+                            suffix = suffix.Substring(4);
+                        }
                         if (int.TryParse(suffix, out int index))
                         {
                             if (index >= nextIndex)
@@ -192,9 +198,10 @@ public class CategoryService : ICategoryService
 
                 foreach (var newAttr in newAttrs)
                 {
+                    var cleanedName = RetradeBE.Utils.IdGenerator.CleanNameForId(newAttr.Name);
                     category.Attributes.Add(new Attributes
                     {
-                        AttributeId = $"{categoryId}_ATTR{nextIndex:D3}",
+                        AttributeId = $"{categoryId}_attr_{cleanedName}_{nextIndex:D3}",
                         CategoryId = categoryId,
                         Name = newAttr.Name,
                         DataType = newAttr.DataType,
@@ -249,8 +256,11 @@ public class CategoryService : ICategoryService
         await _repository.UpdateAsync(category);
     }
 
-    private Task<string> GenerateCategoryIdAsync()
+    private Task<string> GenerateCategoryIdAsync(string name)
     {
-        return Task.FromResult(RetradeBE.Utils.IdGenerator.GenerateId("cat"));
+        string datePart = DateTime.UtcNow.ToString("yyyyMMdd");
+        int randomPart = new Random().Next(100000, 1000000);
+        string cleanedName = RetradeBE.Utils.IdGenerator.CleanNameForId(name);
+        return Task.FromResult($"cat_{cleanedName}_{datePart}_{randomPart}");
     }
 }

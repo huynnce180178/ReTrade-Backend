@@ -156,13 +156,18 @@ namespace RetradeBE.Services
         {
             var product = await _repository.GetByIdAsync(productId);
             if (product == null)
-                throw new Exception("Sản phẩm không tồn tại.");
+                throw new Exception("Product does not exist.");
 
             var currentStatus = product.Status;
             string newStatus;
 
             if (dto.IsApproved)
             {
+                if (product.Category != null && product.Category.Status != "Active")
+                {
+                    throw new Exception("Cannot approve product because its category has not been approved yet.");
+                }
+
                 if (currentStatus == ProductStatusEnum.Pending.ToString())
                 {
                     newStatus = ProductStatusEnum.Accepted.ToString();
@@ -173,13 +178,13 @@ namespace RetradeBE.Services
                 }
                 else
                 {
-                    throw new Exception($"Trạng thái hiện tại '{currentStatus}' không hỗ trợ duyệt.");
+                    throw new Exception($"Current status '{currentStatus}' does not support approval.");
                 }
             }
             else
             {
                 if (string.IsNullOrEmpty(dto.RejectReason))
-                    throw new Exception("Vui lòng cung cấp lý do từ chối.");
+                    throw new Exception("Please provide a rejection reason.");
 
                 if (currentStatus == ProductStatusEnum.Pending.ToString())
                 {
@@ -191,7 +196,7 @@ namespace RetradeBE.Services
                 }
                 else
                 {
-                    throw new Exception($"Trạng thái hiện tại '{currentStatus}' không hỗ trợ từ chối duyệt.");
+                    throw new Exception($"Current status '{currentStatus}' does not support rejection.");
                 }
             }
 
@@ -204,10 +209,10 @@ namespace RetradeBE.Services
             {
                 NotificationId = $"NT{Guid.NewGuid().ToString().Substring(0, 8).ToUpper()}",
                 UserId = product.SellerId,
-                Title = dto.IsApproved ? "Sản phẩm được phê duyệt" : "Sản phẩm bị từ chối duyệt",
+                Title = dto.IsApproved ? "Product Approved" : "Product Rejected",
                 Message = dto.IsApproved
-                    ? $"Sản phẩm '{product.Name}' của bạn đã được phê duyệt và sẵn sàng hiển thị trên nền tảng."
-                    : $"Sản phẩm '{product.Name}' của bạn đã bị từ chối duyệt. Lý do: {dto.RejectReason}",
+                    ? $"Your product '{product.Name}' has been approved and is ready to be displayed on the platform."
+                    : $"Your product '{product.Name}' has been rejected. Reason: {dto.RejectReason}",
                 Type = "ProductApproval",
                 ReferenceId = product.ProductId,
                 IsRead = false,
