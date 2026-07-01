@@ -76,30 +76,13 @@ namespace RetradeBE.Models.DTOs
         public string? AuctionId { get; set; }
         public string? UserId { get; set; }
         public decimal? DepositAmount { get; set; }
+        public decimal? TotalDepositAmount { get; set; }
+        public decimal HeldBidAmount { get; set; }
         public bool PolicyAccepted { get; set; }
         public string? Status { get; set; }
         public DateTime? CreatedAt { get; set; }
         public decimal MaxBidAmount { get; set; }
         public bool CanBid { get; set; }
-    }
-
-    public class AuctionDepositTransactionDto
-    {
-        public string AuctionDepositTransactionId { get; set; } = string.Empty;
-        public string AuctionDepositId { get; set; } = string.Empty;
-        public string AuctionId { get; set; } = string.Empty;
-        public string UserId { get; set; } = string.Empty;
-        public string? UserName { get; set; }
-        public string? ProductName { get; set; }
-        public string? ProductImageUrl { get; set; }
-        public string? PaymentId { get; set; }
-        public string TransactionType { get; set; } = string.Empty;
-        public decimal Amount { get; set; }
-        public string Status { get; set; } = string.Empty;
-        public string? ProviderTransactionNo { get; set; }
-        public string? Note { get; set; }
-        public DateTime CreatedAt { get; set; }
-        public DateTime? CompletedAt { get; set; }
     }
 
     public class AuctionDepositPaymentRequestDto
@@ -118,6 +101,7 @@ namespace RetradeBE.Models.DTOs
     public class AuctionBidResultDto
     {
         public AuctionDetailDto Auction { get; set; } = new AuctionDetailDto();
+        public AuctionDepositDto? Deposit { get; set; }
         public bool AuctionEnded { get; set; }
         public string? OrderId { get; set; }
         public string? Message { get; set; }

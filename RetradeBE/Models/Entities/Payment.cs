@@ -25,8 +25,6 @@ public partial class Payment
 
     public DateTime? UpdatedAt { get; set; }
 
-    public virtual ICollection<AuctionDepositTransaction> AuctionDepositTransaction { get; set; } = new List<AuctionDepositTransaction>();
-
     public virtual Order? Order { get; set; }
 
     public virtual User? User { get; set; }

@@ -28,8 +28,6 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<AuctionDeposit> AuctionDeposit { get; set; }
 
-    public virtual DbSet<AuctionDepositTransaction> AuctionDepositTransaction { get; set; }
-
     public virtual DbSet<Banner> Banner { get; set; }
 
     public virtual DbSet<Bid> Bid { get; set; }
@@ -333,71 +331,6 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.User).WithMany(p => p.AuctionDeposit)
                 .HasForeignKey(d => d.UserId)
                 .HasConstraintName("fk_ad_user");
-        });
-
-        modelBuilder.Entity<AuctionDepositTransaction>(entity =>
-        {
-            entity.HasKey(e => e.AuctionDepositTransactionId).HasName("auction_deposit_transaction_pkey");
-
-            entity.ToTable("auction_deposit_transaction");
-
-            entity.HasIndex(e => e.AuctionDepositId, "IX_auction_deposit_transaction_deposit_id");
-            entity.HasIndex(e => e.AuctionId, "IX_auction_deposit_transaction_auction_id");
-            entity.HasIndex(e => e.UserId, "IX_auction_deposit_transaction_user_id");
-            entity.HasIndex(e => e.PaymentId, "IX_auction_deposit_transaction_payment_id");
-
-            entity.Property(e => e.AuctionDepositTransactionId)
-                .HasMaxLength(100)
-                .HasColumnName("auction_deposit_transaction_id");
-            entity.Property(e => e.Amount)
-                .HasPrecision(18, 2)
-                .HasColumnName("amount");
-            entity.Property(e => e.AuctionDepositId)
-                .HasMaxLength(100)
-                .HasColumnName("auction_deposit_id");
-            entity.Property(e => e.AuctionId)
-                .HasMaxLength(100)
-                .HasColumnName("auction_id");
-            entity.Property(e => e.CompletedAt)
-                .HasColumnType("timestamp without time zone")
-                .HasColumnName("completed_at");
-            entity.Property(e => e.CreatedAt)
-                .HasColumnType("timestamp without time zone")
-                .HasColumnName("created_at");
-            entity.Property(e => e.Note)
-                .HasMaxLength(500)
-                .HasColumnName("note");
-            entity.Property(e => e.PaymentId)
-                .HasMaxLength(100)
-                .HasColumnName("payment_id");
-            entity.Property(e => e.ProviderTransactionNo)
-                .HasMaxLength(100)
-                .HasColumnName("provider_transaction_no");
-            entity.Property(e => e.Status)
-                .HasMaxLength(30)
-                .HasColumnName("status");
-            entity.Property(e => e.TransactionType)
-                .HasMaxLength(30)
-                .HasColumnName("transaction_type");
-            entity.Property(e => e.UserId)
-                .HasMaxLength(100)
-                .HasColumnName("user_id");
-
-            entity.HasOne(d => d.AuctionDeposit).WithMany(p => p.AuctionDepositTransaction)
-                .HasForeignKey(d => d.AuctionDepositId)
-                .HasConstraintName("fk_adt_deposit");
-
-            entity.HasOne(d => d.Auction).WithMany(p => p.AuctionDepositTransaction)
-                .HasForeignKey(d => d.AuctionId)
-                .HasConstraintName("fk_adt_auction");
-
-            entity.HasOne(d => d.Payment).WithMany(p => p.AuctionDepositTransaction)
-                .HasForeignKey(d => d.PaymentId)
-                .HasConstraintName("fk_adt_payment");
-
-            entity.HasOne(d => d.User).WithMany(p => p.AuctionDepositTransaction)
-                .HasForeignKey(d => d.UserId)
-                .HasConstraintName("fk_adt_user");
         });
 
         modelBuilder.Entity<Banner>(entity =>

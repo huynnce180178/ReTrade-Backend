@@ -19,8 +19,6 @@ public partial class AuctionDeposit
 
     public DateTime? CreatedAt { get; set; }
 
-    public virtual ICollection<AuctionDepositTransaction> AuctionDepositTransaction { get; set; } = new List<AuctionDepositTransaction>();
-
     public virtual Auction? Auction { get; set; }
 
     public virtual User? User { get; set; }

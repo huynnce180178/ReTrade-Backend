@@ -31,8 +31,6 @@ public partial class User
 
     public virtual ICollection<AuctionDeposit> AuctionDeposit { get; set; } = new List<AuctionDeposit>();
 
-    public virtual ICollection<AuctionDepositTransaction> AuctionDepositTransaction { get; set; } = new List<AuctionDepositTransaction>();
-
     public virtual ICollection<Auction> AuctionSeller { get; set; } = new List<Auction>();
 
     public virtual ICollection<Auction> AuctionWinner { get; set; } = new List<Auction>();

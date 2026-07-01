@@ -131,21 +131,6 @@ namespace RetradeBE.Controllers.Refund
                     if (deposit != null)
                     {
                         deposit.Status = "Refunded";
-
-                        var depositTransaction = await _context.AuctionDepositTransaction
-                            .Where(t => t.AuctionDepositId == deposit.AuctionDepositId
-                                && t.UserId == refund.UserId
-                                && t.TransactionType == "RefundPending"
-                                && t.Status == "Pending"
-                                && t.Amount == refund.Amount)
-                            .OrderByDescending(t => t.CreatedAt)
-                            .FirstOrDefaultAsync();
-
-                        if (depositTransaction != null)
-                        {
-                            depositTransaction.Status = "Completed";
-                            depositTransaction.CompletedAt = refund.UpdatedAt;
-                        }
                     }
                 }
             }
