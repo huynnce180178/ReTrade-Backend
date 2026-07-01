@@ -290,6 +290,10 @@ namespace RetradeBE
             SeedRefundRequest(dbContext, "ref_20260701_200002", "usr_20260701_100002", 200000m, "Pending", "Auction refund for AUC_20260701_990002. Fee 10,000 VND retained.", "Vietcombank", "0123456789", "BUYER TEST");
             SeedRefundRequest(dbContext, "ref_20260701_200003", "usr_20260701_100002", 50000m, "Processed", "Auction refund for AUC_20260701_990003. Fee 10,000 VND retained.", "Vietcombank", "0123456789", "BUYER TEST");
             SeedRefundRequest(dbContext, "ref_20260701_200004", "usr_20260701_100002", 300000m, "Completed", "Auction refund for AUC_20260701_990004.", "Vietcombank", "0123456789", "BUYER TEST");
+
+            // Seeding Refund Requests for Demo Seller (usr_20260701_100003)
+            SeedRefundRequest(dbContext, "ref_20260701_300001", "usr_20260701_100003", 500000m, "NotReady", "Auction refund for AUC_20260701_990005. Fee 10,000 VND retained.");
+            SeedRefundRequest(dbContext, "ref_20260701_300002", "usr_20260701_100003", 750000m, "Pending", "Auction refund for AUC_20260701_990006. Fee 10,000 VND retained.", "Vietcombank", "0987654321", "SELLER TEST");
         }
 
         private static void SeedRole(AppDbContext dbContext, int roleId, string name)
