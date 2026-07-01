@@ -33,7 +33,7 @@ namespace RetradeBE.Services
                 return EmptyPagedResult(query);
             }
 
-            var orders = ApplyFilters(_orderRepository.Query().Where(o => o.UserId == userId), query);
+            var orders = ApplyFilters(_orderRepository.Query().Where(o => o.BuyerId == userId), query);
             return await ToPagedListAsync(orders, query);
         }
 
@@ -368,9 +368,9 @@ namespace RetradeBE.Services
                     (o.OrderCode != null && o.OrderCode.ToLower().Contains(search)) ||
                     (o.TrackingCode != null && o.TrackingCode.ToLower().Contains(search)) ||
                     (o.Product != null && o.Product.Name != null && o.Product.Name.ToLower().Contains(search)) ||
-                    (o.User != null && o.User.Email != null && o.User.Email.ToLower().Contains(search)) ||
-                    (o.User != null && o.User.Phone != null && o.User.Phone.ToLower().Contains(search)) ||
-                    (o.User != null && (((o.User.FirstName ?? "") + " " + (o.User.LastName ?? "")).Trim()).ToLower().Contains(search)));
+                    (o.Buyer != null && o.Buyer.Email != null && o.Buyer.Email.ToLower().Contains(search)) ||
+                    (o.Buyer != null && o.Buyer.Phone != null && o.Buyer.Phone.ToLower().Contains(search)) ||
+                    (o.Buyer != null && (((o.Buyer.FirstName ?? "") + " " + (o.Buyer.LastName ?? "")).Trim()).ToLower().Contains(search)));
             }
 
             return orders;
@@ -426,10 +426,10 @@ namespace RetradeBE.Services
                         .Select(pi => pi.Image.ImageUrl)
                         .FirstOrDefault()
                     : null,
-                BuyerId = o.UserId,
-                BuyerName = o.User != null ? (o.User.FirstName + " " + o.User.LastName).Trim() : null,
-                BuyerEmail = o.User != null ? o.User.Email : null,
-                BuyerPhone = o.User != null ? o.User.Phone : null,
+                BuyerId = o.BuyerId,
+                BuyerName = o.Buyer != null ? (o.Buyer.FirstName + " " + o.Buyer.LastName).Trim() : null,
+                BuyerEmail = o.Buyer != null ? o.Buyer.Email : null,
+                BuyerPhone = o.Buyer != null ? o.Buyer.Phone : null,
                 SellerId = o.SellerId,
                 SellerName = o.Seller != null ? (o.Seller.FirstName + " " + o.Seller.LastName).Trim() : null,
                 SellerEmail = o.Seller != null ? o.Seller.Email : null,
@@ -468,9 +468,9 @@ namespace RetradeBE.Services
                 ProductId = order.ProductId,
                 ProductName = order.Product?.Name,
                 ProductImageUrl = productImageUrl,
-                BuyerId = order.UserId,
-                BuyerName = order.User != null ? $"{order.User.FirstName} {order.User.LastName}".Trim() : null,
-                BuyerEmail = order.User?.Email,
+                BuyerId = order.BuyerId,
+                BuyerName = order.Buyer != null ? $"{order.Buyer.FirstName} {order.Buyer.LastName}".Trim() : null,
+                BuyerEmail = order.Buyer?.Email,
                 BuyerPhone = ResolveBuyerPhone(order),
                 SellerId = order.SellerId,
                 SellerName = order.Seller != null ? $"{order.Seller.FirstName} {order.Seller.LastName}".Trim() : null,
@@ -518,9 +518,9 @@ namespace RetradeBE.Services
 
         private static string? ResolveBuyerPhone(Order order)
         {
-            if (!string.IsNullOrWhiteSpace(order.User?.Phone))
+            if (!string.IsNullOrWhiteSpace(order.Buyer?.Phone))
             {
-                return order.User.Phone;
+                return order.Buyer.Phone;
             }
 
             return ExtractReceiverPhone(order.AddressSnapshot);

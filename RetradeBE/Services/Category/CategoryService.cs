@@ -249,25 +249,8 @@ public class CategoryService : ICategoryService
         await _repository.UpdateAsync(category);
     }
 
-    private async Task<string> GenerateCategoryIdAsync()
+    private Task<string> GenerateCategoryIdAsync()
     {
-        var lastCategory = await _repository
-            .Query()
-            .Where(x => x.CategoryId.StartsWith("CAT") && !x.CategoryId.Contains("_"))
-            .OrderByDescending(x => x.CategoryId)
-            .FirstOrDefaultAsync();
-
-        int next = 1;
-
-        if (lastCategory != null)
-        {
-            int.TryParse(
-                lastCategory.CategoryId.Substring(3),
-                out int lastNumber);
-
-            next = lastNumber + 1;
-        }
-
-        return $"CAT{next:D3}";
+        return Task.FromResult(RetradeBE.Utils.IdGenerator.GenerateId("cat"));
     }
 }

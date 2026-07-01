@@ -17,6 +17,7 @@ public class PaymentService : IPaymentService
 {
     private const string PaymentMethod = "VNPAY";
     private const string AuctionDepositPaymentPrefix = "AUCTION_DEPOSIT:";
+    private const decimal AuctionMinimumDepositAmount = 20000m;
     private readonly AppDbContext _context;
     private readonly VnPaySettings _vnPaySettings;
     private readonly ILogger<PaymentService> _logger;
@@ -73,28 +74,44 @@ public class PaymentService : IPaymentService
             }
         }
 
+        AuctionDeposit? auctionDeposit = null;
+
         if (!string.IsNullOrWhiteSpace(request.AuctionDepositId))
         {
-            var deposit = await _context.AuctionDeposit
+            auctionDeposit ??= await _context.AuctionDeposit
+                .Include(x => x.Auction)
                 .FirstOrDefaultAsync(x => x.AuctionDepositId == request.AuctionDepositId && x.UserId == account.UserId);
 
-            if (deposit == null)
+            if (auctionDeposit == null)
             {
                 throw new InvalidOperationException("Auction deposit not found.");
             }
 
-            if (deposit.Status == "Paid")
+            if (auctionDeposit.Status != "Pending" && auctionDeposit.Status != "Paid")
             {
-                throw new InvalidOperationException("Auction deposit is already paid.");
+                throw new InvalidOperationException("Auction deposit is not available for payment.");
             }
 
-            if (deposit.DepositAmount != request.Amount)
+            var now = DateTime.UtcNow.AddHours(7);
+            if (auctionDeposit.Auction == null
+                || auctionDeposit.Auction.Status is "Ended" or "EndedByBuyNow" or "EndedByTime" or "EndedNoBid" or "Cancelled"
+                || (auctionDeposit.Auction.EndTime.HasValue && auctionDeposit.Auction.EndTime.Value <= now))
+            {
+                throw new InvalidOperationException("This auction is not available for deposit payment.");
+            }
+
+            if (request.Amount < AuctionMinimumDepositAmount)
+            {
+                throw new InvalidOperationException("Deposit amount must be at least 20,000 VND.");
+            }
+
+            if (auctionDeposit.Status == "Pending" && auctionDeposit.DepositAmount != request.Amount)
             {
                 throw new InvalidOperationException("Payment amount does not match auction deposit.");
             }
         }
 
-        var paymentId = $"PAY_{Guid.NewGuid():N}";
+        var paymentId = RetradeBE.Utils.IdGenerator.GenerateId("pay");
         var createDate = DateTime.UtcNow.AddHours(7);
         var amount = Convert.ToInt64(decimal.Round(request.Amount * 100, 0, MidpointRounding.AwayFromZero));
         var locale = string.IsNullOrWhiteSpace(request.Locale) ? _vnPaySettings.Locale : request.Locale.Trim().ToLowerInvariant();
@@ -108,7 +125,7 @@ public class PaymentService : IPaymentService
             Amount = request.Amount,
             PaymentMethod = PaymentMethod,
             ProviderTransactionId = string.IsNullOrWhiteSpace(request.AuctionDepositId)
-                ? null
+                ? RetradeBE.Utils.IdGenerator.GenerateTransactionId(PaymentMethod)
                 : $"{AuctionDepositPaymentPrefix}{request.AuctionDepositId}",
             Status = "Pending",
             CreatedAt = DateTime.UtcNow,
@@ -206,6 +223,7 @@ public class PaymentService : IPaymentService
                 ? payment.ProviderTransactionId.Substring(AuctionDepositPaymentPrefix.Length)
                 : null;
 
+        var paymentWasFinalized = payment.Status is "Success" or "Failed";
         payment.Status = isSuccess ? "Success" : "Failed";
         payment.ProviderTransactionId = transactionNo;
         payment.UpdatedAt = DateTime.UtcNow;
@@ -218,6 +236,7 @@ public class PaymentService : IPaymentService
 
         // Nếu là payment cho đơn hàng thì cập nhật trạng thái đơn hàng
         AuctionDeposit? updatedDeposit = null;
+        var wasAuctionDepositAlreadyPaid = false;
         string? auctionId = null;
 
         if (!string.IsNullOrWhiteSpace(auctionDepositRef))
@@ -226,7 +245,19 @@ public class PaymentService : IPaymentService
                 .FirstOrDefaultAsync(x => x.AuctionDepositId == auctionDepositRef);
             if (deposit != null)
             {
-                deposit.Status = isSuccess ? "Paid" : "Failed";
+                wasAuctionDepositAlreadyPaid = deposit.Status == "Paid";
+                if (!paymentWasFinalized && isSuccess)
+                {
+                    if (wasAuctionDepositAlreadyPaid)
+                    {
+                        deposit.DepositAmount = (deposit.DepositAmount ?? 0) + (payment.Amount ?? amount);
+                    }
+                    deposit.Status = "Paid";
+                }
+                else if (!paymentWasFinalized && !wasAuctionDepositAlreadyPaid)
+                {
+                    deposit.Status = "Failed";
+                }
                 updatedDeposit = deposit;
                 auctionId = deposit.AuctionId;
             }
@@ -237,7 +268,7 @@ public class PaymentService : IPaymentService
         if (isSuccess && !string.IsNullOrWhiteSpace(payment.OrderId))
         {
             var order = await _context.Order
-                .Include(o => o.User)
+                .Include(o => o.Buyer)
                 .Include(o => o.Product)
                     .ThenInclude(p => p!.ProductImage)
                     .ThenInclude(pi => pi.Image)
@@ -257,7 +288,10 @@ public class PaymentService : IPaymentService
         }
         if (updatedDeposit != null)
         {
-            await NotifyAuctionDepositChangedAsync(updatedDeposit, isSuccess ? "DepositPaid" : "DepositFailed");
+            var eventType = isSuccess
+                ? (wasAuctionDepositAlreadyPaid ? "DepositToppedUp" : "DepositPaid")
+                : (wasAuctionDepositAlreadyPaid ? "DepositTopUpFailed" : "DepositFailed");
+            await NotifyAuctionDepositChangedAsync(updatedDeposit, eventType);
         }
 
         return new VnPayReturnResponseDto
@@ -301,9 +335,9 @@ public class PaymentService : IPaymentService
                 order.ProductId,
                 ProductName = order.Product?.Name,
                 ProductImageUrl = productImageUrl,
-                BuyerId = order.UserId,
-                BuyerName = order.User != null ? $"{order.User.FirstName} {order.User.LastName}".Trim() : null,
-                BuyerEmail = order.User?.Email,
+                BuyerId = order.BuyerId,
+                BuyerName = order.Buyer != null ? $"{order.Buyer.FirstName} {order.Buyer.LastName}".Trim() : null,
+                BuyerEmail = order.Buyer?.Email,
                 order.SellerId,
                 order.Quantity,
                 order.UnitPrice,
@@ -327,6 +361,13 @@ public class PaymentService : IPaymentService
             return;
         }
 
+        var spentBidAmount = await _context.Bid
+            .AsNoTracking()
+            .Where(b => b.AuctionId == deposit.AuctionId && b.UserId == deposit.UserId)
+            .SumAsync(b => b.BidAmount ?? 0);
+        var totalDepositAmount = deposit.DepositAmount ?? 0;
+        var availableDepositAmount = Math.Max(0, totalDepositAmount - spentBidAmount);
+
         await _auctionHub.Clients
             .Group(AuctionHub.GetAuctionUserGroupName(deposit.AuctionId, deposit.UserId))
             .SendAsync("AuctionDepositChanged", new
@@ -337,11 +378,13 @@ public class PaymentService : IPaymentService
                     deposit.AuctionDepositId,
                     deposit.AuctionId,
                     deposit.UserId,
-                    deposit.DepositAmount,
+                    DepositAmount = availableDepositAmount,
+                    TotalDepositAmount = deposit.DepositAmount,
+                    HeldBidAmount = spentBidAmount,
                     PolicyAccepted = deposit.PolicyAccepted == true,
                     deposit.Status,
                     deposit.CreatedAt,
-                    MaxBidAmount = Math.Max(0, (deposit.DepositAmount ?? 0) - 20000m),
+                    MaxBidAmount = Math.Max(0, availableDepositAmount - AuctionMinimumDepositAmount),
                     CanBid = deposit.Status == "Paid" && deposit.PolicyAccepted == true
                 }
             });

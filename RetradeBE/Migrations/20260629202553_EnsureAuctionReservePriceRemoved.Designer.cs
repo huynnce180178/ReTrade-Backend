@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RetradeBE.Data;
@@ -11,9 +12,11 @@ using RetradeBE.Data;
 namespace RetradeBE.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260629202553_EnsureAuctionReservePriceRemoved")]
+    partial class EnsureAuctionReservePriceRemoved
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -34,7 +37,8 @@ namespace RetradeBE.Migrations
                         .HasColumnName("created_at");
 
                     b.Property<bool?>("IsDeleted")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
 
                     b.Property<bool?>("IsPasswordSet")
                         .ValueGeneratedOnAdd()
@@ -136,7 +140,8 @@ namespace RetradeBE.Migrations
                         .HasColumnName("is_default");
 
                     b.Property<bool?>("IsDeleted")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
 
                     b.Property<int?>("ProvinceId")
                         .HasColumnType("integer")
@@ -209,7 +214,8 @@ namespace RetradeBE.Migrations
                         .HasColumnType("integer");
 
                     b.Property<bool?>("IsDeleted")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
 
                     b.Property<bool>("IsFilterable")
                         .HasColumnType("boolean");
@@ -521,7 +527,8 @@ namespace RetradeBE.Migrations
                         .HasColumnName("created_at");
 
                     b.Property<bool?>("IsDeleted")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
 
                     b.Property<bool?>("IsRead")
                         .HasColumnType("boolean")
@@ -581,7 +588,8 @@ namespace RetradeBE.Migrations
                         .HasColumnName("created_at");
 
                     b.Property<bool?>("IsDeleted")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
 
                     b.Property<string>("ProductId")
                         .HasMaxLength(100)
@@ -739,7 +747,8 @@ namespace RetradeBE.Migrations
                         .HasColumnName("created_at");
 
                     b.Property<bool?>("IsDeleted")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
 
                     b.Property<bool?>("IsRead")
                         .HasColumnType("boolean")
@@ -846,11 +855,6 @@ namespace RetradeBE.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("auction_id");
 
-                    b.Property<string>("BuyerId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("buyer_id");
-
                     b.Property<DateTime?>("CreatedAt")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_at");
@@ -931,6 +935,11 @@ namespace RetradeBE.Migrations
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("updated_at");
 
+                    b.Property<string>("UserId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("user_id");
+
                     b.Property<string>("VoucherId")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
@@ -941,13 +950,13 @@ namespace RetradeBE.Migrations
 
                     b.HasIndex("AuctionId");
 
-                    b.HasIndex("BuyerId");
-
                     b.HasIndex("OfferId");
 
                     b.HasIndex("ProductId");
 
                     b.HasIndex("SellerId");
+
+                    b.HasIndex("UserId");
 
                     b.HasIndex("VoucherId");
 
@@ -1044,7 +1053,8 @@ namespace RetradeBE.Migrations
                         .HasColumnName("height_cm");
 
                     b.Property<bool?>("IsDeleted")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
 
                     b.Property<int?>("LengthCm")
                         .HasColumnType("integer")
@@ -1113,7 +1123,8 @@ namespace RetradeBE.Migrations
                         .HasColumnName("created_at");
 
                     b.Property<bool?>("IsDeleted")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
 
                     b.Property<string>("ProductId")
                         .HasMaxLength(100)
@@ -1240,64 +1251,6 @@ namespace RetradeBE.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("refund_request", (string)null);
-                });
-
-            modelBuilder.Entity("RetradeBE.Models.Report", b =>
-                {
-                    b.Property<string>("ReportId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("report_id");
-
-                    b.Property<DateTime?>("CreatedAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text")
-                        .HasColumnName("description");
-
-                    b.Property<string>("Reason")
-                        .HasColumnType("text")
-                        .HasColumnName("reason");
-
-                    b.Property<string>("ReporterId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("reporter_id");
-
-                    b.Property<DateTime?>("ReviewedAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("reviewed_at");
-
-                    b.Property<string>("Status")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("status");
-
-                    b.Property<string>("TargetId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("target_id");
-
-                    b.Property<string>("TargetType")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("target_type");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("ReportId")
-                        .HasName("report_pkey");
-
-                    b.HasIndex("ReporterId");
-
-                    b.ToTable("report", (string)null);
                 });
 
             modelBuilder.Entity("RetradeBE.Models.Review", b =>
@@ -1444,7 +1397,8 @@ namespace RetradeBE.Migrations
                         .HasColumnName("flag_count");
 
                     b.Property<bool?>("IsDeleted")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
 
                     b.Property<string>("LastName")
                         .HasMaxLength(100)
@@ -1482,11 +1436,6 @@ namespace RetradeBE.Migrations
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<string>("ProductId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("product_id");
-
                     b.Property<string>("UserId")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
@@ -1496,8 +1445,6 @@ namespace RetradeBE.Migrations
                         .HasName("user_favorite_pkey");
 
                     b.HasIndex("CategoryId");
-
-                    b.HasIndex("ProductId");
 
                     b.HasIndex("UserId");
 
@@ -1533,6 +1480,65 @@ namespace RetradeBE.Migrations
                     b.HasIndex("FollowerId");
 
                     b.ToTable("user_follow", (string)null);
+                });
+
+            modelBuilder.Entity("RetradeBE.Models.UserReport", b =>
+                {
+                    b.Property<string>("ReportId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("report_id");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("ReporterId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("reporter_id");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("reviewed_at");
+
+                    b.Property<string>("ReviewedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("reviewed_by");
+
+                    b.Property<string>("Status")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TargetId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("target_id");
+
+                    b.Property<string>("TargetType")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("target_type");
+
+                    b.HasKey("ReportId")
+                        .HasName("user_report_pkey");
+
+                    b.HasIndex("ReporterId");
+
+                    b.HasIndex("ReviewedBy");
+
+                    b.ToTable("user_report", (string)null);
                 });
 
             modelBuilder.Entity("RetradeBE.Models.UserSearch", b =>
@@ -1653,7 +1659,8 @@ namespace RetradeBE.Migrations
                         .HasColumnName("created_at");
 
                     b.Property<bool?>("IsDeleted")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
 
                     b.Property<string>("Status")
                         .HasMaxLength(20)
@@ -1953,11 +1960,6 @@ namespace RetradeBE.Migrations
                         .HasForeignKey("AuctionId")
                         .HasConstraintName("fk_order_auction");
 
-                    b.HasOne("RetradeBE.Models.User", "Buyer")
-                        .WithMany("OrderBuyer")
-                        .HasForeignKey("BuyerId")
-                        .HasConstraintName("fk_order_buyer");
-
                     b.HasOne("RetradeBE.Models.Offer", "Offer")
                         .WithMany("Order")
                         .HasForeignKey("OfferId")
@@ -1973,6 +1975,11 @@ namespace RetradeBE.Migrations
                         .HasForeignKey("SellerId")
                         .HasConstraintName("fk_order_seller");
 
+                    b.HasOne("RetradeBE.Models.User", "User")
+                        .WithMany("OrderUser")
+                        .HasForeignKey("UserId")
+                        .HasConstraintName("fk_order_user");
+
                     b.HasOne("RetradeBE.Models.Voucher", "Voucher")
                         .WithMany("Order")
                         .HasForeignKey("VoucherId")
@@ -1980,13 +1987,13 @@ namespace RetradeBE.Migrations
 
                     b.Navigation("Auction");
 
-                    b.Navigation("Buyer");
-
                     b.Navigation("Offer");
 
                     b.Navigation("Product");
 
                     b.Navigation("Seller");
+
+                    b.Navigation("User");
 
                     b.Navigation("Voucher");
                 });
@@ -2078,18 +2085,6 @@ namespace RetradeBE.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("RetradeBE.Models.Report", b =>
-                {
-                    b.HasOne("RetradeBE.Models.User", "Reporter")
-                        .WithMany("Report")
-                        .HasForeignKey("ReporterId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_report_reporter");
-
-                    b.Navigation("Reporter");
-                });
-
             modelBuilder.Entity("RetradeBE.Models.Review", b =>
                 {
                     b.HasOne("RetradeBE.Models.Order", "Order")
@@ -2121,18 +2116,12 @@ namespace RetradeBE.Migrations
                         .HasForeignKey("CategoryId")
                         .HasConstraintName("fk_ufav_category");
 
-                    b.HasOne("RetradeBE.Models.Product", "Product")
-                        .WithMany("UserFavorite")
-                        .HasForeignKey("ProductId");
-
                     b.HasOne("RetradeBE.Models.User", "User")
                         .WithMany("UserFavorite")
                         .HasForeignKey("UserId")
                         .HasConstraintName("fk_ufav_user");
 
                     b.Navigation("Category");
-
-                    b.Navigation("Product");
 
                     b.Navigation("User");
                 });
@@ -2152,6 +2141,23 @@ namespace RetradeBE.Migrations
                     b.Navigation("FollowedUser");
 
                     b.Navigation("Follower");
+                });
+
+            modelBuilder.Entity("RetradeBE.Models.UserReport", b =>
+                {
+                    b.HasOne("RetradeBE.Models.User", "Reporter")
+                        .WithMany("UserReportReporter")
+                        .HasForeignKey("ReporterId")
+                        .HasConstraintName("fk_ur_reporter");
+
+                    b.HasOne("RetradeBE.Models.User", "ReviewedByNavigation")
+                        .WithMany("UserReportReviewedByNavigation")
+                        .HasForeignKey("ReviewedBy")
+                        .HasConstraintName("fk_ur_reviewer");
+
+                    b.Navigation("Reporter");
+
+                    b.Navigation("ReviewedByNavigation");
                 });
 
             modelBuilder.Entity("RetradeBE.Models.UserSearch", b =>
@@ -2282,8 +2288,6 @@ namespace RetradeBE.Migrations
 
                     b.Navigation("ProductImage");
 
-                    b.Navigation("UserFavorite");
-
                     b.Navigation("WishlistItem");
                 });
 
@@ -2325,17 +2329,15 @@ namespace RetradeBE.Migrations
 
                     b.Navigation("Offer");
 
-                    b.Navigation("OrderBuyer");
-
                     b.Navigation("OrderSeller");
+
+                    b.Navigation("OrderUser");
 
                     b.Navigation("Payment");
 
                     b.Navigation("Product");
 
                     b.Navigation("RefundRequest");
-
-                    b.Navigation("Report");
 
                     b.Navigation("ReviewReviewer");
 
@@ -2346,6 +2348,10 @@ namespace RetradeBE.Migrations
                     b.Navigation("UserFollowFollowedUser");
 
                     b.Navigation("UserFollowFollower");
+
+                    b.Navigation("UserReportReporter");
+
+                    b.Navigation("UserReportReviewedByNavigation");
 
                     b.Navigation("UserSearch");
 

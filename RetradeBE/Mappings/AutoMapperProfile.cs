@@ -75,10 +75,10 @@ namespace RetradeBE.Mappings
 
             CreateMap<Order, PurchaseDetailDto>()
                 .IncludeBase<Order, PurchaseListDto>()
-                .ForMember(dest => dest.BuyerId, opt => opt.MapFrom(src => src.UserId))
-                .ForMember(dest => dest.BuyerName, opt => opt.MapFrom(src => src.User != null ? (src.User.FirstName + " " + src.User.LastName).Trim() : null))
-                .ForMember(dest => dest.BuyerEmail, opt => opt.MapFrom(src => src.User != null ? src.User.Email : null))
-                .ForMember(dest => dest.BuyerPhone, opt => opt.MapFrom(src => src.User != null ? src.User.Phone : null))
+                .ForMember(dest => dest.BuyerId, opt => opt.MapFrom(src => src.BuyerId))
+                .ForMember(dest => dest.BuyerName, opt => opt.MapFrom(src => src.Buyer != null ? (src.Buyer.FirstName + " " + src.Buyer.LastName).Trim() : null))
+                .ForMember(dest => dest.BuyerEmail, opt => opt.MapFrom(src => src.Buyer != null ? src.Buyer.Email : null))
+                .ForMember(dest => dest.BuyerPhone, opt => opt.MapFrom(src => src.Buyer != null ? src.Buyer.Phone : null))
                 .ForMember(dest => dest.HasReview, opt => opt.MapFrom(src => src.Review.Any()))
                 .ForMember(dest => dest.Payments, opt => opt.MapFrom(src => src.Payment.OrderByDescending(p => p.CreatedAt)));
 

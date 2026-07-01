@@ -53,7 +53,9 @@ public partial class User
 
     public virtual ICollection<Order> OrderSeller { get; set; } = new List<Order>();
 
-    public virtual ICollection<Order> OrderUser { get; set; } = new List<Order>();
+    public virtual ICollection<Report> Report { get; set; } = new List<Report>();
+
+    public virtual ICollection<Order> OrderBuyer { get; set; } = new List<Order>();
 
     public virtual ICollection<Payment> Payment { get; set; } = new List<Payment>();
 
@@ -70,10 +72,6 @@ public partial class User
     public virtual ICollection<UserFollow> UserFollowFollowedUser { get; set; } = new List<UserFollow>();
 
     public virtual ICollection<UserFollow> UserFollowFollower { get; set; } = new List<UserFollow>();
-
-    public virtual ICollection<UserReport> UserReportReporter { get; set; } = new List<UserReport>();
-
-    public virtual ICollection<UserReport> UserReportReviewedByNavigation { get; set; } = new List<UserReport>();
 
     public virtual ICollection<UserSearch> UserSearch { get; set; } = new List<UserSearch>();
 

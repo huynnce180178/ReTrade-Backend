@@ -76,6 +76,8 @@ namespace RetradeBE.Models.DTOs
         public string? AuctionId { get; set; }
         public string? UserId { get; set; }
         public decimal? DepositAmount { get; set; }
+        public decimal? TotalDepositAmount { get; set; }
+        public decimal HeldBidAmount { get; set; }
         public bool PolicyAccepted { get; set; }
         public string? Status { get; set; }
         public DateTime? CreatedAt { get; set; }
@@ -99,6 +101,7 @@ namespace RetradeBE.Models.DTOs
     public class AuctionBidResultDto
     {
         public AuctionDetailDto Auction { get; set; } = new AuctionDetailDto();
+        public AuctionDepositDto? Deposit { get; set; }
         public bool AuctionEnded { get; set; }
         public string? OrderId { get; set; }
         public string? Message { get; set; }

@@ -472,35 +472,19 @@ namespace RetradeBE.Services
             return result.Distinct().ToList();
         }
 
-        private async Task<string> GenerateProductIdAsync()
+        private Task<string> GenerateProductIdAsync()
         {
-            var lastProduct = await _context.Product
-                .IgnoreQueryFilters()
-                .Where(x => x.ProductId.StartsWith("PR") && !x.ProductId.Contains("_"))
-                .OrderByDescending(x => x.ProductId)
-                .FirstOrDefaultAsync();
-
-            int next = 1;
-
-            if (lastProduct != null)
-            {
-                if (int.TryParse(lastProduct.ProductId.Substring(2), out int lastNumber))
-                {
-                    next = lastNumber + 1;
-                }
-            }
-
-            return $"PR{next:D5}";
+            return Task.FromResult(RetradeBE.Utils.IdGenerator.GenerateId("prd"));
         }
 
         private Task<string> GenerateImageIdAsync()
         {
-            return Task.FromResult($"IMG_{Guid.NewGuid():N}");
+            return Task.FromResult(RetradeBE.Utils.IdGenerator.GenerateId("img"));
         }
 
         private Task<string> GenerateProductAttributeIdAsync()
         {
-            return Task.FromResult($"PA_{Guid.NewGuid():N}");
+            return Task.FromResult(RetradeBE.Utils.IdGenerator.GenerateId("pa"));
         }
 
         private ProductResponseDto MapToResponseDto(Product product)

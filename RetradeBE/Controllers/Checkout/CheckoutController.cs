@@ -54,5 +54,21 @@ namespace RetradeBE.Controllers.Checkout
                 return BadRequest(new { message = ex.Message });
             }
         }
+
+        [HttpGet("validate-voucher")]
+        [Authorize]
+        public async Task<IActionResult> ValidateVoucher([FromQuery] string code, [FromQuery] string productId)
+        {
+            try
+            {
+                var response = await _checkoutService.ValidateVoucherAsync(code, productId);
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
     }
 }
+

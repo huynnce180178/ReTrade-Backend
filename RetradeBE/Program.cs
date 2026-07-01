@@ -235,19 +235,19 @@ namespace RetradeBE
             SeedRole(dbContext, 2, "Buyer");
             SeedRole(dbContext, 3, "Seller");
 
-            SeedUserAccount(dbContext, "USER_ADMIN", "Admin", "System", "admin@retrade.com", "ACC_ADMIN", "admin", "Admin123@", 1);
-            SeedUserAccount(dbContext, "USER_BUYER", "Demo", "Buyer", "buyer@retrade.com", "ACC_BUYER", "buyer", "Buyer123@", 2);
-            SeedUserAccount(dbContext, "USER_SELLER", "Demo", "Seller", "seller@retrade.com", "ACC_SELLER", "seller", "Seller123@", 3);
+            SeedUserAccount(dbContext, "usr_20260701_100001", "Admin", "System", "admin@retrade.com", "acc_20260701_100001", "admin", "Admin123@", 1);
+            SeedUserAccount(dbContext, "usr_20260701_100002", "Demo", "Buyer", "buyer@retrade.com", "acc_20260701_100002", "buyer", "Buyer123@", 2);
+            SeedUserAccount(dbContext, "usr_20260701_100003", "Demo", "Seller", "seller@retrade.com", "acc_20260701_100003", "seller", "Seller123@", 3);
 
-            SeedAddress(dbContext, "ADDR_ADMIN", "USER_ADMIN", "Admin", "0900000001", "Tân Thạnh", 215, 2034, "570604");
-            SeedAddress(dbContext, "ADDR_SELLER", "USER_SELLER", "Seller", "0900000002", "Đường số 1", 202, 3695, "90768");
-            SeedAddress(dbContext, "ADDR_BUYER", "USER_BUYER", "Buyer", "0900000003", "Đường số 2", 201, 3440, "13010");
+            SeedAddress(dbContext, "adr_20260701_100001", "usr_20260701_100001", "Admin", "0900000001", "Tân Thạnh", 215, 2034, "570604");
+            SeedAddress(dbContext, "adr_20260701_100003", "usr_20260701_100003", "Seller", "0900000002", "Đường số 1", 202, 3695, "90768");
+            SeedAddress(dbContext, "adr_20260701_100002", "usr_20260701_100002", "Buyer", "0900000003", "Đường số 2", 201, 3440, "13010");
 
             SeedDemoOrders(dbContext);
 
             SeedServiceSubscription(
                 dbContext,
-                "SERVICE_UPGRADE_SELLER",
+                "sub_20260701_100001",
                 "Seller Upgrade Package",
                 "Buyer",
                 99000m,
@@ -256,7 +256,7 @@ namespace RetradeBE
 
             SeedServiceSubscription(
                 dbContext,
-                "SERVICE_VOUCHER_FEATURE",
+                "sub_20260701_100002",
                 "Discount Voucher Package",
                 "Seller",
                 49000m,
@@ -265,12 +265,18 @@ namespace RetradeBE
 
             SeedServiceSubscription(
                 dbContext,
-                "SERVICE_PRIORITY_LISTING",
+                "sub_20260701_100003",
                 "Priority Listing Package",
                 "Seller",
                 69000m,
                 30,
                 "Activate priority display rights. Bring products to the top of search results. Reach tens of thousands of potential buyers.");
+
+            SeedVoucher(dbContext, "voc_20260701_100001", "HELLORETRADE", "Fixed", 20000m, 100000m, null, 100);
+            SeedVoucher(dbContext, "voc_20260701_100002", "SALE50", "Fixed", 50000m, 200000m, null, 100);
+            SeedVoucher(dbContext, "voc_20260701_100003", "SAVE10", "Percentage", 10m, 150000m, 50000m, 100);
+            SeedVoucher(dbContext, "voc_20260701_100004", "FREESHIP", "Fixed", 30000m, 50000m, null, 100);
+            SeedVoucher(dbContext, "voc_20260701_100005", "WELCOME", "Percentage", 20m, 100000m, 100000m, 100);
         }
 
         private static void SeedRole(AppDbContext dbContext, int roleId, string name)
@@ -370,11 +376,11 @@ namespace RetradeBE
         {
             var now = DateTime.UtcNow;
 
-            if (!dbContext.Category.Any(c => c.CategoryId == "CAT_DEMO_ELECTRONICS"))
+            if (!dbContext.Category.Any(c => c.CategoryId == "cat_20260701_100001"))
             {
                 dbContext.Category.Add(new Category
                 {
-                    CategoryId = "CAT_DEMO_ELECTRONICS",
+                    CategoryId = "cat_20260701_100001",
                     Name = "Demo Electronics",
                     Description = "Seed data for testing order list before checkout is available.",
                     Status = "Active",
@@ -385,47 +391,59 @@ namespace RetradeBE
 
             SeedDemoProduct(
                 dbContext,
-                "PROD_DEMO_PHONE",
-                "IMG_DEMO_PHONE",
-                "Vintage Demo Phone",
+                "prd_20260701_100001",
+                "img_20260701_100001",
+                "Iphone 13 pro max 256gb - 99%",
                 "Second-hand phone used for testing order list.",
                 1250000m,
                 "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&auto=format&fit=crop&q=80");
 
             SeedDemoProduct(
                 dbContext,
-                "PROD_DEMO_HEADPHONE",
-                "IMG_DEMO_HEADPHONE",
-                "Demo Wireless Headphone",
-                "Wireless headphone sample for seller and buyer order testing.",
+                "prd_20260701_100002",
+                "img_20260701_100002",
+                "Tai nghe sony wh-1000xm4 - likenew",
+                "Tai nghe không dây chính hãng giá tốt, còn bảo hành 6 tháng.",
                 650000m,
                 "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&auto=format&fit=crop&q=80");
 
+            
+            SeedDemoProduct(
+                dbContext,
+                "prd_20260701_100003",
+                "img_20260701_100003",
+                "Test auction",
+                "Sản phẩm test đấu giá.",
+                null,
+                "https://data.lvo.vn/media/upload/1001210/Image/auction-hammer.jpg",
+                "Ready",
+                1);
+
             SeedDemoOrder(
                 dbContext,
-                "ORD_DEMO_001",
+                "ord_20260701_100001",
                 "RTD-2026-0001",
-                "PROD_DEMO_PHONE",
+                "prd_20260701_100001",
                 1,
                 1250000m,
                 30000m,
                 0m,
                 "Pending",
-                "PAY_DEMO_001",
+                "pay_20260701_100001",
                 "Pending",
                 now.AddDays(-2));
 
             SeedDemoOrder(
                 dbContext,
-                "ORD_DEMO_002",
+                "ord_20260701_100002",
                 "RTD-2026-0002",
-                "PROD_DEMO_HEADPHONE",
+                "prd_20260701_100002",
                 2,
                 650000m,
                 25000m,
                 50000m,
                 "Shipping",
-                "PAY_DEMO_002",
+                "pay_20260701_100002",
                 "Paid",
                 now.AddDays(-1));
 
@@ -438,8 +456,10 @@ namespace RetradeBE
             string imageId,
             string name,
             string description,
-            decimal price,
-            string imageUrl)
+            decimal? price,
+            string imageUrl,
+            string status = "Accepted",
+            int stockQuantity = 5)
         {
             var now = DateTime.UtcNow;
 
@@ -459,14 +479,14 @@ namespace RetradeBE
                 dbContext.Product.Add(new Product
                 {
                     ProductId = productId,
-                    SellerId = "USER_SELLER",
-                    CategoryId = "CAT_DEMO_ELECTRONICS",
+                    SellerId = "usr_20260701_100003",
+                    CategoryId = "cat_20260701_100001",
                     Name = name,
                     Description = description,
                     Condition = "Used",
                     Price = price,
-                    StockQuantity = 5,
-                    Status = "Accepted",
+                    StockQuantity = stockQuantity,
+                    Status = status,
                     IsDeleted = false,
                     CreatedAt = now,
                     UpdatedAt = now
@@ -508,8 +528,8 @@ namespace RetradeBE
                 {
                     OrderId = orderId,
                     OrderCode = orderCode,
-                    UserId = "USER_BUYER",
-                    SellerId = "USER_SELLER",
+                    BuyerId = "usr_20260701_100002",
+                    SellerId = "usr_20260701_100003",
                     ProductId = productId,
                     Quantity = quantity,
                     UnitPrice = unitPrice,
@@ -533,7 +553,7 @@ namespace RetradeBE
                 {
                     PaymentId = paymentId,
                     OrderId = orderId,
-                    UserId = "USER_BUYER",
+                    UserId = "usr_20260701_100002",
                     Amount = finalAmount,
                     PaymentMethod = "VNPAY",
                     ProviderTransactionId = paymentStatus == "Paid" ? "VNPAY-DEMO-002" : null,
@@ -578,7 +598,51 @@ namespace RetradeBE
 
             dbContext.SaveChanges();
         }
+
+        private static void SeedVoucher(
+            AppDbContext dbContext,
+            string voucherId,
+            string code,
+            string discountType,
+            decimal discountValue,
+            decimal minOrderValue,
+            decimal? maxDiscountValue,
+            int quantity)
+        {
+            var now = DateTime.UtcNow;
+            var existing = dbContext.Voucher.FirstOrDefault(v => v.VoucherId == voucherId);
+            if (existing != null)
+            {
+                existing.Code = code;
+                existing.DiscountType = discountType;
+                existing.DiscountValue = discountValue;
+                existing.MinOrderValue = minOrderValue;
+                existing.MaxDiscountValue = maxDiscountValue;
+                existing.Quantity = quantity;
+            }
+            else
+            {
+                dbContext.Voucher.Add(new Voucher
+                {
+                    VoucherId = voucherId,
+                    SellerId = null,
+                    Code = code,
+                    DiscountType = discountType,
+                    DiscountValue = discountValue,
+                    MinOrderValue = minOrderValue,
+                    MaxDiscountValue = maxDiscountValue,
+                    Quantity = quantity,
+                    StartDate = now.AddDays(-10),
+                    ExpirationDate = now.AddDays(30),
+                    Status = "Active",
+                    CreatedAt = now,
+                    UpdatedAt = now
+                });
+            }
+            dbContext.SaveChanges();
+        }
     }
+
 
     public class SwaggerODataFilter : IOperationFilter
     {

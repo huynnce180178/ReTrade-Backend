@@ -4,6 +4,7 @@ namespace RetradeBE.Models.DTOs
     {
         public string FavoriteId { get; set; } = null!;
         public string? CategoryId { get; set; }
+        public string? ProductId { get; set; }
         public string? CategoryName { get; set; }
         public string? CategoryImageUrl { get; set; }
         public DateTime? CreatedAt { get; set; }
@@ -14,3 +15,4 @@ namespace RetradeBE.Models.DTOs
         public string CategoryId { get; set; } = null!;
     }
 }
+

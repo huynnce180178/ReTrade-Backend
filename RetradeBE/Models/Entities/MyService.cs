@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace RetradeBE.Models;
@@ -25,3 +25,5 @@ public partial class MyService
 
     public virtual User? User { get; set; }
 }
+
+

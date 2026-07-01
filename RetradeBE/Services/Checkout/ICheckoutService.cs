@@ -9,5 +9,7 @@ namespace RetradeBE.Services.Checkout
         Task<CalculateFeeResponseDto> CalculateShippingFeeAsync(CalculateFeeRequestDto request);
         Task<string> ProcessCheckoutAsync(CheckoutRequestDto request, string userId);
         Task<string> GetAddressSnapshotPublicAsync(Address address);
+        Task<VoucherValidationResponseDto> ValidateVoucherAsync(string code, string productId);
     }
 }
+

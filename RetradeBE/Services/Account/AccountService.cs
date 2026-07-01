@@ -1,4 +1,4 @@
-using AutoMapper;
+﻿using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -258,18 +258,18 @@ namespace RetradeBE.Services
             string userId = await GenerateUserIdAsync();
             string accountId = await GenerateAccountIdAsync();
 
-            // Tạo User
+            // Táº¡o User
             var user = _mapper.Map<User>(dto);
             user.UserId = userId;
             await _userRepository.AddAsync(user);
 
-            // Sinh mã OTP 6 số
+            // Sinh mÃ£ OTP 6 sá»‘
             string otp = new Random().Next(100000, 999999).ToString();
 
-            // Lưu OTP vào MemoryCache với thời hạn 3 phút
+            // LÆ°u OTP vÃ o MemoryCache vá»›i thá»i háº¡n 3 phÃºt
             _cache.Set(dto.Email, otp, TimeSpan.FromMinutes(3));
 
-            // Tạo Account
+            // Táº¡o Account
             var account = _mapper.Map<Account>(dto);
             account.AccountId = accountId;
             account.UserId = userId;
@@ -277,11 +277,11 @@ namespace RetradeBE.Services
             account.IsPasswordSet = true;
             await _repository.AddAsync(account);
 
-            // Gán quyền dựa trên RoleId đã có trong DB (1‑Admin, 2‑Buyer, 3‑Seller)
+            // GÃ¡n quyá»n dá»±a trÃªn RoleId Ä‘Ã£ cÃ³ trong DB (1â€‘Admin, 2â€‘Buyer, 3â€‘Seller)
             string roleName = ((RetradeBE.Models.Enums.RoleEnum)dto.RoleId).ToString();
             await _repository.AssignRoleAsync(accountId, roleName);
 
-            // Gửi OTP qua email
+            // Gá»­i OTP qua email
             string template = await GetEmailTemplateAsync("VerificationOtp.html");
             string emailBody = template.Replace("{{OTP}}", otp);
             await _emailService.SendEmailAsync(dto.Email, "ReTrade Account Verification", emailBody);
@@ -291,7 +291,7 @@ namespace RetradeBE.Services
 
         public async Task<bool> VerifyAsync(VerifyDto dto)
         {
-            // Kiểm tra OTP trong Cache
+            // Kiá»ƒm tra OTP trong Cache
             if (!_cache.TryGetValue(dto.Email, out string? savedOtp) || savedOtp != dto.Otp)
             {
                 return false;
@@ -300,17 +300,17 @@ namespace RetradeBE.Services
             var user = await _userRepository.GetByEmailAsync(dto.Email);
             if (user == null) return false;
 
-            // Lấy Account liên kết
+            // Láº¥y Account liÃªn káº¿t
             var allAccounts = await _repository.GetAllAsync();
             var account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
 
             if (account == null) return false;
 
-            // Cập nhật trạng thái account
+            // Cáº­p nháº­t tráº¡ng thÃ¡i account
             account.Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString();
             await _repository.UpdateAsync(account);
 
-            // Xóa OTP khỏi Cache
+            // XÃ³a OTP khá»i Cache
             _cache.Remove(dto.Email);
 
             return true;
@@ -321,13 +321,13 @@ namespace RetradeBE.Services
             var user = await _userRepository.GetByEmailAsync(email);
             if (user == null) return "User not found.";
             
-            // Sinh mã OTP 6 số mới
+            // Sinh mÃ£ OTP 6 sá»‘ má»›i
             string otp = new Random().Next(100000, 999999).ToString();
 
-            // Lưu OTP vào MemoryCache với thời hạn 3 phút (đè lên mã cũ nếu có)
+            // LÆ°u OTP vÃ o MemoryCache vá»›i thá»i háº¡n 3 phÃºt (Ä‘Ã¨ lÃªn mÃ£ cÅ© náº¿u cÃ³)
             _cache.Set(email, otp, TimeSpan.FromMinutes(3));
 
-            // Gửi OTP qua email
+            // Gá»­i OTP qua email
             string template = await GetEmailTemplateAsync("VerificationOtp.html");
             string emailBody = template.Replace("{{OTP}}", otp);
             await _emailService.SendEmailAsync(email, "ReTrade Resend OTP", emailBody);
@@ -418,21 +418,19 @@ namespace RetradeBE.Services
             };
         }
 
-        private async Task<string> GenerateUserIdAsync()
+        private Task<string> GenerateUserIdAsync()
         {
-            int count = await _userRepository.CountAllUsersAsync();
-            return $"UC{count + 1}";
+            return Task.FromResult(RetradeBE.Utils.IdGenerator.GenerateId("usr"));
         }
 
-        private async Task<string> GenerateAccountIdAsync()
+        private Task<string> GenerateAccountIdAsync()
         {
-            int count = await _repository.CountAllAccountsAsync();
-            return $"AC{count + 1}";
+            return Task.FromResult(RetradeBE.Utils.IdGenerator.GenerateId("acc"));
         }
 
         public async Task<object?> LoginWithGoogleAsync(string accessToken)
         {
-            // Gọi Google UserInfo API để lấy thông tin user
+            // Gá»i Google UserInfo API Ä‘á»ƒ láº¥y thÃ´ng tin user
             using var httpClient = _httpClientFactory.CreateClient();
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
             var response = await httpClient.GetAsync("https://www.googleapis.com/oauth2/v3/userinfo");
@@ -448,17 +446,17 @@ namespace RetradeBE.Services
             if (string.IsNullOrEmpty(email)) return null;
             const string googleProvider = "Google";
 
-            // Tìm user theo email
+            // TÃ¬m user theo email
             var user = await _userRepository.GetByEmailAsync(email);
             Account? account = null;
 
             if (user == null)
             {
-                // Tạo mới User & Account nếu chưa có
+                // Táº¡o má»›i User & Account náº¿u chÆ°a cÃ³
                 string userId = await GenerateUserIdAsync();
                 string accountId = await GenerateAccountIdAsync();
 
-                // Tạo username từ email (phần trước @)
+                // Táº¡o username tá»« email (pháº§n trÆ°á»›c @)
                 string baseUsername = email.Split('@')[0].Replace(".", "").Replace("+", "");
                 string username = baseUsername;
                 int suffix = 1;
@@ -486,7 +484,7 @@ namespace RetradeBE.Services
                     Username = username,
                     ProviderUserId = providerUserId ?? email,
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()), // random password
-                    Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString(), // Google accounts bỏ qua verify
+                    Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString(), // Google accounts bá» qua verify
                     IsPasswordSet = false,
                     CreatedAt = DateTime.UtcNow
                 };
@@ -495,7 +493,7 @@ namespace RetradeBE.Services
             }
             else
             {
-                // Tìm account theo userId
+                // TÃ¬m account theo userId
                 var allAccounts = await _repository.GetAllAsync();
                 account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
                 if (account == null || account.IsDeleted == true) return null;
@@ -505,7 +503,7 @@ namespace RetradeBE.Services
                     throw new InvalidOperationException("ACCOUNT_INACTIVE");
                 }
 
-                // Tự động activate nếu Pending (đăng nhập Google lần đầu sau khi register thường)
+                // Tá»± Ä‘á»™ng activate náº¿u Pending (Ä‘Äƒng nháº­p Google láº§n Ä‘áº§u sau khi register thÆ°á»ng)
                 if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Pending.ToString())
                 {
                     account.Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString();
