@@ -8,22 +8,22 @@ namespace RetradeBE.Services.AccountRole
     public class AccountRoleService : IAccountRoleService
     {
         private readonly IAccountRoleRepository _repository;
-        private readonly IAccountRepository _accountRepository;
+        private readonly IAccountService _accountService;
         private readonly IMapper _mapper;
 
         public AccountRoleService(
             IAccountRoleRepository repository,
-            IAccountRepository accountRepository,
+            IAccountService accountService,
             IMapper mapper)
         {
             _repository = repository;
-            _accountRepository = accountRepository;
+            _accountService = accountService;
             _mapper = mapper;
         }
 
         public async Task<ManageRoleDto?> GetManageRolesAsync(string accountId)
         {
-            var account = await _accountRepository.GetByIdAsync(accountId);
+            var account = await _accountService.GetByIdAsync(accountId);
 
             if (account == null)
                 return null;
@@ -44,7 +44,7 @@ namespace RetradeBE.Services.AccountRole
             if (string.IsNullOrEmpty(accountId))
                 return false;
 
-            var account = await _accountRepository.GetByIdAsync(accountId);
+            var account = await _accountService.GetByIdAsync(accountId);
             if (account == null)
                 return false;
 
@@ -60,7 +60,7 @@ namespace RetradeBE.Services.AccountRole
             if (string.IsNullOrEmpty(accountId))
                 return false;
 
-            var account = await _accountRepository.GetByIdAsync(accountId);
+            var account = await _accountService.GetByIdAsync(accountId);
             if (account == null)
                 return false;
 
