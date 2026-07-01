@@ -2,13 +2,14 @@ using RetradeBE.Models;
 
 namespace RetradeBE.Repositories
 {
-    public interface IReviewRepository
+    public interface IReportRepository
     {
         IQueryable<Review> Query();
         Task<Review?> GetByBuyerOrderAsync(string buyerId, string orderId);
         Task<Review?> GetByIdForReportAsync(string reviewId);
-        Task<ReviewReport?> GetReportByReviewReporterAsync(string reviewId, string reporterId);
+        Task<Report?> GetReportByReporterAsync(string reviewId, string reporterId);
         Task AddAsync(Review review);
-        Task AddReportAsync(ReviewReport report);
+        Task AddReportAsync(Report report);
     }
 }
+

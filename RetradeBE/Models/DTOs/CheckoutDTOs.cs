@@ -101,5 +101,16 @@ namespace RetradeBE.Models.DTOs
         public string AddressId { get; set; } = null!;
         public int Quantity { get; set; } = 1;
         public string? PaymentMethod { get; set; }
+        public string? VoucherCode { get; set; }
+    }
+
+    public class VoucherValidationResponseDto
+    {
+        public string Code { get; set; } = null!;
+        public string DiscountType { get; set; } = null!;
+        public decimal DiscountValue { get; set; }
+        public decimal? MinOrderValue { get; set; }
+        public decimal? MaxDiscountValue { get; set; }
     }
 }
+

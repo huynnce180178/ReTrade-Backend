@@ -4,11 +4,11 @@ using RetradeBE.Models;
 
 namespace RetradeBE.Repositories
 {
-    public class ReviewRepository : IReviewRepository
+    public class ReportRepository : IReportRepository
     {
         private readonly AppDbContext _context;
 
-        public ReviewRepository(AppDbContext context)
+        public ReportRepository(AppDbContext context)
         {
             _context = context;
         }
@@ -20,17 +20,12 @@ namespace RetradeBE.Repositories
                 .Include(review => review.Reviewer)
                 .Include(review => review.Seller)
                 .Include(review => review.Order)
-                    .ThenInclude(order => order!.User)
+                    .ThenInclude(order => order!.Buyer)
                 .Include(review => review.Order)
                     .ThenInclude(order => order!.Seller)
                 .Include(review => review.Order)
                     .ThenInclude(order => order!.Product)
-                        .ThenInclude(product => product!.ProductImage)
-                            .ThenInclude(productImage => productImage.Image)
-                .Include(review => review.ReviewReport)
-                    .ThenInclude(report => report.Reporter)
-                .Include(review => review.ReviewReport)
-                    .ThenInclude(report => report.ReviewedByNavigation);
+                        .ThenInclude(product => product!.ProductImage);
         }
 
         public async Task<Review?> GetByBuyerOrderAsync(string buyerId, string orderId)
@@ -44,15 +39,15 @@ namespace RetradeBE.Repositories
         {
             return await _context.Review
                 .Include(review => review.Order)
-                .Include(review => review.ReviewReport)
+                //.Include(review => review.Report)
                 .FirstOrDefaultAsync(review => review.ReviewId == reviewId);
         }
 
-        public async Task<ReviewReport?> GetReportByReviewReporterAsync(string reviewId, string reporterId)
+        public async Task<Report?> GetReportByReporterAsync(string reviewId, string reporterId)
         {
-            return await _context.ReviewReport
+            return await _context.Report
                 .AsNoTracking()
-                .FirstOrDefaultAsync(report => report.ReviewId == reviewId && report.ReporterId == reporterId);
+                .FirstOrDefaultAsync(report => report.TargetId == reviewId && report.ReporterId == reporterId);
         }
 
         public async Task AddAsync(Review review)
@@ -61,10 +56,11 @@ namespace RetradeBE.Repositories
             await _context.SaveChangesAsync();
         }
 
-        public async Task AddReportAsync(ReviewReport report)
+        public async Task AddReportAsync(Report report)
         {
-            await _context.ReviewReport.AddAsync(report);
+            await _context.Report.AddAsync(report);
             await _context.SaveChangesAsync();
         }
     }
 }
+

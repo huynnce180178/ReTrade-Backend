@@ -90,7 +90,7 @@ namespace RetradeBE.Controllers.Review
 
         [HttpPost("{reviewId}/report")]
         [Authorize(Roles = $"{nameof(RoleEnum.Seller)},{nameof(RoleEnum.Admin)}")]
-        public async Task<IActionResult> ReportReview(string reviewId, [FromBody] ReviewReportCreateDto request)
+        public async Task<IActionResult> ReportReview(string reviewId, [FromBody] ReportCreateDto request)
         {
             var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrWhiteSpace(accountId)) return Unauthorized();
@@ -120,3 +120,4 @@ namespace RetradeBE.Controllers.Review
         }
     }
 }
+

@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.SignalR;
 using RetradeBE.Data;
 using RetradeBE.Hubs;
@@ -246,9 +246,9 @@ namespace RetradeBE.Services.Offer
 
             var order = new Order
             {
-                OrderId = Guid.NewGuid().ToString(),
+                OrderId = RetradeBE.Utils.IdGenerator.GenerateOrderId(new Random().Next(1, 9999)),
                 OrderCode = orderCode,
-                UserId = buyerUserId,
+                BuyerId = buyerUserId,
                 SellerId = product.SellerId,
                 ProductId = product.ProductId,
                 OfferId = offer.OfferId,

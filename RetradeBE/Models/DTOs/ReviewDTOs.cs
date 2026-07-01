@@ -18,23 +18,22 @@ namespace RetradeBE.Models.DTOs
         public int PageSize { get; set; } = 12;
     }
 
-    public class ReviewReportCreateDto
+    public class ReportCreateDto
     {
         public string Reason { get; set; } = null!;
         public string? Description { get; set; }
     }
 
-    public class ReviewReportDto
+    public class ReportDto
     {
-        public string ReviewReportId { get; set; } = null!;
-        public string ReviewId { get; set; } = null!;
+        public string ReportId { get; set; } = null!;
+        public string TargetId { get; set; } = null!;
+        public string TargetType { get; set; } = null!;
         public string ReporterId { get; set; } = null!;
         public string? ReporterName { get; set; }
         public string? Reason { get; set; }
         public string? Description { get; set; }
         public string? Status { get; set; }
-        public string? ReviewedBy { get; set; }
-        public string? ReviewedByName { get; set; }
         public DateTime? ReviewedAt { get; set; }
         public DateTime? CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
@@ -67,7 +66,8 @@ namespace RetradeBE.Models.DTOs
         public DateTime? UpdatedAt { get; set; }
         public int ReportCount { get; set; }
         public bool ReportedByCurrentUser { get; set; }
-        public ReviewReportDto? CurrentUserReport { get; set; }
-        public List<ReviewReportDto> Reports { get; set; } = new();
+        public ReportDto? CurrentUserReport { get; set; }
+        public List<ReportDto> Reports { get; set; } = new();
     }
 }
+

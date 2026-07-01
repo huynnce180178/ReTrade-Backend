@@ -111,7 +111,7 @@ public class PaymentService : IPaymentService
             }
         }
 
-        var paymentId = $"PAY_{Guid.NewGuid():N}";
+        var paymentId = RetradeBE.Utils.IdGenerator.GenerateId("pay");
         var createDate = DateTime.UtcNow.AddHours(7);
         var amount = Convert.ToInt64(decimal.Round(request.Amount * 100, 0, MidpointRounding.AwayFromZero));
         var locale = string.IsNullOrWhiteSpace(request.Locale) ? _vnPaySettings.Locale : request.Locale.Trim().ToLowerInvariant();
@@ -125,7 +125,7 @@ public class PaymentService : IPaymentService
             Amount = request.Amount,
             PaymentMethod = PaymentMethod,
             ProviderTransactionId = string.IsNullOrWhiteSpace(request.AuctionDepositId)
-                ? null
+                ? RetradeBE.Utils.IdGenerator.GenerateTransactionId(PaymentMethod)
                 : $"{AuctionDepositPaymentPrefix}{request.AuctionDepositId}",
             Status = "Pending",
             CreatedAt = DateTime.UtcNow,
@@ -268,7 +268,7 @@ public class PaymentService : IPaymentService
         if (isSuccess && !string.IsNullOrWhiteSpace(payment.OrderId))
         {
             var order = await _context.Order
-                .Include(o => o.User)
+                .Include(o => o.Buyer)
                 .Include(o => o.Product)
                     .ThenInclude(p => p!.ProductImage)
                     .ThenInclude(pi => pi.Image)
@@ -335,9 +335,9 @@ public class PaymentService : IPaymentService
                 order.ProductId,
                 ProductName = order.Product?.Name,
                 ProductImageUrl = productImageUrl,
-                BuyerId = order.UserId,
-                BuyerName = order.User != null ? $"{order.User.FirstName} {order.User.LastName}".Trim() : null,
-                BuyerEmail = order.User?.Email,
+                BuyerId = order.BuyerId,
+                BuyerName = order.Buyer != null ? $"{order.Buyer.FirstName} {order.Buyer.LastName}".Trim() : null,
+                BuyerEmail = order.Buyer?.Email,
                 order.SellerId,
                 order.Quantity,
                 order.UnitPrice,

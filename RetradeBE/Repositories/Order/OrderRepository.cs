@@ -17,7 +17,7 @@ namespace RetradeBE.Repositories
         {
             return _context.Order
                 .AsNoTracking()
-                .Include(o => o.User)
+                .Include(o => o.Buyer)
                 .Include(o => o.Seller)
                 .Include(o => o.Product)
                     .ThenInclude(p => p!.ProductImage)
@@ -35,7 +35,7 @@ namespace RetradeBE.Repositories
         public async Task<Order?> GetForUpdateAsync(string orderId)
         {
             return await _context.Order
-                .Include(o => o.User)
+                .Include(o => o.Buyer)
                 .Include(o => o.Seller)
                 .Include(o => o.Product)
                     .ThenInclude(p => p!.ProductImage)

@@ -64,7 +64,7 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<Review> Review { get; set; }
 
-    public virtual DbSet<ReviewReport> ReviewReport { get; set; }
+    
 
     public virtual DbSet<Role> Role { get; set; }
 
@@ -76,7 +76,7 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<UserFollow> UserFollow { get; set; }
 
-    public virtual DbSet<UserReport> UserReport { get; set; }
+    public virtual DbSet<Report> Report { get; set; }
 
     public virtual DbSet<UserSearch> UserSearch { get; set; }
 
@@ -103,7 +103,6 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
-            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
             entity.Property(e => e.LastLoginAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("last_login_at");
@@ -178,7 +177,6 @@ public partial class AppDbContext : DbContext
                 .HasColumnName("created_at");
             entity.Property(e => e.DistrictId).HasColumnName("district_id");
             entity.Property(e => e.IsDefault).HasColumnName("is_default");
-            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
             entity.Property(e => e.ProvinceId).HasColumnName("province_id");
             entity.Property(e => e.ReceiverName)
                 .HasMaxLength(100)
@@ -225,7 +223,6 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.DataType)
                 .HasMaxLength(50)
                 .HasColumnName("data_type");
-            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
             entity.Property(e => e.IsRequired).HasColumnName("is_required");
             entity.Property(e => e.Name)
                 .HasMaxLength(100)
@@ -459,7 +456,6 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
-            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
             entity.Property(e => e.IsRead).HasColumnName("is_read");
             entity.Property(e => e.Message).HasColumnName("message");
             entity.Property(e => e.MessageType)
@@ -502,7 +498,6 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
-            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
             entity.Property(e => e.ProductId)
                 .HasMaxLength(100)
                 .HasColumnName("product_id");
@@ -568,6 +563,7 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
                 .HasColumnName("status");
+
             entity.Property(e => e.UpdatedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("updated_at");
@@ -633,7 +629,6 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
-            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
             entity.Property(e => e.IsRead).HasColumnName("is_read");
             entity.Property(e => e.Message).HasColumnName("message");
             entity.Property(e => e.ReadAt)
@@ -741,6 +736,7 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
                 .HasColumnName("status");
+
             entity.Property(e => e.TotalAmount)
                 .HasPrecision(18, 2)
                 .HasColumnName("total_amount");
@@ -753,9 +749,9 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.UpdatedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("updated_at");
-            entity.Property(e => e.UserId)
+            entity.Property(e => e.BuyerId)
                 .HasMaxLength(100)
-                .HasColumnName("user_id");
+                .HasColumnName("buyer_id");
             entity.Property(e => e.VoucherId)
                 .HasMaxLength(100)
                 .HasColumnName("voucher_id");
@@ -776,9 +772,9 @@ public partial class AppDbContext : DbContext
                 .HasForeignKey(d => d.SellerId)
                 .HasConstraintName("fk_order_seller");
 
-            entity.HasOne(d => d.User).WithMany(p => p.OrderUser)
-                .HasForeignKey(d => d.UserId)
-                .HasConstraintName("fk_order_user");
+            entity.HasOne(d => d.Buyer).WithMany(p => p.OrderBuyer)
+                .HasForeignKey(d => d.BuyerId)
+                .HasConstraintName("fk_order_buyer");
 
             entity.HasOne(d => d.Voucher).WithMany(p => p.Order)
                 .HasForeignKey(d => d.VoucherId)
@@ -851,7 +847,6 @@ public partial class AppDbContext : DbContext
                 .HasColumnName("created_at");
             entity.Property(e => e.Description).HasColumnName("description");
             entity.Property(e => e.HeightCm).HasColumnName("height_cm");
-            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
             entity.Property(e => e.LengthCm).HasColumnName("length_cm");
             entity.Property(e => e.Name)
                 .HasMaxLength(255)
@@ -896,7 +891,6 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
-            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
             entity.Property(e => e.ProductId)
                 .HasMaxLength(100)
                 .HasColumnName("product_id");
@@ -1036,59 +1030,45 @@ public partial class AppDbContext : DbContext
                 .HasConstraintName("fk_review_seller");
         });
 
-        modelBuilder.Entity<ReviewReport>(entity =>
+        
+        modelBuilder.Entity<Report>(entity =>
         {
-            entity.HasKey(e => e.ReviewReportId).HasName("review_report_pkey");
+            entity.HasKey(e => e.ReportId).HasName("report_pkey");
 
-            entity.ToTable("review_report");
+            entity.ToTable("report");
 
-            entity.HasIndex(e => e.ReviewId, "IX_review_report_review_id");
-            entity.HasIndex(e => e.ReporterId, "IX_review_report_reporter_id");
-            entity.HasIndex(e => e.ReviewedBy, "IX_review_report_reviewed_by");
-            entity.HasIndex(e => new { e.ReviewId, e.ReporterId }, "review_report_review_id_reporter_id_key").IsUnique();
-
-            entity.Property(e => e.ReviewReportId)
+            entity.Property(e => e.ReportId)
                 .HasMaxLength(100)
-                .HasColumnName("review_report_id");
+                .HasColumnName("report_id");
             entity.Property(e => e.CreatedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
             entity.Property(e => e.Description).HasColumnName("description");
-            entity.Property(e => e.Reason)
-                .HasMaxLength(100)
-                .HasColumnName("reason");
+            entity.Property(e => e.Reason).HasColumnName("reason");
             entity.Property(e => e.ReporterId)
                 .HasMaxLength(100)
                 .HasColumnName("reporter_id");
-            entity.Property(e => e.ReviewedAt)
-                .HasColumnType("timestamp without time zone")
-                .HasColumnName("reviewed_at");
-            entity.Property(e => e.ReviewedBy)
+            entity.Property(e => e.TargetId)
                 .HasMaxLength(100)
-                .HasColumnName("reviewed_by");
-            entity.Property(e => e.ReviewId)
+                .HasColumnName("target_id");
+            entity.Property(e => e.TargetType)
                 .HasMaxLength(100)
-                .HasColumnName("review_id");
+                .HasColumnName("target_type");
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
                 .HasColumnName("status");
             entity.Property(e => e.UpdatedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("updated_at");
+            entity.Property(e => e.ReviewedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("reviewed_at");
 
-            entity.HasOne(d => d.Review).WithMany(p => p.ReviewReport)
-                .HasForeignKey(d => d.ReviewId)
-                .OnDelete(DeleteBehavior.Cascade)
-                .HasConstraintName("fk_review_report_review");
-
-            entity.HasOne(d => d.Reporter).WithMany(p => p.ReviewReportReporter)
+            entity.HasOne(d => d.Reporter).WithMany(p => p.Report)
                 .HasForeignKey(d => d.ReporterId)
-                .HasConstraintName("fk_review_report_reporter");
-
-            entity.HasOne(d => d.ReviewedByNavigation).WithMany(p => p.ReviewReportReviewedByNavigation)
-                .HasForeignKey(d => d.ReviewedBy)
-                .HasConstraintName("fk_review_report_reviewer");
+                .HasConstraintName("fk_report_reporter");
         });
+
 
         modelBuilder.Entity<Role>(entity =>
         {
@@ -1149,7 +1129,6 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.FlagCount)
                 .HasDefaultValue(0)
                 .HasColumnName("flag_count");
-            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
             entity.Property(e => e.LastName)
                 .HasMaxLength(100)
                 .HasColumnName("last_name");
@@ -1173,6 +1152,14 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.CategoryId)
                 .HasMaxLength(100)
                 .HasColumnName("category_id");
+
+            entity.Property(e => e.ProductId)
+                .HasMaxLength(100)
+                .HasColumnName("product_id");
+
+            entity.Property(e => e.ProductId)
+                .HasMaxLength(100)
+                .HasColumnName("product_id");
             entity.Property(e => e.CreatedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
@@ -1217,49 +1204,7 @@ public partial class AppDbContext : DbContext
                 .HasConstraintName("fk_uf_follower");
         });
 
-        modelBuilder.Entity<UserReport>(entity =>
-        {
-            entity.HasKey(e => e.ReportId).HasName("user_report_pkey");
 
-            entity.ToTable("user_report");
-
-            entity.Property(e => e.ReportId)
-                .HasMaxLength(100)
-                .HasColumnName("report_id");
-            entity.Property(e => e.CreatedAt)
-                .HasColumnType("timestamp without time zone")
-                .HasColumnName("created_at");
-            entity.Property(e => e.Description).HasColumnName("description");
-            entity.Property(e => e.Reason)
-                .HasMaxLength(100)
-                .HasColumnName("reason");
-            entity.Property(e => e.ReporterId)
-                .HasMaxLength(100)
-                .HasColumnName("reporter_id");
-            entity.Property(e => e.ReviewedAt)
-                .HasColumnType("timestamp without time zone")
-                .HasColumnName("reviewed_at");
-            entity.Property(e => e.ReviewedBy)
-                .HasMaxLength(100)
-                .HasColumnName("reviewed_by");
-            entity.Property(e => e.Status)
-                .HasMaxLength(20)
-                .HasColumnName("status");
-            entity.Property(e => e.TargetId)
-                .HasMaxLength(100)
-                .HasColumnName("target_id");
-            entity.Property(e => e.TargetType)
-                .HasMaxLength(30)
-                .HasColumnName("target_type");
-
-            entity.HasOne(d => d.Reporter).WithMany(p => p.UserReportReporter)
-                .HasForeignKey(d => d.ReporterId)
-                .HasConstraintName("fk_ur_reporter");
-
-            entity.HasOne(d => d.ReviewedByNavigation).WithMany(p => p.UserReportReviewedByNavigation)
-                .HasForeignKey(d => d.ReviewedBy)
-                .HasConstraintName("fk_ur_reviewer");
-        });
 
         modelBuilder.Entity<UserSearch>(entity =>
         {
@@ -1353,7 +1298,6 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
-            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
                 .HasColumnName("status");
@@ -1403,3 +1347,4 @@ public partial class AppDbContext : DbContext
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
 
 }
+

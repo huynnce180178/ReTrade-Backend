@@ -1,4 +1,4 @@
-using RetradeBE.Models;
+﻿using RetradeBE.Models;
 using RetradeBE.Models.DTOs;
 using RetradeBE.Repositories;
 using RetradeBE.Hubs;
@@ -325,10 +325,9 @@ namespace RetradeBE.Services
             }
         }
 
-        private async Task<string> GenerateAddressIdAsync()
+        private Task<string> GenerateAddressIdAsync()
         {
-            var count = await _repository.CountAddressesAsync();
-            return $"ADDR{count + 1}";
+            return Task.FromResult(RetradeBE.Utils.IdGenerator.GenerateId("adr"));
         }
 
         private static string GenerateFollowId() => $"UF{Guid.NewGuid():N}";

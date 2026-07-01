@@ -610,9 +610,9 @@ namespace RetradeBE.Services
             var finalAmount = Math.Max(0, winningAmount - appliedDeposit);
             var order = new Order
             {
-                OrderId = Guid.NewGuid().ToString(),
+                OrderId = RetradeBE.Utils.IdGenerator.GenerateOrderId(new Random().Next(1, 9999)),
                 OrderCode = GenerateOrderCode(),
-                UserId = winnerBid.UserId,
+                BuyerId = winnerBid.UserId,
                 SellerId = auction.SellerId,
                 ProductId = auction.ProductId,
                 AuctionId = auction.AuctionId,
@@ -633,7 +633,7 @@ namespace RetradeBE.Services
 
             var depositPayment = new Payment
             {
-                PaymentId = $"PAY_AUC_{Guid.NewGuid():N}",
+                PaymentId = RetradeBE.Utils.IdGenerator.GenerateId("pay"),
                 OrderId = order.OrderId,
                 UserId = winnerBid.UserId,
                 Amount = appliedDeposit,
@@ -975,9 +975,9 @@ namespace RetradeBE.Services
             return account;
         }
 
-        private async Task<string> GenerateAuctionIdAsync()
+        private Task<string> GenerateAuctionIdAsync()
         {
-            return await Task.FromResult($"AUC_{Guid.NewGuid():N}");
+            return Task.FromResult(RetradeBE.Utils.IdGenerator.GenerateId("auc"));
         }
 
         private static int NormalizePageSize(int pageSize)

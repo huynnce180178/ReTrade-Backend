@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace RetradeBE.Models;
@@ -9,7 +9,7 @@ public partial class Order
 
     public string? OrderCode { get; set; }
 
-    public string? UserId { get; set; }
+    public string? BuyerId { get; set; }
 
     public string? SellerId { get; set; }
 
@@ -63,7 +63,9 @@ public partial class Order
 
     public virtual User? Seller { get; set; }
 
-    public virtual User? User { get; set; }
+    public virtual User? Buyer { get; set; }
 
     public virtual Voucher? Voucher { get; set; }
 }
+
+

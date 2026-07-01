@@ -10,6 +10,7 @@ namespace RetradeBE.Services
         Task<PagedResultDto<ReviewResponseDto>> GetAdminReviewsAsync(ReviewQueryDto query);
         Task<ReviewSummaryDto> GetAdminReviewSummaryAsync(ReviewQueryDto query);
         Task<ReviewResponseDto?> CreateAsync(string buyerId, ReviewCreateDto request);
-        Task<ReviewReportDto> ReportReviewAsync(string accountId, string reviewId, ReviewReportCreateDto request, bool isAdmin);
+        Task<ReportDto> ReportReviewAsync(string accountId, string reviewId, ReportCreateDto request, bool isAdmin);
     }
 }
+

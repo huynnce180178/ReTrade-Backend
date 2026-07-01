@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace RetradeBE.Models;
@@ -47,6 +47,8 @@ public partial class Product
 
     public virtual ICollection<Order> Order { get; set; } = new List<Order>();
 
+    public virtual ICollection<UserFavorite> UserFavorite { get; set; } = new List<UserFavorite>();
+
     public virtual ICollection<ProductAttribute> ProductAttribute { get; set; } = new List<ProductAttribute>();
 
     public virtual ICollection<ProductImage> ProductImage { get; set; } = new List<ProductImage>();
@@ -55,3 +57,4 @@ public partial class Product
 
     public virtual ICollection<WishlistItem> WishlistItem { get; set; } = new List<WishlistItem>();
 }
+

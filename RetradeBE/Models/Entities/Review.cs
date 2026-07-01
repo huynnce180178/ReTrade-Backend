@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace RetradeBE.Models;
@@ -22,8 +22,6 @@ public partial class Review
     public DateTime? UpdatedAt { get; set; }
 
     public virtual Order? Order { get; set; }
-
-    public virtual ICollection<ReviewReport> ReviewReport { get; set; } = new List<ReviewReport>();
 
     public virtual User? Reviewer { get; set; }
 

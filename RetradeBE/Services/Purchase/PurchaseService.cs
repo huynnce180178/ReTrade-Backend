@@ -41,7 +41,7 @@ namespace RetradeBE.Services
             }
 
             var q = _orderRepository.Query()
-                .Where(o => o.UserId == buyerId);
+                .Where(o => o.BuyerId == buyerId);
 
             if (!string.IsNullOrWhiteSpace(status))
             {
@@ -62,7 +62,7 @@ namespace RetradeBE.Services
             }
 
             var order = await _orderRepository.GetByIdAsync(orderId);
-            if (order == null || order.UserId != buyerId)
+            if (order == null || order.BuyerId != buyerId)
             {
                 return null;
             }
@@ -78,7 +78,7 @@ namespace RetradeBE.Services
             }
 
             var order = await _orderRepository.GetForUpdateAsync(orderId);
-            if (order == null || order.UserId != buyerId)
+            if (order == null || order.BuyerId != buyerId)
             {
                 return null;
             }
@@ -105,7 +105,7 @@ namespace RetradeBE.Services
             }
 
             var order = await _orderRepository.GetForUpdateAsync(orderId);
-            if (order == null || order.UserId != buyerId)
+            if (order == null || order.BuyerId != buyerId)
             {
                 return null;
             }
@@ -138,7 +138,7 @@ namespace RetradeBE.Services
             }
 
             var order = await _orderRepository.GetForUpdateAsync(orderId);
-            if (order == null || order.UserId != buyerId)
+            if (order == null || order.BuyerId != buyerId)
             {
                 return null;
             }
@@ -170,7 +170,7 @@ namespace RetradeBE.Services
                 order.OrderId,
                 order.OrderCode,
                 SellerId = order.SellerId,
-                BuyerId = order.UserId,
+                BuyerId = order.BuyerId,
                 order.Status,
                 order.TrackingCode,
                 order.ShippingProvider,
@@ -186,10 +186,10 @@ namespace RetradeBE.Services
                     .SendAsync("SellerOrderStatusChanged", payload);
             }
 
-            if (!string.IsNullOrWhiteSpace(order.UserId))
+            if (!string.IsNullOrWhiteSpace(order.BuyerId))
             {
                 await _orderHub.Clients
-                    .Group(OrderHub.GetBuyerOrderGroupName(order.UserId))
+                    .Group(OrderHub.GetBuyerOrderGroupName(order.BuyerId))
                     .SendAsync("BuyerOrderStatusChanged", payload);
             }
         }

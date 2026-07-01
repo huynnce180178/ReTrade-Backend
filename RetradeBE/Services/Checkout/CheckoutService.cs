@@ -124,6 +124,50 @@ namespace RetradeBE.Services.Checkout
             var subtotal = (product.Price ?? 0) * request.Quantity;
             var totalAmount = subtotal + feeResult.ShippingFee;
 
+            decimal discountAmount = 0;
+            RetradeBE.Models.Voucher? appliedVoucher = null;
+
+            if (!string.IsNullOrWhiteSpace(request.VoucherCode))
+            {
+                appliedVoucher = await _context.Voucher.FirstOrDefaultAsync(v => v.Code == request.VoucherCode && v.Status == "Active");
+                if (appliedVoucher == null)
+                    throw new Exception("Invalid or inactive voucher code.");
+                
+                var utcNow = DateTime.UtcNow;
+                if (appliedVoucher.StartDate.HasValue && utcNow < appliedVoucher.StartDate.Value)
+                    throw new Exception("Voucher is not yet active.");
+                if (appliedVoucher.ExpirationDate.HasValue && utcNow > appliedVoucher.ExpirationDate.Value)
+                    throw new Exception("Voucher has expired.");
+                if (appliedVoucher.Quantity <= 0)
+                    throw new Exception("Voucher has run out of uses.");
+                if (appliedVoucher.MinOrderValue.HasValue && subtotal < appliedVoucher.MinOrderValue.Value)
+                    throw new Exception($"Order subtotal must be at least {appliedVoucher.MinOrderValue.Value:N0} to use this voucher.");
+
+                if (appliedVoucher.DiscountType == "Percentage")
+                {
+                    discountAmount = subtotal * ((appliedVoucher.DiscountValue ?? 0) / 100m);
+                }
+                else if (appliedVoucher.DiscountType == "Fixed")
+                {
+                    discountAmount = appliedVoucher.DiscountValue ?? 0;
+                }
+
+                if (appliedVoucher.MaxDiscountValue.HasValue && discountAmount > appliedVoucher.MaxDiscountValue.Value)
+                {
+                    discountAmount = appliedVoucher.MaxDiscountValue.Value;
+                }
+
+                if (discountAmount > totalAmount)
+                {
+                    discountAmount = totalAmount;
+                }
+
+                appliedVoucher.Quantity -= 1;
+                _context.Voucher.Update(appliedVoucher);
+            }
+
+            var finalAmount = totalAmount - discountAmount;
+
             string initialStatus = string.Equals(request.PaymentMethod, "vnpay", StringComparison.OrdinalIgnoreCase) 
                 ? RetradeBE.Models.Enums.OrderStatusEnum.AwaitingPayment.ToString() 
                 : RetradeBE.Models.Enums.OrderStatusEnum.Pending.ToString();
@@ -136,16 +180,18 @@ namespace RetradeBE.Services.Checkout
 
             var order = new Order
             {
-                OrderId = Guid.NewGuid().ToString(),
+                OrderId = RetradeBE.Utils.IdGenerator.GenerateOrderId(new Random().Next(1, 9999)),
                 OrderCode = orderCode,
-                UserId = userId,
+                BuyerId = userId,
                 SellerId = product.SellerId,
                 ProductId = product.ProductId,
                 Quantity = request.Quantity,
                 UnitPrice = product.Price,
                 ShippingFee = feeResult.ShippingFee,
                 TotalAmount = totalAmount,
-                FinalAmount = totalAmount,
+                DiscountAmount = discountAmount,
+                FinalAmount = finalAmount,
+                VoucherId = appliedVoucher?.VoucherId,
                 AddressSnapshot = addressSnapshot,
                 Status = initialStatus,
                 CreatedAt = DateTime.UtcNow,
@@ -306,5 +352,38 @@ namespace RetradeBE.Services.Checkout
 
             return $"{receiverName} - {receiverPhone} - {street}, {wardName}, {districtName}, {provinceName}";
         }
+
+        public async Task<VoucherValidationResponseDto> ValidateVoucherAsync(string code, string productId)
+        {
+            var product = await _context.Product.FirstOrDefaultAsync(p => p.ProductId == productId);
+            if (product == null)
+                throw new Exception("Product not found");
+
+            var voucher = await _context.Voucher.FirstOrDefaultAsync(v => v.Code == code && v.Status == "Active");
+            if (voucher == null)
+                throw new Exception("Invalid or inactive voucher code.");
+
+            var utcNow = DateTime.UtcNow;
+            if (voucher.StartDate.HasValue && utcNow < voucher.StartDate.Value)
+                throw new Exception("Voucher is not yet active.");
+            if (voucher.ExpirationDate.HasValue && utcNow > voucher.ExpirationDate.Value)
+                throw new Exception("Voucher has expired.");
+            if (voucher.Quantity <= 0)
+                throw new Exception("Voucher has run out of uses.");
+
+            var subtotal = product.Price ?? 0;
+            if (voucher.MinOrderValue.HasValue && subtotal < voucher.MinOrderValue.Value)
+                throw new Exception($"Order subtotal must be at least {voucher.MinOrderValue.Value:N0} to use this voucher.");
+
+            return new VoucherValidationResponseDto
+            {
+                Code = voucher.Code ?? "",
+                DiscountType = voucher.DiscountType ?? "Fixed",
+                DiscountValue = voucher.DiscountValue ?? 0,
+                MinOrderValue = voucher.MinOrderValue,
+                MaxDiscountValue = voucher.MaxDiscountValue
+            };
+        }
     }
 }
+
