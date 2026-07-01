@@ -294,6 +294,103 @@ namespace RetradeBE
             // Seeding Refund Requests for Demo Seller (usr_20260701_100003)
             SeedRefundRequest(dbContext, "ref_20260701_300001", "usr_20260701_100003", 500000m, "NotReady", "Auction refund for AUC_20260701_990005. Fee 10,000 VND retained.");
             SeedRefundRequest(dbContext, "ref_20260701_300002", "usr_20260701_100003", 750000m, "Pending", "Auction refund for AUC_20260701_990006. Fee 10,000 VND retained.", "Vietcombank", "0987654321", "SELLER TEST");
+
+            // Seeding mock products and auctions for Demo Seller (usr_20260701_100003) to test all statuses
+            SeedDemoProduct(
+                dbContext,
+                "prd_20260701_200001",
+                "img_20260701_200001",
+                "Vintage Leather Jacket",
+                "High quality retro brown leather jacket in excellent condition.",
+                null,
+                "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=600&auto=format&fit=crop&q=80",
+                "cat_clothing",
+                "Accepted",
+                1);
+
+            SeedDemoProduct(
+                dbContext,
+                "prd_20260701_200002",
+                "img_20260701_200002",
+                "Mechanical Keyboard",
+                "RGB hot-swappable custom mechanical keyboard with linear switches.",
+                null,
+                "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=600&auto=format&fit=crop&q=80",
+                "cat_computers",
+                "Accepted",
+                1);
+
+            SeedDemoProduct(
+                dbContext,
+                "prd_20260701_200003",
+                "img_20260701_200003",
+                "Solid Wood Dining Table",
+                "Rustic handmade solid wood dining table for family dinners.",
+                null,
+                "https://images.unsplash.com/photo-1577140917170-285929fb55b7?w=600&auto=format&fit=crop&q=80",
+                "cat_furniture",
+                "Accepted",
+                1);
+
+            // Attribute values for Vintage Leather Jacket (prd_20260701_200001)
+            SeedProductAttributeValue(dbContext, "pav_lj_size", "prd_20260701_200001", "att_clot_size", "L");
+            SeedProductAttributeValue(dbContext, "pav_lj_color", "prd_20260701_200001", "att_clot_color", "Brown");
+            SeedProductAttributeValue(dbContext, "pav_lj_gender", "prd_20260701_200001", "att_clot_gender", "Men");
+            SeedProductAttributeValue(dbContext, "pav_lj_material", "prd_20260701_200001", "att_clot_material", "Leather");
+            SeedProductAttributeValue(dbContext, "pav_lj_brand", "prd_20260701_200001", "att_clot_brand", "Schott NYC");
+
+            // Attribute values for Mechanical Keyboard (prd_20260701_200002)
+            SeedProductAttributeValue(dbContext, "pav_kb_cpu", "prd_20260701_200002", "att_comp_cpu", "ARM Cortex M0");
+            SeedProductAttributeValue(dbContext, "pav_kb_ram", "prd_20260701_200002", "att_comp_ram", "1");
+            SeedProductAttributeValue(dbContext, "pav_kb_storage", "prd_20260701_200002", "att_comp_storage", "Flash Memory");
+            SeedProductAttributeValue(dbContext, "pav_kb_gpu", "prd_20260701_200002", "att_comp_gpu", "None");
+            SeedProductAttributeValue(dbContext, "pav_kb_os", "prd_20260701_200002", "att_comp_os", "Windows/macOS");
+
+            // Attribute values for Solid Wood Dining Table (prd_20260701_200003)
+            SeedProductAttributeValue(dbContext, "pav_dt_material", "prd_20260701_200003", "att_furn_material", "Oak Wood");
+            SeedProductAttributeValue(dbContext, "pav_dt_color", "prd_20260701_200003", "att_furn_color", "Natural Oak");
+            SeedProductAttributeValue(dbContext, "pav_dt_dimensions", "prd_20260701_200003", "att_furn_dimensions", "180x90x75 cm");
+            SeedProductAttributeValue(dbContext, "pav_dt_brand", "prd_20260701_200003", "att_furn_brand", "Handcrafted");
+            SeedProductAttributeValue(dbContext, "pav_dt_assembly", "prd_20260701_200003", "att_furn_assembly", "Yes");
+
+            SeedAuction(
+                dbContext,
+                "auc_20260701_100001",
+                "prd_20260701_200001",
+                "usr_20260701_100003",
+                350000m,
+                350000m,
+                20000m,
+                600000m,
+                DateTime.UtcNow.AddDays(1),
+                DateTime.UtcNow.AddDays(2),
+                "Upcoming");
+
+            SeedAuction(
+                dbContext,
+                "auc_20260701_100002",
+                "prd_20260701_200002",
+                "usr_20260701_100003",
+                150000m,
+                210000m,
+                10000m,
+                400000m,
+                DateTime.UtcNow.AddDays(-1),
+                DateTime.UtcNow.AddDays(1),
+                "Ongoing");
+
+            SeedAuction(
+                dbContext,
+                "auc_20260701_100003",
+                "prd_20260701_200003",
+                "usr_20260701_100003",
+                500000m,
+                650000m,
+                50000m,
+                1000000m,
+                DateTime.UtcNow.AddDays(-3),
+                DateTime.UtcNow.AddDays(-2),
+                "Ended");
         }
 
         private static void SeedRole(AppDbContext dbContext, int roleId, string name)
@@ -393,19 +490,42 @@ namespace RetradeBE
         {
             var now = DateTime.UtcNow;
 
-            if (!dbContext.Category.Any(c => c.CategoryId == "cat_20260701_100001"))
-            {
-                dbContext.Category.Add(new Category
-                {
-                    CategoryId = "cat_20260701_100001",
-                    Name = "Demo Electronics",
-                    Description = "Seed data for testing order list before checkout is available.",
-                    Status = "Active",
-                    CreatedAt = now,
-                    UpdatedAt = now
-                });
-            }
+            // 1. Seed Categories (Furniture, Computers, Mobile Phones, Clothing)
+            SeedCategory(dbContext, "cat_furniture", "Furniture", "Table, chairs, beds, sofa, and other home furniture.");
+            SeedCategory(dbContext, "cat_computers", "Computers", "Laptops, desktops, monitors, components, and computing accessories.");
+            SeedCategory(dbContext, "cat_mobile_phones", "Mobile Phones", "Smartphones, basic phones, tablets, and mobile accessories.");
+            SeedCategory(dbContext, "cat_clothing", "Clothing", "Menswear, womenswear, shoes, bags, and fashion accessories.");
 
+            // 2. Seed Category Attributes (5 per Category, some required, some optional)
+            // Mobile Phones (cat_mobile_phones)
+            SeedCategoryAttribute(dbContext, "att_mobl_color", "cat_mobile_phones", "Color", "String", true, null, 1);
+            SeedCategoryAttribute(dbContext, "att_mobl_storage", "cat_mobile_phones", "Storage Capacity", "String", true, "GB", 2);
+            SeedCategoryAttribute(dbContext, "att_mobl_os", "cat_mobile_phones", "Operating System", "String", true, null, 3);
+            SeedCategoryAttribute(dbContext, "att_mobl_screen", "cat_mobile_phones", "Screen Size", "String", false, "inches", 4);
+            SeedCategoryAttribute(dbContext, "att_mobl_battery", "cat_mobile_phones", "Battery Capacity", "String", false, "mAh", 5);
+
+            // Furniture (cat_furniture)
+            SeedCategoryAttribute(dbContext, "att_furn_material", "cat_furniture", "Material", "String", true, null, 1);
+            SeedCategoryAttribute(dbContext, "att_furn_color", "cat_furniture", "Color", "String", true, null, 2);
+            SeedCategoryAttribute(dbContext, "att_furn_dimensions", "cat_furniture", "Dimensions", "String", false, "cm", 3);
+            SeedCategoryAttribute(dbContext, "att_furn_brand", "cat_furniture", "Brand", "String", false, null, 4);
+            SeedCategoryAttribute(dbContext, "att_furn_assembly", "cat_furniture", "Assembly Required", "String", false, null, 5);
+
+            // Computers (cat_computers)
+            SeedCategoryAttribute(dbContext, "att_comp_cpu", "cat_computers", "CPU", "String", true, null, 1);
+            SeedCategoryAttribute(dbContext, "att_comp_ram", "cat_computers", "RAM", "String", true, "GB", 2);
+            SeedCategoryAttribute(dbContext, "att_comp_storage", "cat_computers", "Storage", "String", true, null, 3);
+            SeedCategoryAttribute(dbContext, "att_comp_gpu", "cat_computers", "GPU", "String", false, null, 4);
+            SeedCategoryAttribute(dbContext, "att_comp_os", "cat_computers", "Operating System", "String", false, null, 5);
+
+            // Clothing (cat_clothing)
+            SeedCategoryAttribute(dbContext, "att_clot_size", "cat_clothing", "Size", "String", true, null, 1);
+            SeedCategoryAttribute(dbContext, "att_clot_color", "cat_clothing", "Color", "String", true, null, 2);
+            SeedCategoryAttribute(dbContext, "att_clot_gender", "cat_clothing", "Gender", "String", false, null, 3);
+            SeedCategoryAttribute(dbContext, "att_clot_material", "cat_clothing", "Material", "String", false, null, 4);
+            SeedCategoryAttribute(dbContext, "att_clot_brand", "cat_clothing", "Brand", "String", false, null, 5);
+
+            // 3. Seed Products with Category mapping
             SeedDemoProduct(
                 dbContext,
                 "prd_20260701_100001",
@@ -413,7 +533,11 @@ namespace RetradeBE
                 "Iphone 13 pro max 256gb - 99%",
                 "Second-hand phone used for testing order list.",
                 1250000m,
-                "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&auto=format&fit=crop&q=80");
+                "https://cdn2.cellphones.com.vn/x/media/catalog/product/i/p/iphone-13-pro-max-256gb-cu-dep_2_.png",
+                "cat_mobile_phones",
+                "Accepted",
+                5,
+                "LikeNew");
 
             SeedDemoProduct(
                 dbContext,
@@ -422,19 +546,255 @@ namespace RetradeBE
                 "Tai nghe sony wh-1000xm4 - likenew",
                 "Tai nghe không dây chính hãng giá tốt, còn bảo hành 6 tháng.",
                 650000m,
-                "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&auto=format&fit=crop&q=80");
+                "https://tainghetot.com/wp-content/uploads/2021/06/P1220334.jpg",
+                "cat_mobile_phones",
+                "Accepted",
+                5,
+                "Fair");
 
-            
             SeedDemoProduct(
                 dbContext,
                 "prd_20260701_100003",
                 "img_20260701_100003",
-                "Test auction",
-                "Sản phẩm test đấu giá.",
+                "iPhone 11 Pro Max",
+                "iPhone 11 Pro Max 64GB like new 99% là máy đa qua sử dụng\r\nnhưng ngoại hình còn đẹp như mới.\r\nCam kết nguyên bản 100%, bảo hành quốc tế trọn đời, dùng được\r\nESIM, 1 đền 10 nếu phát hiện hàng giả, 1 đổi 1 trong 30 ngày.\r\nGiá tốt nhất thị trường, hỗ trợ góp 0%, Ship COD toàn quốc.\r\nViettablet trợ giá thu cũ lên đời lên đến 500.000đ cho tất cả sản\r\nphẩm smartphone, tablet.",
                 null,
-                "https://data.lvo.vn/media/upload/1001210/Image/auction-hammer.jpg",
+                "https://cdn.viettablet.com/images/companies/1/0-hinh-moi/thai/iphone%2011%20pro%20max/iphone-11-pro-max-cu-likenew.png?1672304168621",
+                "cat_mobile_phones",
                 "Ready",
                 1);
+
+            // 4. Seed Product Attribute Values
+            // iPhone 13 Pro Max
+            SeedProductAttributeValue(dbContext, "pav_ip_color", "prd_20260701_100001", "att_mobl_color", "Sierra Blue");
+            SeedProductAttributeValue(dbContext, "pav_ip_storage", "prd_20260701_100001", "att_mobl_storage", "256");
+            SeedProductAttributeValue(dbContext, "pav_ip_os", "prd_20260701_100001", "att_mobl_os", "iOS");
+            SeedProductAttributeValue(dbContext, "pav_ip_screen", "prd_20260701_100001", "att_mobl_screen", "6.7");
+            SeedProductAttributeValue(dbContext, "pav_ip_battery", "prd_20260701_100001", "att_mobl_battery", "4352");
+
+            // Sony Headphones
+            SeedProductAttributeValue(dbContext, "pav_so_color", "prd_20260701_100002", "att_mobl_color", "Black");
+            SeedProductAttributeValue(dbContext, "pav_so_storage", "prd_20260701_100002", "att_mobl_storage", "N/A");
+            SeedProductAttributeValue(dbContext, "pav_so_os", "prd_20260701_100002", "att_mobl_os", "Proprietary");
+
+            // Test Auction Product
+            SeedProductAttributeValue(dbContext, "pav_ta_color", "prd_20260701_100003", "att_mobl_color", "Black");
+            SeedProductAttributeValue(dbContext, "pav_ta_storage", "prd_20260701_100003", "att_mobl_storage", "128");
+            SeedProductAttributeValue(dbContext, "pav_ta_os", "prd_20260701_100003", "att_mobl_os", "Android");
+
+            // 5. Seed Additional Products per Category (Real Names)
+            // --- Furniture Category ---
+            SeedDemoProduct(
+                dbContext,
+                "prd_furn_001",
+                "img_furn_001",
+                "Nordic Fabric Sofa 3-Seater",
+                "Nordic style comfortable 3-seater sofa with washable fabric cover.",
+                4500000m,
+                "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=600&auto=format&fit=crop&q=80",
+                "cat_furniture");
+            SeedProductAttributeValue(dbContext, "pav_f1_mat", "prd_furn_001", "att_furn_material", "Fabric");
+            SeedProductAttributeValue(dbContext, "pav_f1_col", "prd_furn_001", "att_furn_color", "Grey");
+            SeedProductAttributeValue(dbContext, "pav_f1_dim", "prd_furn_001", "att_furn_dimensions", "210x85x80 cm");
+            SeedProductAttributeValue(dbContext, "pav_f1_brd", "prd_furn_001", "att_furn_brand", "IKEA");
+            SeedProductAttributeValue(dbContext, "pav_f1_asm", "prd_furn_001", "att_furn_assembly", "No");
+
+            SeedDemoProduct(
+                dbContext,
+                "prd_furn_002",
+                "img_furn_002",
+                "Minimalist Wooden Coffee Table",
+                "Elegant solid oak wood coffee table for living rooms.",
+                1800000m,
+                "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=600&auto=format&fit=crop&q=80",
+                "cat_furniture",
+                "Accepted",
+                5,
+                "LikeNew");
+            SeedProductAttributeValue(dbContext, "pav_f2_mat", "prd_furn_002", "att_furn_material", "Oak Wood");
+            SeedProductAttributeValue(dbContext, "pav_f2_col", "prd_furn_002", "att_furn_color", "Light Brown");
+            SeedProductAttributeValue(dbContext, "pav_f2_dim", "prd_furn_002", "att_furn_dimensions", "120x60x45 cm");
+            SeedProductAttributeValue(dbContext, "pav_f2_brd", "prd_furn_002", "att_furn_brand", "Jysk");
+            SeedProductAttributeValue(dbContext, "pav_f2_asm", "prd_furn_002", "att_furn_assembly", "Yes");
+
+            SeedDemoProduct(
+                dbContext,
+                "prd_furn_003",
+                "img_furn_003",
+                "Ergonomic Office Chair",
+                "Premium ergonomic mesh office chair with adjustable lumbar support.",
+                8500000m,
+                "https://images.unsplash.com/photo-1505797149-43b0069ec26b?w=600&auto=format&fit=crop&q=80",
+                "cat_furniture",
+                "Sold",
+                0,
+                "Used");
+            SeedProductAttributeValue(dbContext, "pav_f3_mat", "prd_furn_003", "att_furn_material", "Mesh/Steel");
+            SeedProductAttributeValue(dbContext, "pav_f3_col", "prd_furn_003", "att_furn_color", "Black");
+            SeedProductAttributeValue(dbContext, "pav_f3_dim", "prd_furn_003", "att_furn_dimensions", "65x65x120 cm");
+            SeedProductAttributeValue(dbContext, "pav_f3_brd", "prd_furn_003", "att_furn_brand", "Herman Miller");
+            SeedProductAttributeValue(dbContext, "pav_f3_asm", "prd_furn_003", "att_furn_assembly", "Yes");
+
+            // --- Computers Category ---
+            SeedDemoProduct(
+                dbContext,
+                "prd_comp_001",
+                "img_comp_001",
+                "MacBook Pro 14 M3 Pro",
+                "Apple MacBook Pro 14-inch with M3 Pro chip, 18GB Unified Memory, 512GB SSD.",
+                48000000m,
+                "https://onewaymobile.vn/images/news/2024/10/27/original/macbook-pro-14-m3-vs-m3-pro_1730042674.jpeg",
+                "cat_computers",
+                "Accepted",
+                5,
+                "New");
+            SeedProductAttributeValue(dbContext, "pav_c1_cpu", "prd_comp_001", "att_comp_cpu", "Apple M3 Pro");
+            SeedProductAttributeValue(dbContext, "pav_c1_ram", "prd_comp_001", "att_comp_ram", "18");
+            SeedProductAttributeValue(dbContext, "pav_c1_sto", "prd_comp_001", "att_comp_storage", "512GB SSD");
+            SeedProductAttributeValue(dbContext, "pav_c1_gpu", "prd_comp_001", "att_comp_gpu", "14-core GPU");
+            SeedProductAttributeValue(dbContext, "pav_c1_os", "prd_comp_001", "att_comp_os", "macOS");
+
+            SeedDemoProduct(
+                dbContext,
+                "prd_comp_002",
+                "img_comp_002",
+                "ASUS ROG Strix G16 Gaming Laptop",
+                "Powerful gaming laptop with Intel i7-13650HX, RTX 4060, 16GB RAM, 512GB SSD.",
+                29500000m,
+                "https://cdn.tgdd.vn/Products/Images/44/305664/asus-gaming-rog-strix-g16-g614ju-i7-n3777w-1-750x500.jpg",
+                "cat_computers",
+                "Accepted",
+                5,
+                "LikeNew");
+            SeedProductAttributeValue(dbContext, "pav_c2_cpu", "prd_comp_002", "att_comp_cpu", "Intel Core i7-13650HX");
+            SeedProductAttributeValue(dbContext, "pav_c2_ram", "prd_comp_002", "att_comp_ram", "16");
+            SeedProductAttributeValue(dbContext, "pav_c2_sto", "prd_comp_002", "att_comp_storage", "512GB SSD");
+            SeedProductAttributeValue(dbContext, "pav_c2_gpu", "prd_comp_002", "att_comp_gpu", "NVIDIA RTX 4060");
+            SeedProductAttributeValue(dbContext, "pav_c2_os", "prd_comp_002", "att_comp_os", "Windows 11");
+
+            SeedDemoProduct(
+                dbContext,
+                "prd_comp_003",
+                "img_comp_003",
+                "Dell UltraSharp 27 Monitor",
+                "27-inch 4K USB-C Hub Monitor with high color accuracy.",
+                11500000m,
+                "https://npcshop.vn/media/product/1790-u2719d_lfp_00000f000_gy_v1.jpg",
+                "cat_computers",
+                "Sold",
+                0,
+                "Fair");
+            SeedProductAttributeValue(dbContext, "pav_c3_cpu", "prd_comp_003", "att_comp_cpu", "N/A");
+            SeedProductAttributeValue(dbContext, "pav_c3_ram", "prd_comp_003", "att_comp_ram", "N/A");
+            SeedProductAttributeValue(dbContext, "pav_c3_sto", "prd_comp_003", "att_comp_storage", "N/A");
+            SeedProductAttributeValue(dbContext, "pav_c3_gpu", "prd_comp_003", "att_comp_gpu", "N/A");
+            SeedProductAttributeValue(dbContext, "pav_c3_os", "prd_comp_003", "att_comp_os", "Universal");
+
+            // --- Mobile Phones Category ---
+            SeedDemoProduct(
+                dbContext,
+                "prd_mobl_001",
+                "img_mobl_001",
+                "Samsung Galaxy S24 Ultra",
+                "Flagship phone with Snapdragon 8 Gen 3, 12GB RAM, 512GB storage, and S-Pen.",
+                null,
+                "https://product.hstatic.net/1000370129/product/8e64caf8243aed0fad6c81b_master_7830250f33864a0eb199702dee8fd9ea_master_af3aca615315449dbe741862b5dd9556_master.jpg",
+                "cat_mobile_phones",
+                "Ready",
+                1);
+            SeedProductAttributeValue(dbContext, "pav_m1_col", "prd_mobl_001", "att_mobl_color", "Titanium Gray");
+            SeedProductAttributeValue(dbContext, "pav_m1_sto", "prd_mobl_001", "att_mobl_storage", "512");
+            SeedProductAttributeValue(dbContext, "pav_m1_os", "prd_mobl_001", "att_mobl_os", "Android 14");
+            SeedProductAttributeValue(dbContext, "pav_m1_scr", "prd_mobl_001", "att_mobl_screen", "6.8");
+            SeedProductAttributeValue(dbContext, "pav_m1_bat", "prd_mobl_001", "att_mobl_battery", "5000");
+
+            SeedDemoProduct(
+                dbContext,
+                "prd_mobl_002",
+                "img_mobl_002",
+                "iPhone 15 Pro",
+                "Apple flagship smartphone with Titanium design and A17 Pro chip.",
+                24500000m,
+                "https://cdn2.cellphones.com.vn/insecure/rs:fill:358:358/q:90/plain/https://cellphones.com.vn/media/catalog/product/i/p/iphone-15-plus-256gb_2.png",
+                "cat_mobile_phones",
+                "Accepted",
+                5,
+                "New");
+            SeedProductAttributeValue(dbContext, "pav_m2_col", "prd_mobl_002", "att_mobl_color", "Natural Titanium");
+            SeedProductAttributeValue(dbContext, "pav_m2_sto", "prd_mobl_002", "att_mobl_storage", "128");
+            SeedProductAttributeValue(dbContext, "pav_m2_os", "prd_mobl_002", "att_mobl_os", "iOS 17");
+            SeedProductAttributeValue(dbContext, "pav_m2_scr", "prd_mobl_002", "att_mobl_screen", "6.1");
+            SeedProductAttributeValue(dbContext, "pav_m2_bat", "prd_mobl_002", "att_mobl_battery", "3274");
+
+            SeedDemoProduct(
+                dbContext,
+                "prd_mobl_003",
+                "img_mobl_003",
+                "iPad Air 5 M1",
+                "Thin and light tablet with Apple M1 chip, 10.9-inch Liquid Retina display.",
+                13900000m,
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ0tNuMBK9kQSDqLgfMI2dHznfpknbZSM-M4ngstPaNwsQvCbwJLXR3BIT4&s=10",
+                "cat_mobile_phones",
+                "Sold",
+                0,
+                "LikeNew");
+            SeedProductAttributeValue(dbContext, "pav_m3_col", "prd_mobl_003", "att_mobl_color", "Space Gray");
+            SeedProductAttributeValue(dbContext, "pav_m3_sto", "prd_mobl_003", "att_mobl_storage", "64");
+            SeedProductAttributeValue(dbContext, "pav_m3_os", "prd_mobl_003", "att_mobl_os", "iPadOS");
+            SeedProductAttributeValue(dbContext, "pav_m3_scr", "prd_mobl_003", "att_mobl_screen", "10.9");
+            SeedProductAttributeValue(dbContext, "pav_m3_bat", "prd_mobl_003", "att_mobl_battery", "7600");
+
+            // --- Clothing Category ---
+            SeedDemoProduct(
+                dbContext,
+                "prd_clot_001",
+                "img_clot_001",
+                "Uniqlo Airism Cotton Oversized T-Shirt",
+                "Oversized t-shirt with premium Airism fabric blend, perfect for summer.",
+                290000m,
+                "https://image.uniqlo.com/UQ/ST3/WesternCommon/imagesgoods/425974/sub/goods_425974_sub14_3x4.jpg?width=600",
+                "cat_clothing");
+            SeedProductAttributeValue(dbContext, "pav_cl1_siz", "prd_clot_001", "att_clot_size", "M");
+            SeedProductAttributeValue(dbContext, "pav_cl1_col", "prd_clot_001", "att_clot_color", "White");
+            SeedProductAttributeValue(dbContext, "pav_cl1_gen", "prd_clot_001", "att_clot_gender", "Unisex");
+            SeedProductAttributeValue(dbContext, "pav_cl1_mat", "prd_clot_001", "att_clot_material", "Cotton/Polyester");
+            SeedProductAttributeValue(dbContext, "pav_cl1_brd", "prd_clot_001", "att_clot_brand", "Uniqlo");
+
+            SeedDemoProduct(
+                dbContext,
+                "prd_clot_002",
+                "img_clot_002",
+                "Nike Air Force 1 '07 Sneakers",
+                "All-time classic white leather sneakers from Nike.",
+                2200000m,
+                "https://static.nike.com/a/images/t_web_pdp_936_v2/f_auto,u_9ddf04c7-2a9a-4d76-add1-d15af8f0263d,c_scale,fl_relative,w_1.0,h_1.0,fl_layer_apply/b7d9211c-26e7-431a-ac24-b0540fb3c00f/AIR+FORCE+1+%2707.png",
+                "cat_clothing",
+                "Accepted",
+                5,
+                "New");
+            SeedProductAttributeValue(dbContext, "pav_cl2_siz", "prd_clot_002", "att_clot_size", "42");
+            SeedProductAttributeValue(dbContext, "pav_cl2_col", "prd_clot_002", "att_clot_color", "White");
+            SeedProductAttributeValue(dbContext, "pav_cl2_gen", "prd_clot_002", "att_clot_gender", "Men");
+            SeedProductAttributeValue(dbContext, "pav_cl2_mat", "prd_clot_002", "att_clot_material", "Leather");
+            SeedProductAttributeValue(dbContext, "pav_cl2_brd", "prd_clot_002", "att_clot_brand", "Nike");
+
+            SeedDemoProduct(
+                dbContext,
+                "prd_clot_003",
+                "img_clot_003",
+                "Levis 501 Original Fit Jeans",
+                "Straight fit button-fly original denim jeans in medium stone wash.",
+                1500000m,
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSho97kVA7D92umJWK3CYprERV_rJ74pjNjfhaPoAUk1Q&s",
+                "cat_clothing",
+                "Pending",
+                5,
+                "Used");
+            SeedProductAttributeValue(dbContext, "pav_cl3_siz", "prd_clot_003", "att_clot_size", "32/32");
+            SeedProductAttributeValue(dbContext, "pav_cl3_col", "prd_clot_003", "att_clot_color", "Blue Denim");
+            SeedProductAttributeValue(dbContext, "pav_cl3_gen", "prd_clot_003", "att_clot_gender", "Men");
+            SeedProductAttributeValue(dbContext, "pav_cl3_mat", "prd_clot_003", "att_clot_material", "Cotton Denim");
+            SeedProductAttributeValue(dbContext, "pav_cl3_brd", "prd_clot_003", "att_clot_brand", "Levi's");
 
             SeedDemoOrder(
                 dbContext,
@@ -475,8 +835,10 @@ namespace RetradeBE
             string description,
             decimal? price,
             string imageUrl,
+            string categoryId,
             string status = "Accepted",
-            int stockQuantity = 5)
+            int stockQuantity = 5,
+            string condition = "Used")
         {
             var now = DateTime.UtcNow;
 
@@ -497,10 +859,10 @@ namespace RetradeBE
                 {
                     ProductId = productId,
                     SellerId = "usr_20260701_100003",
-                    CategoryId = "cat_20260701_100001",
+                    CategoryId = categoryId,
                     Name = name,
                     Description = description,
-                    Condition = "Used",
+                    Condition = condition,
                     Price = price,
                     StockQuantity = stockQuantity,
                     Status = status,
@@ -520,6 +882,113 @@ namespace RetradeBE
                     SortOrder = 1,
                     CreatedAt = now
                 });
+            }
+        }
+
+        private static void SeedAuction(
+            AppDbContext dbContext,
+            string auctionId,
+            string productId,
+            string sellerId,
+            decimal startingPrice,
+            decimal currentPrice,
+            decimal minIncrement,
+            decimal? buyNowPrice,
+            DateTime startTime,
+            DateTime endTime,
+            string status)
+        {
+            if (!dbContext.Auction.Any(a => a.AuctionId == auctionId))
+            {
+                dbContext.Auction.Add(new Auction
+                {
+                    AuctionId = auctionId,
+                    ProductId = productId,
+                    SellerId = sellerId,
+                    StartingPrice = startingPrice,
+                    CurrentPrice = currentPrice,
+                    MinIncrement = minIncrement,
+                    BuyNowPrice = buyNowPrice,
+                    StartTime = startTime,
+                    EndTime = endTime,
+                    Status = status,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                });
+                dbContext.SaveChanges();
+            }
+        }
+
+        private static void SeedCategory(AppDbContext dbContext, string categoryId, string name, string description)
+        {
+            var category = dbContext.Category.FirstOrDefault(c => c.CategoryId == categoryId);
+            if (category == null)
+            {
+                dbContext.Category.Add(new Category
+                {
+                    CategoryId = categoryId,
+                    Name = name,
+                    Description = description,
+                    Status = "Active",
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                });
+                dbContext.SaveChanges();
+            }
+        }
+
+        private static void SeedCategoryAttribute(
+            AppDbContext dbContext,
+            string attributeId,
+            string categoryId,
+            string name,
+            string dataType,
+            bool isRequired,
+            string? unit = null,
+            int displayOrder = 1)
+        {
+            var attr = dbContext.Attributes.FirstOrDefault(a => a.AttributeId == attributeId);
+            if (attr == null)
+            {
+                dbContext.Attributes.Add(new Attributes
+                {
+                    AttributeId = attributeId,
+                    CategoryId = categoryId,
+                    Name = name,
+                    DataType = dataType,
+                    IsRequired = isRequired,
+                    Unit = unit,
+                    DisplayOrder = displayOrder,
+                    IsFilterable = true,
+                    IsSearchable = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                });
+                dbContext.SaveChanges();
+            }
+        }
+
+        private static void SeedProductAttributeValue(
+            AppDbContext dbContext,
+            string productAttributeId,
+            string productId,
+            string attributeId,
+            string value)
+        {
+            var val = dbContext.ProductAttribute
+                .FirstOrDefault(pa => pa.ProductId == productId && pa.AttributeId == attributeId);
+            if (val == null)
+            {
+                dbContext.ProductAttribute.Add(new ProductAttribute
+                {
+                    ProductAttributeId = productAttributeId,
+                    ProductId = productId,
+                    AttributeId = attributeId,
+                    Value = value,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                });
+                dbContext.SaveChanges();
             }
         }
 

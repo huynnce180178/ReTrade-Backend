@@ -72,6 +72,24 @@ namespace RetradeBE.Services
                     throw new Exception("Số lượng sản phẩm phải lớn hơn 0.");
             }
 
+            if (!string.IsNullOrEmpty(dto.Condition))
+            {
+                var validConditions = new[] { 
+                    ProductConditionEnum.New.ToString(), 
+                    ProductConditionEnum.LikeNew.ToString(), 
+                    ProductConditionEnum.Excellent.ToString(), 
+                    ProductConditionEnum.Good.ToString(), 
+                    ProductConditionEnum.Fair.ToString(), 
+                    ProductConditionEnum.Used.ToString(), 
+                    ProductConditionEnum.Damaged.ToString(), 
+                    ProductConditionEnum.ForParts.ToString() 
+                };
+                if (!validConditions.Contains(dto.Condition!))
+                {
+                    throw new Exception("Tình trạng sản phẩm không hợp lệ.");
+                }
+            }
+
             var product = new Product
             {
                 ProductId = productId,
@@ -193,6 +211,24 @@ namespace RetradeBE.Services
             // 3. Update standard fields
             product.Name = dto.Name;
             product.Description = dto.Description;
+            if (!string.IsNullOrEmpty(dto.Condition))
+            {
+                var validConditions = new[] { 
+                    ProductConditionEnum.New.ToString(), 
+                    ProductConditionEnum.LikeNew.ToString(), 
+                    ProductConditionEnum.Excellent.ToString(), 
+                    ProductConditionEnum.Good.ToString(), 
+                    ProductConditionEnum.Fair.ToString(), 
+                    ProductConditionEnum.Used.ToString(), 
+                    ProductConditionEnum.Damaged.ToString(), 
+                    ProductConditionEnum.ForParts.ToString() 
+                };
+                if (!validConditions.Contains(dto.Condition!))
+                {
+                    throw new Exception("Tình trạng sản phẩm không hợp lệ.");
+                }
+            }
+
             product.Condition = dto.Condition;
             product.WeightGram = dto.WeightGram;
             product.LengthCm = dto.LengthCm;
