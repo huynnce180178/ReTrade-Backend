@@ -64,8 +64,10 @@ namespace RetradeBE.Controllers.Offer
             }
         }
 
-        [HttpPatch("{offerId}/accept")]
-        public async Task<IActionResult> AcceptOffer(string offerId)
+        [HttpPatch("{offerId}/response")]
+        public async Task<IActionResult> RespondToOffer(
+            string offerId,
+            [FromBody] RespondToOfferDto request)
         {
             try
             {
@@ -74,29 +76,10 @@ namespace RetradeBE.Controllers.Offer
                     return Unauthorized();
                 var account = await _accountService.GetByIdAsync(accountId);
                 var sellerId = account.UserId;
-                var offer = await _offerService
-                    .AcceptOfferAsync(sellerId, offerId);
-
-                return Ok(offer);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(ex.Message);
-            }
-        }
-
-        [HttpPatch("{offerId}/reject")]
-        public async Task<IActionResult> RejectOffer(string offerId)
-        {
-            try
-            {
-                var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-                if (string.IsNullOrEmpty(accountId))
+                if (string.IsNullOrEmpty(sellerId))
                     return Unauthorized();
-                var account = await _accountService.GetByIdAsync(accountId);
-                var sellerId = account.UserId;
                 var offer = await _offerService
-                    .RejectOfferAsync(sellerId, offerId);
+                    .RespondToOfferAsync(sellerId, offerId, request.Accept!.Value);
 
                 return Ok(offer);
             }
