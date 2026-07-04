@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace RetradeBE.Models.DTOs
 {
     public class MakeOfferRequestDto
@@ -12,6 +14,12 @@ namespace RetradeBE.Models.DTOs
     {
         public string OfferId { get; set; } = null!;
         public decimal CounterPrice { get; set; }
+    }
+
+    public class RespondToOfferDto
+    {
+        [Required]
+        public bool? Accept { get; set; }
     }
 
     public class OfferDto

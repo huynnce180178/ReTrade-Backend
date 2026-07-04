@@ -146,33 +146,15 @@ namespace RetradeBE.Services.Offer
             }).ToList();
         }
 
-        public async Task<OfferDto> AcceptOfferAsync(string sellerId, string offerId)
+        public async Task<OfferDto> RespondToOfferAsync(string sellerId, string offerId, bool accept)
         {
             var offer = await _repo.GetByIdAsync(offerId);
 
             if (offer == null) throw new Exception("Offer not found.");
             if (offer.Product?.SellerId != sellerId) throw new Exception("You are not authorized to manage this offer.");
-            if (offer.Status != "Pending") throw new Exception("Only pending offers can be accepted.");
+            if (offer.Status != "Pending") throw new Exception("Only pending offers can be accepted or rejected.");
 
-            offer.Status = "Accepted";
-            await _repo.UpdateAsync(offer);
-
-            var mainImage = offer.Product?.ProductImage
-                .OrderBy(pi => pi.SortOrder)
-                .Select(pi => pi.Image?.ImageUrl)
-                .FirstOrDefault();
-
-            return MapToDto(offer, offer.Buyer, offer.Product, mainImage);
-        }
-
-        public async Task<OfferDto> RejectOfferAsync(string sellerId, string offerId)
-        {
-            var offer = await _repo.GetByIdAsync(offerId);
-            if (offer == null) throw new Exception("Offer not found.");
-            if (offer.Product?.SellerId != sellerId) throw new Exception("You are not authorized to manage this offer.");
-            if (offer.Status != "Pending") throw new Exception("Only pending offers can be rejected.");
-
-            offer.Status = "Rejected";
+            offer.Status = accept ? "Accepted" : "Rejected";
             await _repo.UpdateAsync(offer);
 
             var mainImage = offer.Product?.ProductImage
