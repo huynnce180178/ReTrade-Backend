@@ -68,38 +68,6 @@ namespace RetradeBE.Controllers.Offer
             }
         }
 
-        /// <summary>Seller: accept an offer</summary>
-        [HttpPatch("{offerId}/accept")]
-        public async Task<IActionResult> AcceptOffer(string offerId, [FromQuery] string sellerId)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(sellerId)) return BadRequest("sellerId is required.");
-                var offer = await _offerService.AcceptOfferAsync(sellerId, offerId);
-                return Ok(offer);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(ex.Message);
-            }
-        }
-
-        /// <summary>Seller: reject an offer</summary>
-        [HttpPatch("{offerId}/reject")]
-        public async Task<IActionResult> RejectOffer(string offerId, [FromQuery] string sellerId)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(sellerId)) return BadRequest("sellerId is required.");
-                var offer = await _offerService.RejectOfferAsync(sellerId, offerId);
-                return Ok(offer);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(ex.Message);
-            }
-        }
-
         /// <summary>Buyer: cancel a pending offer</summary>
         [HttpPatch("{offerId}/cancel")]
         public async Task<IActionResult> CancelOffer(string offerId)
