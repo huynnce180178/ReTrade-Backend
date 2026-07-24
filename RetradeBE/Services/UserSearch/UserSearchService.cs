@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using RetradeBE.Data;
 using RetradeBE.Models;
 using RetradeBE.Models.DTOs;
 using RetradeBE.Repositories;
@@ -8,12 +7,12 @@ namespace RetradeBE.Services
 {
     public class UserSearchService : IUserSearchService
     {
-        private readonly AppDbContext _context;
+        private readonly IUserSearchRepository _userSearchRepository;
         private readonly IAccountRepository _accountRepository;
 
-        public UserSearchService(AppDbContext context, IAccountRepository accountRepository)
+        public UserSearchService(IUserSearchRepository userSearchRepository, IAccountRepository accountRepository)
         {
-            _context = context;
+            _userSearchRepository = userSearchRepository;
             _accountRepository = accountRepository;
         }
 
@@ -31,19 +30,16 @@ namespace RetradeBE.Services
         {
             var userId = await ResolveUserIdAsync(accountId);
 
-            return await _context.UserSearch
-                .Where(s => s.UserId == userId)
-                .OrderByDescending(s => s.CreatedAt)
-                .Take(limit)
-                .Select(s => new UserSearchResponseDto
-                {
-                    SearchId = s.SearchId,
-                    Keyword = s.Keyword,
-                    CategoryId = s.CategoryId,
-                    CategoryName = s.Category != null ? s.Category.Name : null,
-                    CreatedAt = s.CreatedAt
-                })
-                .ToListAsync();
+            var history = await _userSearchRepository.GetHistoryByUserIdAsync(userId, limit);
+            
+            return history.Select(s => new UserSearchResponseDto
+            {
+                SearchId = s.SearchId,
+                Keyword = s.Keyword,
+                CategoryId = s.CategoryId,
+                CategoryName = s.Category != null ? s.Category.Name : null,
+                CreatedAt = s.CreatedAt
+            }).ToList();
         }
 
         public async Task<UserSearchResponseDto> SaveSearchAsync(string accountId, UserSearchCreateDto dto)
@@ -56,17 +52,13 @@ namespace RetradeBE.Services
             // Check for duplicate recent search (same keyword within last 5 minutes)
             if (!string.IsNullOrWhiteSpace(dto.Keyword))
             {
-                var recentDuplicate = await _context.UserSearch
-                    .Where(s => s.UserId == userId
-                             && s.Keyword == dto.Keyword.Trim()
-                             && s.CreatedAt > DateTime.UtcNow.AddMinutes(-5))
-                    .FirstOrDefaultAsync();
+                var recentDuplicate = await _userSearchRepository.GetRecentDuplicateAsync(userId, dto.Keyword.Trim());
 
                 if (recentDuplicate != null)
                 {
                     // Update timestamp instead of creating duplicate
                     recentDuplicate.CreatedAt = DateTime.UtcNow;
-                    await _context.SaveChangesAsync();
+                    await _userSearchRepository.UpdateAsync(recentDuplicate);
 
                     return new UserSearchResponseDto
                     {
@@ -88,8 +80,7 @@ namespace RetradeBE.Services
                 CreatedAt = DateTime.UtcNow
             };
 
-            await _context.UserSearch.AddAsync(search);
-            await _context.SaveChangesAsync();
+            await _userSearchRepository.AddAsync(search);
 
             return new UserSearchResponseDto
             {
@@ -104,26 +95,21 @@ namespace RetradeBE.Services
         {
             var userId = await ResolveUserIdAsync(accountId);
 
-            var search = await _context.UserSearch
-                .FirstOrDefaultAsync(s => s.SearchId == searchId && s.UserId == userId);
+            var search = await _userSearchRepository.GetByIdAndUserIdAsync(searchId, userId);
 
             if (search == null)
                 throw new Exception("Lịch sử tìm kiếm không tồn tại.");
 
-            _context.UserSearch.Remove(search);
-            await _context.SaveChangesAsync();
+            await _userSearchRepository.RemoveAsync(search);
         }
 
         public async Task ClearAllSearchAsync(string accountId)
         {
             var userId = await ResolveUserIdAsync(accountId);
 
-            var searches = await _context.UserSearch
-                .Where(s => s.UserId == userId)
-                .ToListAsync();
+            var searches = await _userSearchRepository.GetAllByUserIdAsync(userId);
 
-            _context.UserSearch.RemoveRange(searches);
-            await _context.SaveChangesAsync();
+            await _userSearchRepository.RemoveRangeAsync(searches);
         }
     }
 }
