@@ -1,23 +1,31 @@
 using Microsoft.EntityFrameworkCore;
-using RetradeBE.Data;
 using RetradeBE.Models.DTOs;
+using RetradeBE.Repositories;
 
 namespace RetradeBE.Services;
 
 public class ServiceSubscriptionService : IServiceSubscriptionService
 {
-    private readonly AppDbContext _context;
+    private readonly IServiceSubscriptionRepository _serviceSubscriptionRepo;
+    private readonly IMyServiceRepository _myServiceRepo;
+    private readonly IAccountRepository _accountRepo;
     private readonly IPaymentService _paymentService;
 
-    public ServiceSubscriptionService(AppDbContext context, IPaymentService paymentService)
+    public ServiceSubscriptionService(
+        IServiceSubscriptionRepository serviceSubscriptionRepo,
+        IMyServiceRepository myServiceRepo,
+        IAccountRepository accountRepo,
+        IPaymentService paymentService)
     {
-        _context = context;
+        _serviceSubscriptionRepo = serviceSubscriptionRepo;
+        _myServiceRepo = myServiceRepo;
+        _accountRepo = accountRepo;
         _paymentService = paymentService;
     }
 
     public async Task<IEnumerable<ServiceSubscriptionDto>> GetAvailableAsync()
     {
-        return await _context.ServiceSubscription
+        return await _serviceSubscriptionRepo.Query()
             .AsNoTracking()
             .OrderByDescending(x => x.ServiceId == "SERVICE_UPGRADE_SELLER")
             .ThenBy(x => x.Price)
@@ -35,14 +43,14 @@ public class ServiceSubscriptionService : IServiceSubscriptionService
 
     public async Task<IEnumerable<MyServiceDto>> GetMyActiveSubscriptionsAsync(string accountId)
     {
-        var account = await _context.Account.AsNoTracking().FirstOrDefaultAsync(a => a.AccountId == accountId);
+        var account = await _accountRepo.Query().AsNoTracking().FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (account == null || string.IsNullOrWhiteSpace(account.UserId))
         {
             return Enumerable.Empty<MyServiceDto>();
         }
 
         var now = DateTime.UtcNow;
-        return await _context.MyService
+        return await _myServiceRepo.Query()
             .AsNoTracking()
             .Where(x => x.UserId == account.UserId && x.Status == "Active" && x.EndDate >= now)
             .Select(x => new MyServiceDto
@@ -58,7 +66,7 @@ public class ServiceSubscriptionService : IServiceSubscriptionService
 
     public async Task<CreateVnPayPaymentResponseDto> CreatePurchasePaymentUrlAsync(string accountId, string serviceId, string ipAddress)
     {
-        var service = await _context.ServiceSubscription
+        var service = await _serviceSubscriptionRepo.Query()
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.ServiceId == serviceId);
 
