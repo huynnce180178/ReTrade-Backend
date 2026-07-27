@@ -17,6 +17,14 @@ public partial class Chat
 
     public bool? IsRead { get; set; }
 
+    public bool? IsRecalled { get; set; }
+
+    public DateTime? RecalledAt { get; set; }
+
+    public bool? DeletedForSender { get; set; }
+
+    public bool? DeletedForReceiver { get; set; }
+
     public DateTime? ReadAt { get; set; }
 
     public DateTime? CreatedAt { get; set; }

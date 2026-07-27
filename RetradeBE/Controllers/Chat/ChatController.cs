@@ -101,6 +101,56 @@ namespace RetradeBE.Controllers.Chat
             }
         }
 
+        [HttpDelete("{roomId}/messages/{messageId}")]
+        public async Task<IActionResult> DeleteMessage(string roomId, string messageId)
+        {
+            var accountId = GetAccountId();
+            if (accountId == null) return Unauthorized();
+
+            try
+            {
+                await _chatService.DeleteMessageAsync(accountId, roomId, messageId);
+                return Ok(new { deleted = true });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpPost("{roomId}/messages/{messageId}/recall")]
+        public async Task<IActionResult> RecallMessage(string roomId, string messageId)
+        {
+            var accountId = GetAccountId();
+            if (accountId == null) return Unauthorized();
+
+            try
+            {
+                var message = await _chatService.RecallMessageAsync(accountId, roomId, messageId);
+                return Ok(message);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
         [HttpPost("upload-image")]
         public async Task<IActionResult> UploadImage(IFormFile file)
         {

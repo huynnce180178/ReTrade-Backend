@@ -8,6 +8,8 @@ namespace RetradeBE.Services
         Task<ChatRoomListDto> GetOrCreateRoomAsync(string accountId, CreateChatRoomRequestDto request);
         Task<List<ChatMessageDto>> GetMessagesAsync(string accountId, string roomId, int page, int limit);
         Task<ChatMessageDto> SendMessageAsync(string accountId, string roomId, SendMessageRequestDto request);
+        Task<bool> DeleteMessageAsync(string accountId, string roomId, string messageId);
+        Task<ChatMessageDto> RecallMessageAsync(string accountId, string roomId, string messageId);
         Task<int> MarkMessagesAsReadAsync(string accountId, string roomId);
     }
 }

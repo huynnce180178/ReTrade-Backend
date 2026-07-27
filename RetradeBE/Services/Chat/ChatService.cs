@@ -10,6 +10,7 @@ namespace RetradeBE.Services
 {
     public class ChatService : IChatService
     {
+        private static readonly TimeSpan RecallWindow = TimeSpan.FromMinutes(3);
         private readonly IChatRepository _chatRepository;
         private readonly IAccountRepository _accountRepository;
         private readonly AppDbContext _context;
@@ -43,8 +44,9 @@ namespace RetradeBE.Services
             var principal = await ResolvePrincipalAsync(accountId);
             Product? product = null;
             string? sellerId = request.SellerId;
+            var isProductRoom = !string.IsNullOrWhiteSpace(request.ProductId);
 
-            if (!string.IsNullOrWhiteSpace(request.ProductId))
+            if (isProductRoom)
             {
                 product = await _context.Product
                     .AsNoTracking()
@@ -77,7 +79,9 @@ namespace RetradeBE.Services
             }
 
             var buyerId = principal.UserId;
-            var room = await _chatRepository.GetRoomByBuyerAndSellerAsync(buyerId, sellerId);
+            var room = product != null
+                ? await _chatRepository.GetRoomByProductAndBuyerAsync(product.ProductId, buyerId)
+                : await _chatRepository.GetBusinessRoomAsync(sellerId, buyerId);
 
             if (room == null)
             {
@@ -86,11 +90,17 @@ namespace RetradeBE.Services
                     RoomId = RetradeBE.Utils.IdGenerator.GenerateId("room"),
                     BuyerId = buyerId,
                     SellerId = sellerId,
-                    ProductId = null,
+                    ProductId = product?.ProductId,
+                    RoomType = product == null ? "Business" : "Product",
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow,
                     IsDeleted = false
                 });
+
+                if (product != null)
+                {
+                    await AddAutoSellerGreetingAsync(room, product, sellerId);
+                }
             }
 
             var rooms = await _chatRepository.GetRoomsForUserAsync(principal.UserId, principal.IsAdmin);
@@ -101,8 +111,8 @@ namespace RetradeBE.Services
         {
             var principal = await ResolvePrincipalAsync(accountId);
             await EnsureCanAccessRoomAsync(roomId, principal);
-            var messages = await _chatRepository.GetMessagesByRoomIdAsync(roomId, page, limit);
-            return messages.Select(MapMessage).ToList();
+            var messages = await _chatRepository.GetMessagesByRoomIdAsync(roomId, principal.UserId, page, limit);
+            return messages.Select(message => MapMessage(message, principal.UserId)).ToList();
         }
 
         public async Task<ChatMessageDto> SendMessageAsync(string accountId, string roomId, SendMessageRequestDto request)
@@ -130,12 +140,15 @@ namespace RetradeBE.Services
                 Message = message,
                 MessageType = string.IsNullOrWhiteSpace(request.MessageType) ? "Text" : request.MessageType,
                 IsRead = false,
+                IsRecalled = false,
+                DeletedForSender = false,
+                DeletedForReceiver = false,
                 CreatedAt = now,
                 UpdatedAt = now,
                 IsDeleted = false
             });
 
-            var dto = MapMessage(saved);
+            var dto = MapMessage(saved, principal.UserId);
             await _hubContext.Clients
                 .Group(ChatHub.GetRoomGroupName(room.RoomId))
                 .SendAsync("ReceiveMessage", dto);
@@ -157,6 +170,86 @@ namespace RetradeBE.Services
                         SenderId = principal.UserId
                     });
             }
+
+            return dto;
+        }
+
+        public async Task<bool> DeleteMessageAsync(string accountId, string roomId, string messageId)
+        {
+            var principal = await ResolvePrincipalAsync(accountId);
+            await EnsureCanAccessRoomAsync(roomId, principal);
+
+            var message = await _chatRepository.GetMessageByIdAsync(messageId);
+            if (message == null || message.RoomId != roomId)
+            {
+                throw new KeyNotFoundException("Message not found.");
+            }
+
+            if (message.SenderId == principal.UserId)
+            {
+                message.DeletedForSender = true;
+            }
+            else
+            {
+                message.DeletedForReceiver = true;
+            }
+
+            message.UpdatedAt = DateTime.UtcNow;
+            if (message.DeletedForSender == true && message.DeletedForReceiver == true)
+            {
+                message.IsDeleted = true;
+            }
+
+            await _chatRepository.UpdateMessageAsync(message);
+            await _hubContext.Clients
+                .Group(ChatHub.GetUserGroupName(principal.UserId))
+                .SendAsync("MessageDeleted", new
+                {
+                    RoomId = roomId,
+                    ChatId = messageId,
+                    UserId = principal.UserId
+                });
+
+            return true;
+        }
+
+        public async Task<ChatMessageDto> RecallMessageAsync(string accountId, string roomId, string messageId)
+        {
+            var principal = await ResolvePrincipalAsync(accountId);
+            await EnsureCanAccessRoomAsync(roomId, principal);
+
+            var message = await _chatRepository.GetMessageByIdAsync(messageId);
+            if (message == null || message.RoomId != roomId)
+            {
+                throw new KeyNotFoundException("Message not found.");
+            }
+
+            if (message.SenderId != principal.UserId)
+            {
+                throw new UnauthorizedAccessException("You can only recall your own message.");
+            }
+
+            if (message.IsRecalled == true)
+            {
+                return MapMessage(message, principal.UserId);
+            }
+
+            if (message.CreatedAt == null || DateTime.UtcNow - message.CreatedAt.Value > RecallWindow)
+            {
+                throw new InvalidOperationException("Messages can only be recalled within 3 minutes.");
+            }
+
+            message.IsRecalled = true;
+            message.RecalledAt = DateTime.UtcNow;
+            message.Message = "Tin nhan da bi thu hoi";
+            message.MessageType = "Recall";
+            message.UpdatedAt = DateTime.UtcNow;
+
+            var saved = await _chatRepository.UpdateMessageAsync(message);
+            var dto = MapMessage(saved, principal.UserId);
+            await _hubContext.Clients
+                .Group(ChatHub.GetRoomGroupName(roomId))
+                .SendAsync("MessageRecalled", dto);
 
             return dto;
         }
@@ -214,11 +307,37 @@ namespace RetradeBE.Services
                 roles.Any(role => string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase)));
         }
 
-        private static ChatMessageDto MapMessage(Chat chat)
+        private async Task AddAutoSellerGreetingAsync(ChatRoom room, Product product, string sellerId)
+        {
+            var now = DateTime.UtcNow;
+            await _chatRepository.AddMessageAsync(new Chat
+            {
+                ChatId = RetradeBE.Utils.IdGenerator.GenerateId("chat"),
+                RoomId = room.RoomId,
+                SenderId = sellerId,
+                Message = $"Xin chao, minh thay ban dang quan tam san pham \"{product.Name ?? "nay"}\". Ban can minh ho tro them thong tin gi khong?",
+                MessageType = "Auto",
+                IsRead = false,
+                CreatedAt = now,
+                UpdatedAt = now,
+                IsDeleted = false,
+                IsRecalled = false,
+                DeletedForSender = false,
+                DeletedForReceiver = false
+            });
+        }
+
+        private static ChatMessageDto MapMessage(Chat chat, string? currentUserId = null)
         {
             var senderName = chat.Sender == null
                 ? null
                 : $"{chat.Sender.FirstName} {chat.Sender.LastName}".Trim();
+            var isRecalled = chat.IsRecalled == true;
+            var canRecall = currentUserId != null &&
+                chat.SenderId == currentUserId &&
+                !isRecalled &&
+                chat.CreatedAt.HasValue &&
+                DateTime.UtcNow - chat.CreatedAt.Value <= RecallWindow;
 
             return new ChatMessageDto
             {
@@ -227,10 +346,13 @@ namespace RetradeBE.Services
                 SenderId = chat.SenderId,
                 SenderName = string.IsNullOrWhiteSpace(senderName) ? chat.Sender?.Email : senderName,
                 SenderAvatarUrl = chat.Sender?.AvatarUrl,
-                Message = chat.Message,
+                Message = isRecalled ? "Tin nhan da bi thu hoi" : chat.Message,
                 MessageType = chat.MessageType,
                 IsRead = chat.IsRead == true,
+                IsRecalled = isRecalled,
+                CanRecall = canRecall,
                 ReadAt = chat.ReadAt,
+                RecalledAt = chat.RecalledAt,
                 CreatedAt = chat.CreatedAt
             };
         }
