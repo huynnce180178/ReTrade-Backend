@@ -225,6 +225,7 @@ namespace RetradeBE
             app.MapHub<SellerHub>("/hubs/sellers");
             app.MapHub<OrderHub>("/hubs/orders");
             app.MapHub<AuctionHub>("/hubs/auctions");
+            app.MapHub<ChatHub>("/hubs/chat");
 
             app.Run();
         }
