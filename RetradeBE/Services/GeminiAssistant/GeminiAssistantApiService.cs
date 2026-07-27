@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using RetradeBE.Config;
 using RetradeBE.Models.DTOs.Gemini;
@@ -13,6 +14,7 @@ namespace RetradeBE.Services.GeminiAssistant
         private const string SearchProductsFunctionName = "search_products";
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly GeminiSettings _settings;
+        private readonly IConfiguration _configuration;
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -20,10 +22,14 @@ namespace RetradeBE.Services.GeminiAssistant
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
 
-        public GeminiAssistantApiService(IHttpClientFactory httpClientFactory, IOptions<GeminiSettings> settings)
+        public GeminiAssistantApiService(
+            IHttpClientFactory httpClientFactory,
+            IOptions<GeminiSettings> settings,
+            IConfiguration configuration)
         {
             _httpClientFactory = httpClientFactory;
             _settings = settings.Value;
+            _configuration = configuration;
         }
 
         public async Task<GeminiGenerateContentResponseDto> GenerateContentAsync(
@@ -54,8 +60,7 @@ namespace RetradeBE.Services.GeminiAssistant
                 {
                     FunctionCallingConfig = new GeminiFunctionCallingConfigDto
                     {
-                        Mode = "AUTO",
-                        AllowedFunctionNames = new List<string> { SearchProductsFunctionName }
+                        Mode = "AUTO"
                     }
                 },
                 GenerationConfig = new GeminiGenerationConfigDto
@@ -65,61 +70,86 @@ namespace RetradeBE.Services.GeminiAssistant
                 }
             };
 
-            var baseUrl = (_settings.BaseUrl ?? string.Empty).TrimEnd('/');
-            var model = string.IsNullOrWhiteSpace(_settings.Model) ? "gemini-2.0-flash" : _settings.Model.Trim();
-            var url = $"{baseUrl}/{Uri.EscapeDataString(model)}:generateContent";
+            var rawBaseUrl = _configuration["Gemini:BaseUrl"] ?? _settings.BaseUrl ?? "https://generativelanguage.googleapis.com/v1beta/models";
+            var baseUrl = rawBaseUrl.TrimEnd('/');
+            var primaryModel = string.IsNullOrWhiteSpace(_configuration["Gemini:Model"] ?? _settings.Model) ? "gemini-2.5-flash" : (_configuration["Gemini:Model"] ?? _settings.Model!).Trim();
+            
+            var candidateModels = new List<string> { primaryModel };
+            if (!candidateModels.Contains("gemini-2.5-flash")) candidateModels.Add("gemini-2.5-flash");
+            if (!candidateModels.Contains("gemini-2.0-flash-lite")) candidateModels.Add("gemini-2.0-flash-lite");
+            if (!candidateModels.Contains("gemini-2.0-flash")) candidateModels.Add("gemini-2.0-flash");
+
             var payload = JsonSerializer.Serialize(request, JsonOptions);
             var client = _httpClientFactory.CreateClient();
             var maxRetryAttempts = Math.Max(0, _settings.MaxRetryAttempts);
+            Exception? lastException = null;
 
-            for (var attempt = 0; attempt <= maxRetryAttempts; attempt++)
+            foreach (var currentModel in candidateModels)
             {
-                try
-                {
-                    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                    timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(5, _settings.RequestTimeoutSeconds)));
-                    using var httpRequest = BuildHttpRequest(url, payload, apiKey);
-                    using var response = await client.SendAsync(httpRequest, timeoutCts.Token);
-                    var body = await response.Content.ReadAsStringAsync(timeoutCts.Token);
+                var url = $"{baseUrl}/{Uri.EscapeDataString(currentModel)}:generateContent?key={Uri.EscapeDataString(apiKey)}";
 
-                    if (!response.IsSuccessStatusCode)
+                for (var attempt = 0; attempt <= maxRetryAttempts; attempt++)
+                {
+                    try
                     {
-                        if (IsTransientFailure(response.StatusCode) && attempt < maxRetryAttempts)
+                        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                        timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(5, _settings.RequestTimeoutSeconds)));
+                        using var httpRequest = BuildHttpRequest(url, payload, apiKey);
+                        using var response = await client.SendAsync(httpRequest, timeoutCts.Token);
+                        var body = await response.Content.ReadAsStringAsync(timeoutCts.Token);
+
+                        if (!response.IsSuccessStatusCode)
                         {
-                            await DelayBeforeRetryAsync(attempt, cancellationToken);
-                            continue;
+                            var message = TryGetGeminiErrorMessage(body) ?? response.ReasonPhrase ?? "Gemini request failed.";
+                            lastException = new InvalidOperationException($"Gemini API error ({(int)response.StatusCode}) for model '{currentModel}': {message}");
+
+                            if (IsTransientFailure(response.StatusCode) && attempt < maxRetryAttempts)
+                            {
+                                await DelayBeforeRetryAsync(attempt, cancellationToken);
+                                continue;
+                            }
+
+                            // If this model failed with non-retriable error or out of retries, try next candidate model
+                            break;
                         }
 
-                        var message = TryGetGeminiErrorMessage(body) ?? response.ReasonPhrase ?? "Gemini request failed.";
-                        throw new InvalidOperationException($"Gemini API error ({(int)response.StatusCode}): {message}");
-                    }
+                        var result = JsonSerializer.Deserialize<GeminiGenerateContentResponseDto>(body, JsonOptions);
+                        if (result == null)
+                        {
+                            throw new InvalidOperationException("Gemini returned an empty response.");
+                        }
 
-                    var result = JsonSerializer.Deserialize<GeminiGenerateContentResponseDto>(body, JsonOptions);
-                    if (result == null)
+                        return result;
+                    }
+                    catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
                     {
-                        throw new InvalidOperationException("Gemini returned an empty response.");
+                        lastException = ex;
+                        if (attempt < maxRetryAttempts)
+                        {
+                            await DelayBeforeRetryAsync(attempt, cancellationToken);
+                        }
                     }
-
-                    return result;
-                }
-                catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested && attempt < maxRetryAttempts)
-                {
-                    await DelayBeforeRetryAsync(attempt, cancellationToken);
-                }
-                catch (HttpRequestException) when (attempt < maxRetryAttempts)
-                {
-                    await DelayBeforeRetryAsync(attempt, cancellationToken);
                 }
             }
 
-            throw new InvalidOperationException("Gemini request timed out or could not connect.");
+            throw lastException ?? new InvalidOperationException("Gemini request failed across all available models.");
         }
 
         private string? ResolveApiKey()
         {
-            return !string.IsNullOrWhiteSpace(_settings.ApiKey)
-                ? _settings.ApiKey
-                : Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+            var configKey = _configuration["Gemini:ApiKey"];
+            if (!string.IsNullOrWhiteSpace(configKey))
+            {
+                return configKey.Trim();
+            }
+
+            var envKey = _configuration["GEMINI_API_KEY"] ?? Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+            if (!string.IsNullOrWhiteSpace(envKey))
+            {
+                return envKey.Trim();
+            }
+
+            return !string.IsNullOrWhiteSpace(_settings.ApiKey) ? _settings.ApiKey.Trim() : null;
         }
 
         private static HttpRequestMessage BuildHttpRequest(string url, string payload, string apiKey)

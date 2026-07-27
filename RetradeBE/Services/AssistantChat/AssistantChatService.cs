@@ -7,6 +7,7 @@ using RetradeBE.Models.DTOs.Gemini;
 using RetradeBE.Models.Enums;
 using RetradeBE.Repositories;
 using RetradeBE.Services.GeminiAssistant;
+using RetradeBE.Services;
 
 namespace RetradeBE.Services.AssistantChat
 {
@@ -21,6 +22,7 @@ namespace RetradeBE.Services.AssistantChat
         private readonly IAssistantChatMessageRepository _chatMessageRepository;
         private readonly IAccountRepository _accountRepository;
         private readonly IProductRepository _productRepository;
+        private readonly IPurchaseService _purchaseService;
         private readonly IGeminiAssistantApiService _geminiApiService;
         private readonly ILogger<AssistantChatService> _logger;
 
@@ -34,6 +36,7 @@ namespace RetradeBE.Services.AssistantChat
             IAssistantChatMessageRepository chatMessageRepository,
             IAccountRepository accountRepository,
             IProductRepository productRepository,
+            IPurchaseService purchaseService,
             IGeminiAssistantApiService geminiApiService,
             ILogger<AssistantChatService> logger)
         {
@@ -41,6 +44,7 @@ namespace RetradeBE.Services.AssistantChat
             _chatMessageRepository = chatMessageRepository;
             _accountRepository = accountRepository;
             _productRepository = productRepository;
+            _purchaseService = purchaseService;
             _geminiApiService = geminiApiService;
             _logger = logger;
         }
@@ -79,6 +83,7 @@ namespace RetradeBE.Services.AssistantChat
 
             var history = await _chatMessageRepository.GetBySessionIdAsync(session.SessionId);
             var geminiContents = BuildGeminiContents(history);
+            await InjectUserOrderContextAsync(userId, geminiContents, cancellationToken);
             var suggestedProducts = new List<AssistantProductSuggestionDto>();
             string finalText;
 
@@ -94,11 +99,11 @@ namespace RetradeBE.Services.AssistantChat
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
             {
                 _logger.LogError(ex, "Assistant chat request failed.");
-                finalText = "Xin loi, hien tro ly AI dang gap loi khi xu ly yeu cau. Ban thu lai sau it phut nhe.";
+                finalText = "Xin lỗi, hiện trợ lý AI đang gặp lỗi khi xử lý yêu cầu. Bạn thử lại sau ít phút nhé.";
             }
             if (string.IsNullOrWhiteSpace(finalText))
             {
-                finalText = "Xin loi, hien minh chua the tao cau tra loi phu hop. Ban thu dien dat lai nhu cau tim san pham giup minh nhe.";
+                finalText = "Xin lỗi, hiện mình chưa thể tạo câu trả lời phù hợp. Bạn thử diễn đạt lại nhu cầu tìm sản phẩm giúp mình nhé.";
             }
 
             var assistantMessage = new ChatMessage
@@ -321,7 +326,7 @@ namespace RetradeBE.Services.AssistantChat
 
             if (normalized.Contains("api key is not configured"))
             {
-                return "Gemini API key chua duoc cau hinh. Hay them Gemini:ApiKey hoac bien moi truong GEMINI_API_KEY roi restart backend.";
+                return "Gemini API key is not configured. Please add Gemini:ApiKey or GEMINI_API_KEY environment variable and restart the backend.";
             }
 
             if (normalized.Contains("api key not valid") ||
@@ -331,25 +336,89 @@ namespace RetradeBE.Services.AssistantChat
                 normalized.Contains("access_token_type_unsupported") ||
                 normalized.Contains("401"))
             {
-                return "Gemini API key khong hop le. Hay tao key Gemini moi trong Google AI Studio, cau hinh lai, roi restart backend.";
+                return "Invalid Gemini API key. Please generate a new key in Google AI Studio and update appsettings.";
             }
 
             if (normalized.Contains("permission") || normalized.Contains("forbidden") || normalized.Contains("403"))
             {
-                return "Gemini dang tu choi request. Hay kiem tra API key co quyen dung Gemini API va project da bat API chua.";
+                return "Gemini API request refused. Please verify that your API key has permission for Gemini API.";
             }
 
             if (normalized.Contains("quota") || normalized.Contains("429"))
             {
-                return "Gemini API dang het quota hoac bi gioi han toc do. Ban thu lai sau hoac doi API key/project.";
+                return "Gemini API rate limit or quota exceeded. Please try again later or switch API project.";
             }
 
-            if (normalized.Contains("not found") || normalized.Contains("404") || normalized.Contains("model"))
+            if (normalized.Contains("models/") && (normalized.Contains("not found") || normalized.Contains("404")))
             {
-                return "Gemini model dang cau hinh khong dung hoac chua kha dung. Hay kiem tra Gemini:Model trong appsettings.";
+                return "The configured Gemini model was not found or is unavailable. Please check Gemini:Model in appsettings.";
             }
 
-            return $"Gemini dang tra loi loi: {message}";
+            return $"AI Assistant returned an error: {message}";
+        }
+
+        private async Task InjectUserOrderContextAsync(
+            string? userId,
+            List<GeminiContentDto> geminiContents,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return;
+            }
+
+            try
+            {
+                var recentOrders = await _purchaseService.QueryByBuyerId(userId)
+                    .Take(5)
+                    .ToListAsync(cancellationToken);
+
+                string contextText;
+                if (recentOrders.Count == 0)
+                {
+                    contextText = "[System Context]: Current user has no orders placed on ReTrade.";
+                }
+                else
+                {
+                    var orderSummaries = recentOrders.Select(o =>
+                        $"- Order Code: #{o.OrderCode ?? o.OrderId} | Product: {o.ProductName ?? "ReTrade Product"} | Total: {o.FinalAmount ?? o.TotalAmount ?? 0:N0} VND | Status: {TranslateOrderStatus(o.Status)} | Date: {(o.CreatedAt.HasValue ? o.CreatedAt.Value.ToString("dd/MM/yyyy HH:mm") : "N/A")}"
+                    );
+
+                    contextText = "[Current User's Real Order Data from ReTrade System]:\n" + string.Join("\n", orderSummaries);
+                }
+
+                geminiContents.Insert(0, new GeminiContentDto
+                {
+                    Role = UserRole,
+                    Parts = new List<GeminiPartDto>
+                    {
+                        new() { Text = contextText }
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to fetch user order context for AI assistant.");
+            }
+        }
+
+        private static string TranslateOrderStatus(string? status)
+        {
+            return status switch
+            {
+                "AwaitingPayment" => "Awaiting Payment",
+                "Pending" => "Processing",
+                "Confirmed" => "Confirmed",
+                "Shipping" => "In Transit / Shipping",
+                "Delivered" => "Delivered",
+                "Completed" => "Completed",
+                "Cancelled" => "Cancelled",
+                "ReturnRequested" => "Return Requested",
+                "Returned" => "Returned",
+                "ReturnRejected" => "Return Rejected",
+                "DeliveryFailed" => "Delivery Failed",
+                _ => status ?? "Unknown"
+            };
         }
 
         private async Task<List<AssistantProductSuggestionDto>> SearchProductsAsync(
