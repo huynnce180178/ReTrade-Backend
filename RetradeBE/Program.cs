@@ -192,6 +192,8 @@ namespace RetradeBE
                     });
             });
 
+            builder.Services.AddHostedService<VoucherExpirationService>();
+
             var app = builder.Build();
 
             // Automatically apply migrations at startup
@@ -268,10 +270,10 @@ namespace RetradeBE
                 dbContext,
                 "sub_20260701_100002",
                 "Discount Voucher Package",
-                "Seller",
+                "Buyer",
                 49000m,
                 30,
-                "Activate the right to create discount codes. Freely distribute vouchers for the shop. Attract more customers.");
+                "Receive 30 exclusive discount & freeship vouchers. Valid for 30 days of shopping. Unlock progressive savings every week.");
 
             SeedServiceSubscription(
                 dbContext,
@@ -294,6 +296,35 @@ namespace RetradeBE
             SeedMyVoucher(dbContext, "mvo_20260701_100002", "usr_20260701_100002", "voc_20260701_100002", "Active");
             SeedMyVoucher(dbContext, "mvo_20260701_100003", "usr_20260701_100002", "voc_20260701_100003", "Used", DateTime.UtcNow.AddDays(-2));
             SeedMyVoucher(dbContext, "mvo_20260701_100004", "usr_20260701_100002", "voc_20260701_100006", "Active");
+
+            // Update existing user vouchers in DB to reflect higher caps (min 50k max cap) and higher freeship values (30k-50k)
+            var existingUserVouchers = dbContext.Set<Voucher>().Where(v => v.SellerId == null).ToList();
+            foreach (var v in existingUserVouchers)
+            {
+                if (v.DiscountType == "Percentage" && v.MaxDiscountValue < 50000m)
+                {
+                    v.MaxDiscountValue = 50000m;
+                    v.UpdatedAt = DateTime.UtcNow;
+                }
+                else if (v.DiscountType == "Fixed" && v.DiscountValue < 30000m)
+                {
+                    v.DiscountValue = 30000m;
+                    v.MaxDiscountValue = 30000m;
+                    v.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+            var ordersWithVouchers = dbContext.Order.Where(o => o.VoucherId != null).ToList();
+            foreach (var ord in ordersWithVouchers)
+            {
+                var myVoucher = dbContext.MyVoucher.FirstOrDefault(mv => mv.UserId == ord.BuyerId && mv.VoucherId == ord.VoucherId);
+                if (myVoucher != null && myVoucher.Status != "Used")
+                {
+                    myVoucher.Status = "Used";
+                    myVoucher.UsedAt = ord.CreatedAt ?? DateTime.UtcNow;
+                }
+            }
+            dbContext.SaveChanges();
+            VoucherExpirationService.CheckAndExpireVouchersStaticAsync(dbContext).GetAwaiter().GetResult();
 
             // Seeding Refund Requests for Demo Buyer (usr_20260701_100002)
             SeedRefundRequest(dbContext, "ref_20260701_200001", "usr_20260701_100002", 150000m, "NotReady", "Auction refund for AUC_20260701_990001. Fee 10,000 VND retained.");

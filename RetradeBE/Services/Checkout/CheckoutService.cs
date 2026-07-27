@@ -164,6 +164,30 @@ namespace RetradeBE.Services.Checkout
 
                 appliedVoucher.Quantity -= 1;
                 _context.Voucher.Update(appliedVoucher);
+
+                // Update user's claimed voucher status to 'Used'
+                var myVoucher = await _context.MyVoucher
+                    .FirstOrDefaultAsync(mv => mv.UserId == userId && mv.VoucherId == appliedVoucher.VoucherId && mv.Status == "Active");
+
+                if (myVoucher != null)
+                {
+                    myVoucher.Status = "Used";
+                    myVoucher.UsedAt = DateTime.UtcNow;
+                    _context.MyVoucher.Update(myVoucher);
+                }
+                else
+                {
+                    var newMyVoucher = new RetradeBE.Models.MyVoucher
+                    {
+                        UserVoucherId = $"MV_{Guid.NewGuid():N}",
+                        UserId = userId,
+                        VoucherId = appliedVoucher.VoucherId,
+                        Status = "Used",
+                        UsedAt = DateTime.UtcNow,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _context.MyVoucher.Add(newMyVoucher);
+                }
             }
 
             var finalAmount = totalAmount - discountAmount;

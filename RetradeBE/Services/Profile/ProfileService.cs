@@ -17,19 +17,22 @@ namespace RetradeBE.Services
         private readonly IHubContext<SellerHub> _sellerHub;
         private readonly IMapper _mapper;
         private readonly AppDbContext _context;
+        private readonly ISubscriptionVoucherService _subscriptionVoucherService;
 
         public ProfileService(
             IProfileRepository repository,
             IAccountRepository accountRepository,
             IHubContext<SellerHub> sellerHub,
             IMapper mapper,
-            AppDbContext context)
+            AppDbContext context,
+            ISubscriptionVoucherService subscriptionVoucherService)
         {
             _repository = repository;
             _accountRepository = accountRepository;
             _sellerHub = sellerHub;
             _mapper = mapper;
             _context = context;
+            _subscriptionVoucherService = subscriptionVoucherService;
         }
 
         public async Task<ProfileDetailDto?> GetMyProfileAsync(string accountId)
@@ -354,6 +357,25 @@ namespace RetradeBE.Services
             if (account?.User == null)
             {
                 throw new KeyNotFoundException("User profile not found.");
+            }
+
+            var userId = account.User.UserId;
+            var now = DateTime.UtcNow;
+
+            var hasActiveSubscription = await _context.MyService
+                .AsNoTracking()
+                .AnyAsync(s => s.UserId == userId && s.Status == "Active" && s.EndDate >= now);
+
+            if (hasActiveSubscription)
+            {
+                var currentVoucherCount = await _context.MyVoucher
+                    .AsNoTracking()
+                    .CountAsync(mv => mv.UserId == userId);
+
+                if (currentVoucherCount < 30)
+                {
+                    await _subscriptionVoucherService.GenerateSubscriptionVouchersAsync(userId);
+                }
             }
 
             return _context.MyVoucher
