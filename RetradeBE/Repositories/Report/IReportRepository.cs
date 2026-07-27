@@ -4,12 +4,17 @@ namespace RetradeBE.Repositories
 {
     public interface IReportRepository
     {
-        IQueryable<Review> Query();
-        Task<Review?> GetByBuyerOrderAsync(string buyerId, string orderId);
-        Task<Review?> GetByIdForReportAsync(string reviewId);
-        Task<Report?> GetReportByReporterAsync(string reviewId, string reporterId);
-        Task AddAsync(Review review);
-        Task AddReportAsync(Report report);
+        IQueryable<Report> Query();
+        Task<Report?> GetByIdAsync(string reportId);
+        Task<Report?> GetByTargetAndReporterAsync(string targetId, string reporterId, string targetType);
+        Task<Review?> GetReviewByIdAsync(string reviewId);
+        Task<List<Report>> GetReportsByReporterAsync(string reporterId);
+        Task<List<Report>> GetReportsReceivedByUserAsync(string userId);
+        Task<List<Report>> GetReportsForUserAsync(string userId);
+        Task<bool> ExistsAsync(string targetId, string reporterId, string targetType);
+        Task AddAsync(Report report);
+        Task UpdateAsync(Report report);
+        Task UpdateReviewAsync(Review review);
     }
 }
 
