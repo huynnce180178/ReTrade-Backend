@@ -450,6 +450,16 @@ public partial class AppDbContext : DbContext
 
             entity.ToTable("chat");
 
+            entity.HasIndex(e => e.RoomId, "idx_chat_room_id");
+
+            entity.HasIndex(e => e.CreatedAt, "idx_chat_created_at");
+
+            entity.HasIndex(e => e.IsRead, "idx_chat_is_read");
+
+            entity.HasIndex(e => new { e.RoomId, e.CreatedAt }, "idx_chat_room_created_at");
+
+            entity.HasIndex(e => new { e.RoomId, e.IsRead }, "idx_chat_room_is_read");
+
             entity.Property(e => e.ChatId)
                 .HasMaxLength(100)
                 .HasColumnName("chat_id");
