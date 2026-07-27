@@ -23,19 +23,22 @@ public class PaymentService : IPaymentService
     private readonly ILogger<PaymentService> _logger;
     private readonly IHubContext<OrderHub> _orderHub;
     private readonly IHubContext<AuctionHub> _auctionHub;
+    private readonly ISubscriptionVoucherService _subscriptionVoucherService;
 
     public PaymentService(
         AppDbContext context,
         IOptions<VnPaySettings> vnPaySettings,
         ILogger<PaymentService> logger,
         IHubContext<OrderHub> orderHub,
-        IHubContext<AuctionHub> auctionHub)
+        IHubContext<AuctionHub> auctionHub,
+        ISubscriptionVoucherService subscriptionVoucherService)
     {
         _context = context;
         _vnPaySettings = vnPaySettings.Value;
         _logger = logger;
         _orderHub = orderHub;
         _auctionHub = auctionHub;
+        _subscriptionVoucherService = subscriptionVoucherService;
     }
 
     public async Task<CreateVnPayPaymentResponseDto> CreateVnPayPaymentUrlAsync(
@@ -474,6 +477,17 @@ public class PaymentService : IPaymentService
                 _logger.LogWarning(
                     "ActivateSubscription: Role '{Role}' not found in database.", targetRoleName);
             }
+        }
+
+        // 4. Generate 30 subscription vouchers for user
+        try
+        {
+            await _subscriptionVoucherService.GenerateSubscriptionVouchersAsync(userId);
+            _logger.LogInformation("ActivateSubscription: Successfully generated 30 subscription vouchers for UserId {UserId}.", userId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ActivateSubscription: Error generating 30 subscription vouchers for UserId {UserId}.", userId);
         }
     }
 

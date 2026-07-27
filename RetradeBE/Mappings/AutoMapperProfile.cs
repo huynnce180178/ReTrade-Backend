@@ -162,7 +162,7 @@ namespace RetradeBE.Mappings
                 .ForMember(dest => dest.ExpirationDate, opt => opt.MapFrom(src => src.Voucher != null ? src.Voucher.ExpirationDate : null))
                 .ForMember(dest => dest.VoucherStatus, opt => opt.MapFrom(src => src.Voucher != null ? src.Voucher.Status : null))
                 .ForMember(dest => dest.SellerId, opt => opt.MapFrom(src => src.Voucher != null ? src.Voucher.SellerId : null))
-                .ForMember(dest => dest.SellerName, opt => opt.MapFrom(src => src.Voucher != null && src.Voucher.Seller != null ? $"{src.Voucher.Seller.FirstName} {src.Voucher.Seller.LastName}".Trim() : null));
+                .ForMember(dest => dest.SellerName, opt => opt.MapFrom(src => src.Voucher != null && src.Voucher.Seller != null ? src.Voucher.Seller.FirstName + " " + src.Voucher.Seller.LastName : null));
         }
     }
 }
