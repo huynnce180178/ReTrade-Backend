@@ -35,7 +35,14 @@ namespace RetradeBE.Services.BackgroundJobs
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error occurred while simulating shipping outcomes.");
-                    await Task.Delay(CheckInterval, stoppingToken);
+                    try
+                    {
+                        await Task.Delay(CheckInterval, stoppingToken);
+                    }
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
                 }
             }
         }

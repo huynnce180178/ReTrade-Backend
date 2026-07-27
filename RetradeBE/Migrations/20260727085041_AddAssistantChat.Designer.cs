@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RetradeBE.Data;
@@ -11,9 +12,11 @@ using RetradeBE.Data;
 namespace RetradeBE.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260727085041_AddAssistantChat")]
+    partial class AddAssistantChat
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -520,24 +523,12 @@ namespace RetradeBE.Migrations
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<bool?>("DeletedForReceiver")
-                        .HasColumnType("boolean")
-                        .HasColumnName("deleted_for_receiver");
-
-                    b.Property<bool?>("DeletedForSender")
-                        .HasColumnType("boolean")
-                        .HasColumnName("deleted_for_sender");
-
                     b.Property<bool?>("IsDeleted")
                         .HasColumnType("boolean");
 
                     b.Property<bool?>("IsRead")
                         .HasColumnType("boolean")
                         .HasColumnName("is_read");
-
-                    b.Property<bool?>("IsRecalled")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_recalled");
 
                     b.Property<string>("Message")
                         .HasColumnType("text")
@@ -551,10 +542,6 @@ namespace RetradeBE.Migrations
                     b.Property<DateTime?>("ReadAt")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("read_at");
-
-                    b.Property<DateTime?>("RecalledAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("recalled_at");
 
                     b.Property<string>("RoomId")
                         .HasMaxLength(100)
@@ -659,11 +646,6 @@ namespace RetradeBE.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("product_id");
 
-                    b.Property<string>("RoomType")
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("room_type");
-
                     b.Property<string>("SellerId")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
@@ -679,8 +661,6 @@ namespace RetradeBE.Migrations
                     b.HasIndex("BuyerId");
 
                     b.HasIndex("ProductId");
-
-                    b.HasIndex(new[] { "RoomType" }, "idx_chat_room_type");
 
                     b.HasIndex("SellerId");
 
