@@ -17,6 +17,8 @@ public partial class Review
 
     public string? Comment { get; set; }
 
+    public bool? IsDeleted { get; set; }
+
     public DateTime? CreatedAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }

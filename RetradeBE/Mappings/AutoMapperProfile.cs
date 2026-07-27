@@ -82,6 +82,43 @@ namespace RetradeBE.Mappings
 
             CreateMap<Payment, PaymentSummaryDto>();
             CreateMap<Review, ReviewResponseDto>();
+            CreateMap<Report, ReportDto>()
+                .ForMember(dest => dest.ReporterName, opt => opt.MapFrom(src => src.Reporter == null
+                    ? null
+                    : string.IsNullOrWhiteSpace((src.Reporter.FirstName + " " + src.Reporter.LastName).Trim())
+                        ? src.Reporter.Email
+                        : (src.Reporter.FirstName + " " + src.Reporter.LastName).Trim()));
+            CreateMap<Report, ReportListDto>()
+                .ForMember(dest => dest.ReporterName, opt => opt.MapFrom(src => src.Reporter == null
+                    ? null
+                    : string.IsNullOrWhiteSpace((src.Reporter.FirstName + " " + src.Reporter.LastName).Trim())
+                        ? src.Reporter.Email
+                        : (src.Reporter.FirstName + " " + src.Reporter.LastName).Trim()));
+            CreateMap<Report, ReportDetailDto>()
+                .ForMember(dest => dest.ReporterName, opt => opt.MapFrom(src => src.Reporter == null
+                    ? null
+                    : string.IsNullOrWhiteSpace((src.Reporter.FirstName + " " + src.Reporter.LastName).Trim())
+                        ? src.Reporter.Email
+                        : (src.Reporter.FirstName + " " + src.Reporter.LastName).Trim()))
+                .ForMember(dest => dest.Review, opt => opt.Ignore())
+                .ForMember(dest => dest.Order, opt => opt.Ignore())
+                .ForMember(dest => dest.Buyer, opt => opt.Ignore())
+                .ForMember(dest => dest.Seller, opt => opt.Ignore());
+            CreateMap<Review, ReportReviewDetailDto>();
+            CreateMap<Order, ReportOrderDetailDto>();
+            CreateMap<User, ReportUserDetailDto>()
+                .ForMember(dest => dest.UserName, opt => opt.MapFrom(src =>
+                    string.IsNullOrWhiteSpace((src.FirstName + " " + src.LastName).Trim())
+                        ? src.Email
+                        : (src.FirstName + " " + src.LastName).Trim()))
+                .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.IsDeleted == true ? "Deleted" : "Active"));
+            CreateMap<User, FlaggedUserDto>()
+                .ForMember(dest => dest.UserName, opt => opt.MapFrom(src =>
+                    string.IsNullOrWhiteSpace((src.FirstName + " " + src.LastName).Trim())
+                        ? src.Email
+                        : (src.FirstName + " " + src.LastName).Trim()))
+                .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.IsDeleted == true ? "Deleted" : "Active"))
+                .ForMember(dest => dest.Reports, opt => opt.Ignore());
             //Attribute -> AttributeDTO
             CreateMap<Role, RoleDto>();
 
