@@ -105,7 +105,7 @@ namespace RetradeBE.Controllers.Account
         public async Task<IActionResult> PasswordRecovery([FromBody] ForgotPasswordDto dto)
         {
             var result = await _service.PasswordRecoveryAsync(dto.Email);
-            if (result.Contains("not found"))
+            if (result.Contains("not found") || result.Contains("No account is associated"))
             {
                 return BadRequest(result);
             }
