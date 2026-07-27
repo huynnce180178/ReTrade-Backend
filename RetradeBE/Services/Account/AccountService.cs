@@ -609,11 +609,11 @@ namespace RetradeBE.Services
         public async Task<string> PasswordRecoveryAsync(string email)
         {
             var user = await _userRepository.GetByEmailAsync(email);
-            if (user == null) return "User not found.";
+            if (user == null) return "No account is associated with this email address.";
 
             var allAccounts = await _repository.GetAllAsync();
             var account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
-            if (account == null) return "Account not found.";
+            if (account == null) return "No account is associated with this email address.";
 
             // Generate Random Password
             string newPassword = GenerateRandomPassword();
@@ -629,7 +629,7 @@ namespace RetradeBE.Services
             string emailBody = template.Replace("{{NEW_PASSWORD}}", newPassword);
             await _emailService.SendEmailAsync(email, "ReTrade Password Generated", emailBody);
 
-            return "A new password has been generated and sent to your email.";
+            return "Password reset successful. Please check your email for your new password.";
         }
 
         public async Task<string> ResetPasswordAsync(ResetPasswordDto dto)

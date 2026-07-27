@@ -34,6 +34,8 @@ namespace RetradeBE.Services
 
         public async Task<ProfileDetailDto?> GetMyProfileAsync(string accountId)
         {
+            if (string.IsNullOrWhiteSpace(accountId)) return null;
+
             var account = await _repository.GetAccountWithUserAsync(accountId);
             if (account?.User == null) return null;
 
