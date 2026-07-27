@@ -26,6 +26,10 @@ namespace RetradeBE.Services.BackgroundJobs
                 {
                     await CheckAndExpireSubscriptionsAsync(stoppingToken);
                 }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error occurred while executing SubscriptionExpirationService.");
@@ -33,7 +37,14 @@ namespace RetradeBE.Services.BackgroundJobs
 
                 // Wait for 1 hour before checking again. 
                 // For testing purposes, you might want to lower this (e.g., TimeSpan.FromMinutes(1))
-                await Task.Delay(TimeSpan.FromHours(1), stoppingToken);
+                try
+                {
+                    await Task.Delay(TimeSpan.FromHours(1), stoppingToken);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
             }
 
             _logger.LogInformation("SubscriptionExpirationService is stopping.");

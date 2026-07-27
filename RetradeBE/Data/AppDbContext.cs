@@ -38,7 +38,11 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<Chat> Chat { get; set; }
 
+    public virtual DbSet<ChatMessage> ChatMessage { get; set; }
+
     public virtual DbSet<ChatRoom> ChatRoom { get; set; }
+
+    public virtual DbSet<ChatSession> ChatSession { get; set; }
 
     public virtual DbSet<Image> Image { get; set; }
 
@@ -466,7 +470,10 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
+            entity.Property(e => e.DeletedForReceiver).HasColumnName("deleted_for_receiver");
+            entity.Property(e => e.DeletedForSender).HasColumnName("deleted_for_sender");
             entity.Property(e => e.IsRead).HasColumnName("is_read");
+            entity.Property(e => e.IsRecalled).HasColumnName("is_recalled");
             entity.Property(e => e.Message).HasColumnName("message");
             entity.Property(e => e.MessageType)
                 .HasMaxLength(30)
@@ -474,6 +481,9 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.ReadAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("read_at");
+            entity.Property(e => e.RecalledAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("recalled_at");
             entity.Property(e => e.RoomId)
                 .HasMaxLength(100)
                 .HasColumnName("room_id");
@@ -491,6 +501,43 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.Sender).WithMany(p => p.Chat)
                 .HasForeignKey(d => d.SenderId)
                 .HasConstraintName("fk_chat_sender");
+        });
+
+        modelBuilder.Entity<ChatMessage>(entity =>
+        {
+            entity.HasKey(e => e.MessageId).HasName("chat_message_pkey");
+
+            entity.ToTable("chat_message");
+
+            entity.HasIndex(e => e.SessionId, "idx_chat_message_session_id");
+
+            entity.HasIndex(e => e.CreatedAt, "idx_chat_message_created_at");
+
+            entity.HasIndex(e => new { e.SessionId, e.CreatedAt }, "idx_chat_message_session_created_at");
+
+            entity.Property(e => e.MessageId)
+                .HasMaxLength(100)
+                .HasColumnName("message_id");
+            entity.Property(e => e.Content).HasColumnName("content");
+            entity.Property(e => e.CreatedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+            entity.Property(e => e.FunctionCallId)
+                .HasMaxLength(100)
+                .HasColumnName("function_call_id");
+            entity.Property(e => e.FunctionName)
+                .HasMaxLength(100)
+                .HasColumnName("function_name");
+            entity.Property(e => e.Role)
+                .HasMaxLength(30)
+                .HasColumnName("role");
+            entity.Property(e => e.SessionId)
+                .HasMaxLength(100)
+                .HasColumnName("session_id");
+
+            entity.HasOne(d => d.Session).WithMany(p => p.ChatMessage)
+                .HasForeignKey(d => d.SessionId)
+                .HasConstraintName("fk_chat_message_session");
         });
 
         modelBuilder.Entity<ChatRoom>(entity =>
@@ -511,6 +558,9 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.ProductId)
                 .HasMaxLength(100)
                 .HasColumnName("product_id");
+            entity.Property(e => e.RoomType)
+                .HasMaxLength(30)
+                .HasColumnName("room_type");
             entity.Property(e => e.SellerId)
                 .HasMaxLength(100)
                 .HasColumnName("seller_id");
@@ -529,6 +579,40 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.Seller).WithMany(p => p.ChatRoomSeller)
                 .HasForeignKey(d => d.SellerId)
                 .HasConstraintName("fk_cr_seller");
+        });
+
+        modelBuilder.Entity<ChatSession>(entity =>
+        {
+            entity.HasKey(e => e.SessionId).HasName("chat_session_pkey");
+
+            entity.ToTable("chat_session");
+
+            entity.HasIndex(e => e.UserId, "idx_chat_session_user_id");
+
+            entity.HasIndex(e => e.IsActive, "idx_chat_session_is_active");
+
+            entity.Property(e => e.SessionId)
+                .HasMaxLength(100)
+                .HasColumnName("session_id");
+            entity.Property(e => e.IsActive)
+                .HasDefaultValue(true)
+                .HasColumnName("is_active");
+            entity.Property(e => e.LastMessageAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("last_message_at");
+            entity.Property(e => e.StartedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("started_at");
+            entity.Property(e => e.Title)
+                .HasMaxLength(255)
+                .HasColumnName("title");
+            entity.Property(e => e.UserId)
+                .HasMaxLength(100)
+                .HasColumnName("user_id");
+
+            entity.HasOne(d => d.User).WithMany()
+                .HasForeignKey(d => d.UserId)
+                .HasConstraintName("fk_chat_session_user");
         });
 
         modelBuilder.Entity<Image>(entity =>

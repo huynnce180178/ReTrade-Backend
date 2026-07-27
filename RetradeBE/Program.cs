@@ -5,6 +5,7 @@ using RetradeBE.Repositories;
 using RetradeBE.Services;
 using RetradeBE.Services.BackgroundJobs;
 using System.Reflection;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -25,12 +26,20 @@ namespace RetradeBE
             AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
             var builder = WebApplication.CreateBuilder(args);
+            builder.Logging.ClearProviders();
+            builder.Logging.AddConsole();
+            builder.Logging.AddDebug();
 
             builder.Services.Configure<RetradeBE.Config.EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
             builder.Services.Configure<RetradeBE.Config.CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
             builder.Services.Configure<RetradeBE.Config.GoogleSettings>(builder.Configuration.GetSection("GoogleSettings"));
             builder.Services.Configure<RetradeBE.Config.VnPaySettings>(builder.Configuration.GetSection("VNPAY"));
             builder.Services.Configure<RetradeBE.Config.GhnSettings>(builder.Configuration.GetSection("GHN"));
+            builder.Services.Configure<RetradeBE.Config.GeminiSettings>(builder.Configuration.GetSection("Gemini"));
+
+            builder.Services.AddDataProtection()
+                .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "DataProtectionKeys")))
+                .SetApplicationName("ReTrade");
 
             builder.Services.AddHttpClient();
             builder.Services.AddSignalR();

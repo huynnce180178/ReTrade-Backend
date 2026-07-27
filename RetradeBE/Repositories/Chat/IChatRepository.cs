@@ -7,11 +7,12 @@ namespace RetradeBE.Repositories
     {
         Task<ChatRoom?> GetRoomByIdAsync(string roomId);
         Task<ChatRoom?> GetRoomByProductAndBuyerAsync(string productId, string buyerId);
-        Task<ChatRoom?> GetDirectRoomAsync(string sellerId, string buyerId);
-        Task<ChatRoom?> GetRoomByBuyerAndSellerAsync(string buyerId, string sellerId);
+        Task<ChatRoom?> GetBusinessRoomAsync(string sellerId, string buyerId);
         Task<ChatRoom> CreateRoomAsync(ChatRoom room);
         Task<Chat> AddMessageAsync(Chat chat);
-        Task<List<Chat>> GetMessagesByRoomIdAsync(string roomId, int page, int limit);
+        Task<Chat?> GetMessageByIdAsync(string messageId);
+        Task<Chat> UpdateMessageAsync(Chat chat);
+        Task<List<Chat>> GetMessagesByRoomIdAsync(string roomId, string userId, int page, int limit);
         Task<List<ChatRoomListDto>> GetRoomsForUserAsync(string userId, bool isAdmin);
         Task<int> MarkMessagesAsReadAsync(string roomId, string userId);
     }

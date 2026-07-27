@@ -13,6 +13,8 @@ public partial class ChatRoom
 
     public string? ProductId { get; set; }
 
+    public string? RoomType { get; set; }
+
     public DateTime? CreatedAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }

@@ -30,7 +30,10 @@ namespace RetradeBE.Models.DTOs
         public string? Message { get; set; }
         public string? MessageType { get; set; }
         public bool IsRead { get; set; }
+        public bool IsRecalled { get; set; }
+        public bool CanRecall { get; set; }
         public DateTime? ReadAt { get; set; }
+        public DateTime? RecalledAt { get; set; }
         public DateTime? CreatedAt { get; set; }
     }
 
@@ -40,8 +43,10 @@ namespace RetradeBE.Models.DTOs
         public string? BuyerId { get; set; }
         public string? SellerId { get; set; }
         public string? ProductId { get; set; }
+        public string? RoomType { get; set; }
         public string? ProductName { get; set; }
         public string? ProductImageUrl { get; set; }
+        public decimal? ProductPrice { get; set; }
         public ChatParticipantDto? Buyer { get; set; }
         public ChatParticipantDto? Seller { get; set; }
         public ChatParticipantDto? OtherParticipant { get; set; }

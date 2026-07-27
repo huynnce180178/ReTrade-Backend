@@ -37,7 +37,14 @@ namespace RetradeBE.Services.BackgroundJobs
                     _logger.LogError(ex, "Failed to process due auctions.");
                 }
 
-                await Task.Delay(PollInterval, stoppingToken);
+                try
+                {
+                    await Task.Delay(PollInterval, stoppingToken);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
             }
         }
     }
