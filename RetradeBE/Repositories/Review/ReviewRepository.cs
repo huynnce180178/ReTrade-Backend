@@ -42,6 +42,9 @@ namespace RetradeBE.Repositories
                 .Include(review => review.Order)
                 .FirstOrDefaultAsync(review => review.ReviewId == reviewId);
         }
+        public Task<Report?> GetReportByReporterAsync(string reviewId, string reporterId) => _context.Report
+            .AsNoTracking()
+            .FirstOrDefaultAsync(report => report.TargetId == reviewId && report.ReporterId == reporterId);
 
         public async Task AddAsync(Review review)
         {
