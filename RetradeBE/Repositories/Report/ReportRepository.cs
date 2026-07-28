@@ -17,8 +17,8 @@ namespace RetradeBE.Repositories
         {
             return _context.Report
                 .AsNoTracking()
-<<<<<<< HEAD
-                .Include(report => report.Reporter);
+                .Include(report => report.Reporter)
+                .OrderByDescending(report => report.CreatedAt);
         }
 
         public async Task<Report?> GetReportByReporterAsync(string reviewId, string reporterId)
@@ -29,9 +29,6 @@ namespace RetradeBE.Repositories
                     report.TargetType == "Review" &&
                     report.TargetId == reviewId &&
                     report.ReporterId == reporterId);
-=======
-                .Include(report => report.Reporter)
-                .OrderByDescending(report => report.CreatedAt);
         }
 
         public async Task<Report?> GetByIdAsync(string reportId)
@@ -127,7 +124,6 @@ namespace RetradeBE.Repositories
         {
             await _context.Report.AddAsync(report);
             await _context.SaveChangesAsync();
->>>>>>> df66243 (feature report)
         }
 
         public async Task UpdateAsync(Report report)

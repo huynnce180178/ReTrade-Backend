@@ -28,6 +28,22 @@ namespace RetradeBE.Services
             _accountRepository = accountRepository;
         }
 
+        public Task<Review?> GetByIdForReportAsync(string reviewId) =>
+            _reviewRepository.GetByIdForReportAsync(reviewId);
+
+        public async Task HideForReportAsync(string reviewId, DateTime updatedAt)
+        {
+            var review = await _reviewRepository.GetByIdForReportAsync(reviewId);
+            if (review == null)
+            {
+                return;
+            }
+
+            review.IsDeleted = true;
+            review.UpdatedAt = updatedAt;
+            await _reviewRepository.UpdateAsync(review);
+        }
+
         public async Task<ReviewResponseDto?> GetByBuyerOrderAsync(string accountId, string buyerId, string orderId, bool isAdmin)
         {
             if (string.IsNullOrWhiteSpace(buyerId) || string.IsNullOrWhiteSpace(orderId))
@@ -163,11 +179,7 @@ namespace RetradeBE.Services
                 throw new InvalidOperationException("Review can only be submitted after the order is completed.");
             }
 
-<<<<<<< HEAD
             var existingReview = await _reviewRepository.GetByBuyerOrderAsync(authenticatedBuyerId, request.OrderId);
-=======
-            var existingReview = await _reviewRepository.GetByBuyerOrderAsync(buyerId, request.OrderId);
->>>>>>> df66243 (feature report)
             if (existingReview != null)
             {
                 throw new InvalidOperationException("You have already reviewed this order.");
@@ -186,12 +198,8 @@ namespace RetradeBE.Services
             };
 
             await _reviewRepository.AddAsync(review);
-<<<<<<< HEAD
             review.Order = order;
             return MapReview(review, new List<Report>(), authenticatedBuyerId, includeReports: false, includeReviewerPrivateInfo: true);
-=======
-            return _mapper.Map<ReviewResponseDto>(review);
->>>>>>> df66243 (feature report)
         }
 
         public async Task<ReportDto> ReportReviewAsync(string accountId, string reviewId, ReportCreateDto request, bool isAdmin)
@@ -224,7 +232,7 @@ namespace RetradeBE.Services
                 throw new UnauthorizedAccessException("You can only report reviews for your own store.");
             }
 
-            var existingReport = await _reviewRepository.GetReportByReporterAsync(reviewId, reporterId);
+            var existingReport = await _reportRepository.GetReportByReporterAsync(reviewId, reporterId);
             if (existingReport != null)
             {
                 throw new InvalidOperationException("You have already reported this review.");
@@ -243,8 +251,8 @@ namespace RetradeBE.Services
                 UpdatedAt = now
             };
 
-            await _reviewRepository.AddReportAsync(report);
-            return _mapper.Map<ReportDto>(report);
+            await _reportRepository.AddAsync(report);
+            return MapReport(report);
         }
 
         private IQueryable<Review> GetSellerReviewsQuery(string sellerId)
@@ -431,7 +439,6 @@ namespace RetradeBE.Services
             };
         }
 
-<<<<<<< HEAD
         private static ReportDto MapReport(Report report)
         {
             return new ReportDto
@@ -448,9 +455,6 @@ namespace RetradeBE.Services
                 UpdatedAt = report.UpdatedAt
             };
         }
-
-=======
->>>>>>> df66243 (feature report)
         private static string? FormatUserName(User? user)
         {
             if (user == null) return null;
