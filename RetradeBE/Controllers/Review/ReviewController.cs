@@ -34,6 +34,20 @@ namespace RetradeBE.Controllers.Review
             return Ok(await _reviewService.GetSellerReviewsAsync(accountId, query));
         }
 
+        [AllowAnonymous]
+        [HttpGet("seller/{sellerId}")]
+        public async Task<IActionResult> GetPublicSellerReviews(string sellerId, [FromQuery] ReviewQueryDto query)
+        {
+            return Ok(await _reviewService.GetPublicSellerReviewsAsync(sellerId, query));
+        }
+
+        [AllowAnonymous]
+        [HttpGet("seller/{sellerId}/summary")]
+        public async Task<IActionResult> GetPublicSellerReviewSummary(string sellerId)
+        {
+            return Ok(await _reviewService.GetPublicSellerReviewSummaryAsync(sellerId));
+        }
+
         [HttpGet("seller/summary")]
         [Authorize(Roles = $"{nameof(RoleEnum.Seller)},{nameof(RoleEnum.Admin)}")]
         public async Task<IActionResult> GetSellerReviewSummary([FromQuery] ReviewQueryDto query)
@@ -66,21 +80,42 @@ namespace RetradeBE.Controllers.Review
         [HttpGet("buyer/{buyerId}/order/{orderId}")]
         public async Task<IActionResult> GetReviewByBuyerAndOrder(string buyerId, string orderId)
         {
-            var review = await _reviewService.GetByBuyerOrderAsync(buyerId, orderId);
-            if (review == null) return NotFound("Review not found.");
+            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(accountId)) return Unauthorized();
 
-            return Ok(review);
+            try
+            {
+                var review = await _reviewService.GetByBuyerOrderAsync(
+                    accountId,
+                    buyerId,
+                    orderId,
+                    User.IsInRole(nameof(RoleEnum.Admin)));
+                if (review == null) return NotFound("Review not found.");
+
+                return Ok(review);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return StatusCode(403, ex.Message);
+            }
         }
 
         [HttpPost("buyer/{buyerId}")]
         public async Task<IActionResult> CreateReview(string buyerId, [FromBody] ReviewCreateDto request)
         {
+            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(accountId)) return Unauthorized();
+
             try
             {
-                var review = await _reviewService.CreateAsync(buyerId, request);
+                var review = await _reviewService.CreateAsync(accountId, buyerId, request);
                 if (review == null) return NotFound("Order not found.");
 
-                return CreatedAtAction(nameof(GetReviewByBuyerAndOrder), new { buyerId, orderId = request.OrderId }, review);
+                return CreatedAtAction(nameof(GetReviewByBuyerAndOrder), new { buyerId = review.ReviewerId, orderId = request.OrderId }, review);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return StatusCode(403, ex.Message);
             }
             catch (InvalidOperationException ex)
             {

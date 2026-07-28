@@ -50,9 +50,11 @@ namespace RetradeBE.Models.DTOs
     public class ReviewResponseDto
     {
         public string ReviewId { get; set; } = null!;
+        public string TargetType { get; set; } = "Review";
         public string? ReviewerId { get; set; }
         public string? ReviewerName { get; set; }
         public string? ReviewerEmail { get; set; }
+        public string? ReviewerAvatarUrl { get; set; }
         public string? SellerId { get; set; }
         public string? SellerName { get; set; }
         public string? OrderId { get; set; }
@@ -66,6 +68,9 @@ namespace RetradeBE.Models.DTOs
         public DateTime? UpdatedAt { get; set; }
         public int ReportCount { get; set; }
         public bool ReportedByCurrentUser { get; set; }
+        public string? LatestReportStatus { get; set; }
+        public string? LatestReportReason { get; set; }
+        public DateTime? LatestReportCreatedAt { get; set; }
         public ReportDto? CurrentUserReport { get; set; }
         public List<ReportDto> Reports { get; set; } = new();
     }
