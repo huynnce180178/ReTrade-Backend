@@ -924,16 +924,6 @@ namespace RetradeBE.Migrations
                 });
 
             migrationBuilder.InsertData(
-                table: "User",
-                columns: new[] { "user_id", "avatar_url", "created_at", "email", "first_name", "is_deleted", "last_name", "phone", "updated_at" },
-                values: new object[,]
-                {
-                    { "USER_ADMIN", null, null, "admin@retrade.com", "Admin", null, "System", null, null },
-                    { "USER_BUYER", null, null, "buyer@retrade.com", "Demo", null, "Buyer", null, null },
-                    { "USER_SELLER", null, null, "seller@retrade.com", "Demo", null, "Seller", null, null }
-                });
-
-            migrationBuilder.InsertData(
                 table: "role",
                 columns: new[] { "role_id", "name" },
                 values: new object[,]
@@ -941,26 +931,6 @@ namespace RetradeBE.Migrations
                     { 1, "Admin" },
                     { 2, "Buyer" },
                     { 3, "Seller" }
-                });
-
-            migrationBuilder.InsertData(
-                table: "account",
-                columns: new[] { "account_id", "created_at", "is_deleted", "last_login_at", "password_hash", "provider", "provider_user_id", "status", "updated_at", "user_id", "username" },
-                values: new object[,]
-                {
-                    { "ACC_ADMIN", null, null, null, "$2a$11$D8rpGqj4uPb34Kf9BhHud.b5wrpHqo25Om7dHv5MSJCyc7D8A8iuO", "LOCAL", null, "Active", null, "USER_ADMIN", "admin" },
-                    { "ACC_BUYER", null, null, null, "$2a$11$EvX6TGoRi2u0C9KWIRwDguqF4ci/fYcPT.6Wdced7L57NQ6g59OC6", "LOCAL", null, "Active", null, "USER_BUYER", "buyer" },
-                    { "ACC_SELLER", null, null, null, "$2a$11$FxpVyrvrrOXIGWFyR2clfOrXx58Pp87rkmST//6jwUM3lD3xP0bnO", "LOCAL", null, "Active", null, "USER_SELLER", "seller" }
-                });
-
-            migrationBuilder.InsertData(
-                table: "account_role",
-                columns: new[] { "account_id", "role_id", "created_at" },
-                values: new object[,]
-                {
-                    { "ACC_ADMIN", 1, null },
-                    { "ACC_BUYER", 2, null },
-                    { "ACC_SELLER", 3, null }
                 });
 
             migrationBuilder.CreateIndex(

@@ -27,7 +27,6 @@ namespace RetradeBE.Services
         public IQueryable<ProductListDto> Query()
         {
             return _repository.Query()
-                .Where(p => p.IsDeleted != true)
                 .Select(p => new ProductListDto
                 {
                     ProductId = p.ProductId,
@@ -41,7 +40,8 @@ namespace RetradeBE.Services
                     SellerId = p.SellerId,
                     SellerName = p.Seller != null ? (p.Seller.FirstName + " " + p.Seller.LastName).Trim() : null,
                     MainImageUrl = p.ProductImage.Where(pi => pi.IsMain == true).Select(pi => pi.Image.ImageUrl).FirstOrDefault()
-                                   ?? p.ProductImage.OrderBy(pi => pi.SortOrder).Select(pi => pi.Image.ImageUrl).FirstOrDefault()
+                                   ?? p.ProductImage.OrderBy(pi => pi.SortOrder).Select(pi => pi.Image.ImageUrl).FirstOrDefault(),
+                    IsDeleted = p.IsDeleted
                 });
         }
 
@@ -91,7 +91,8 @@ namespace RetradeBE.Services
                     SellerId = p.SellerId,
                     SellerName = p.Seller != null ? (p.Seller.FirstName + " " + p.Seller.LastName).Trim() : null,
                     MainImageUrl = p.ProductImage.Where(pi => pi.IsMain == true).Select(pi => pi.Image.ImageUrl).FirstOrDefault()
-                                   ?? p.ProductImage.OrderBy(pi => pi.SortOrder).Select(pi => pi.Image.ImageUrl).FirstOrDefault()
+                                   ?? p.ProductImage.OrderBy(pi => pi.SortOrder).Select(pi => pi.Image.ImageUrl).FirstOrDefault(),
+                    IsDeleted = p.IsDeleted
                 })
                 .ToListAsync();
 
@@ -133,6 +134,7 @@ namespace RetradeBE.Services
                 Status = product.Status,
                 CreatedAt = product.CreatedAt,
                 UpdatedAt = product.UpdatedAt,
+                IsDeleted = product.IsDeleted,
                 Images = product.ProductImage.Select(pi => new ProductImageDto
                 {
                     ImageId = pi.ImageId,

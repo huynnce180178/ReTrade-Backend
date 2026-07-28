@@ -1,6 +1,5 @@
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
-using Microsoft.EntityFrameworkCore;
 using RetradeBE.Models;
 using RetradeBE.Models.DTOs;
 using RetradeBE.Repositories;
@@ -18,28 +17,28 @@ namespace RetradeBE.Services
         private const string CompletedStatus = "Completed";
 
         private readonly IReportRepository _reportRepository;
-        private readonly IOrderRepository _orderRepository;
-        private readonly IAccountRepository _accountRepository;
-        private readonly IUserRepository _userRepository;
-        private readonly IProductRepository _productRepository;
+        private readonly IOrderService _orderService;
         private readonly IAccountService _accountService;
+        private readonly IUserService _userService;
+        private readonly IProductService _productService;
+        private readonly IReviewService _reviewService;
         private readonly IMapper _mapper;
 
         public ReportService(
             IReportRepository reportRepository,
-            IOrderRepository orderRepository,
-            IAccountRepository accountRepository,
-            IUserRepository userRepository,
-            IProductRepository productRepository,
+            IOrderService orderService,
             IAccountService accountService,
+            IUserService userService,
+            IProductService productService,
+            IReviewService reviewService,
             IMapper mapper)
         {
             _reportRepository = reportRepository;
-            _orderRepository = orderRepository;
-            _accountRepository = accountRepository;
-            _userRepository = userRepository;
-            _productRepository = productRepository;
+            _orderService = orderService;
             _accountService = accountService;
+            _userService = userService;
+            _productService = productService;
+            _reviewService = reviewService;
             _mapper = mapper;
         }
 
@@ -61,7 +60,7 @@ namespace RetradeBE.Services
                 throw new InvalidOperationException("Report reason is required.");
             }
 
-            var review = await _reportRepository.GetReviewByIdAsync(reviewId);
+            var review = await _reviewService.GetByIdForReportAsync(reviewId);
             if (review == null)
             {
                 throw new KeyNotFoundException("Review not found.");
@@ -79,7 +78,7 @@ namespace RetradeBE.Services
 
             var report = new Report
             {
-                ReportId = Guid.NewGuid().ToString("N"),
+                ReportId = RetradeBE.Utils.IdGenerator.GenerateReportId(ReviewTargetType),
                 ReporterId = reporterId,
                 TargetType = ReviewTargetType,
                 TargetId = review.ReviewId,
@@ -112,7 +111,7 @@ namespace RetradeBE.Services
                 throw new InvalidOperationException("Report reason is required.");
             }
 
-            var order = await _orderRepository.GetByIdAsync(orderId);
+            var order = await _orderService.GetByIdAsync(orderId);
             if (order == null)
             {
                 throw new KeyNotFoundException("Order not found.");
@@ -133,7 +132,7 @@ namespace RetradeBE.Services
                 throw new UnauthorizedAccessException("Only the seller of the order can report the buyer.");
             }
 
-            var buyer = await _userRepository.GetByIdAsync(order.BuyerId);
+            var buyer = await _userService.GetByIdAsync(order.BuyerId);
             if (buyer == null)
             {
                 throw new KeyNotFoundException("Buyer not found.");
@@ -146,7 +145,7 @@ namespace RetradeBE.Services
 
             var report = new Report
             {
-                ReportId = Guid.NewGuid().ToString("N"),
+                ReportId = RetradeBE.Utils.IdGenerator.GenerateReportId(BuyerTargetType),
                 ReporterId = reporterId,
                 TargetType = BuyerTargetType,
                 TargetId = order.OrderId,
@@ -179,7 +178,7 @@ namespace RetradeBE.Services
                 throw new InvalidOperationException("Report reason is required.");
             }
 
-            var order = await _orderRepository.GetByIdAsync(orderId);
+            var order = await _orderService.GetByIdAsync(orderId);
             if (order == null)
             {
                 throw new KeyNotFoundException("Order not found.");
@@ -200,7 +199,7 @@ namespace RetradeBE.Services
                 throw new UnauthorizedAccessException("Only the buyer of the order can report the seller.");
             }
 
-            var seller = await _userRepository.GetByIdAsync(order.SellerId);
+            var seller = await _userService.GetByIdAsync(order.SellerId);
             if (seller == null)
             {
                 throw new KeyNotFoundException("Seller not found.");
@@ -213,7 +212,7 @@ namespace RetradeBE.Services
 
             var report = new Report
             {
-                ReportId = Guid.NewGuid().ToString("N"),
+                ReportId = RetradeBE.Utils.IdGenerator.GenerateReportId(SellerTargetType),
                 ReporterId = reporterId,
                 TargetType = SellerTargetType,
                 TargetId = order.OrderId,
@@ -246,25 +245,25 @@ namespace RetradeBE.Services
 
             if (string.Equals(report.TargetType, ReviewTargetType, StringComparison.OrdinalIgnoreCase))
             {
-                var review = await _reportRepository.GetReviewByIdAsync(report.TargetId);
+                var review = await _reviewService.GetByIdForReportAsync(report.TargetId);
                 detail.Review = review == null ? null : _mapper.Map<ReportReviewDetailDto>(review);
             }
             else if (string.Equals(report.TargetType, BuyerTargetType, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(report.TargetType, SellerTargetType, StringComparison.OrdinalIgnoreCase))
             {
-                var order = await _orderRepository.GetByIdAsync(report.TargetId);
+                var order = await _orderService.GetByIdAsync(report.TargetId);
                 if (order != null)
                 {
                     detail.Order = _mapper.Map<ReportOrderDetailDto>(order);
 
                     if (string.Equals(report.TargetType, BuyerTargetType, StringComparison.OrdinalIgnoreCase))
                     {
-                        var buyer = order.BuyerId == null ? null : await _userRepository.GetByIdAsync(order.BuyerId);
+                        var buyer = order.BuyerId == null ? null : await _userService.GetByIdAsync(order.BuyerId);
                         detail.Buyer = buyer == null ? null : _mapper.Map<ReportUserDetailDto>(buyer);
                     }
                     else
                     {
-                        var seller = order.SellerId == null ? null : await _userRepository.GetByIdAsync(order.SellerId);
+                        var seller = order.SellerId == null ? null : await _userService.GetByIdAsync(order.SellerId);
                         detail.Seller = seller == null ? null : _mapper.Map<ReportUserDetailDto>(seller);
                     }
                 }
@@ -303,13 +302,7 @@ namespace RetradeBE.Services
                 report.ReviewedAt = now;
                 report.UpdatedAt = now;
 
-                var review = await _reportRepository.GetReviewByIdAsync(report.TargetId);
-                if (review != null)
-                {
-                    review.IsDeleted = true;
-                    review.UpdatedAt = now;
-                    await _reportRepository.UpdateReviewAsync(review);
-                }
+                await _reviewService.HideForReportAsync(report.TargetId, now);
 
                 await _reportRepository.UpdateAsync(report);
                 return _mapper.Map<ReportDto>(report);
@@ -321,19 +314,32 @@ namespace RetradeBE.Services
                 report.ReviewedAt = now;
                 report.UpdatedAt = now;
 
-                var order = await _orderRepository.GetByIdAsync(report.TargetId);
+                var order = await _orderService.GetByIdAsync(report.TargetId);
                 if (order != null && !string.IsNullOrWhiteSpace(order.BuyerId))
                 {
-                    var buyer = await _userRepository.GetByIdAsync(order.BuyerId);
+                    var buyer = await _userService.GetByIdAsync(order.BuyerId);
                     if (buyer != null)
                     {
                         buyer.FlagCount = (buyer.FlagCount ?? 0) + 1;
                         buyer.UpdatedAt = now;
-                        await _userRepository.UpdateAsync(buyer);
+                        await _userService.UpdateAsync(buyer);
 
                         if ((buyer.FlagCount ?? 0) >= 2)
                         {
-                            await ApplyUserBanAndHideAsync(buyer.UserId, now);
+                            var account = await _accountService.GetByUserIdAsync(buyer.UserId);
+                            if (account != null)
+                            {
+                                if (account.Status != RetradeBE.Models.Enums.AccountStatusEnum.Ban.ToString())
+                                {
+                                    await _accountService.BanUserAsync(account.AccountId);
+                                }
+                            }
+
+                            buyer.IsDeleted = true;
+                            buyer.UpdatedAt = now;
+
+                            await _userService.UpdateAsync(buyer);
+                            await _productService.HideProductsBySellerAsync(buyer.UserId, now);
                         }
                     }
                 }
@@ -348,13 +354,29 @@ namespace RetradeBE.Services
                 report.ReviewedAt = now;
                 report.UpdatedAt = now;
 
-                var order = await _orderRepository.GetByIdAsync(report.TargetId);
+                var order = await _orderService.GetByIdAsync(report.TargetId);
                 if (order != null && !string.IsNullOrWhiteSpace(order.SellerId))
                 {
-                    var seller = await _userRepository.GetByIdAsync(order.SellerId);
+                    var seller = await _userService.GetByIdAsync(order.SellerId);
                     if (seller != null)
                     {
-                        await ApplyUserBanAndHideAsync(seller.UserId, now);
+                      
+                        
+
+            var account = await _accountService.GetByUserIdAsync(seller.UserId);
+            if (account != null)
+            {
+                if (account.Status != RetradeBE.Models.Enums.AccountStatusEnum.Ban.ToString())
+                {
+                    await _accountService.BanUserAsync(account.AccountId);
+                }
+            }
+
+            seller.IsDeleted = true;
+            seller.UpdatedAt = now;
+            
+            await _userService.UpdateAsync(seller);
+            await _productService.HideProductsBySellerAsync(seller.UserId, now);
                     }
                 }
 
@@ -367,7 +389,7 @@ namespace RetradeBE.Services
 
         public async Task<IReadOnlyList<FlaggedUserDto>> GetFlaggedUsersAsync()
         {
-            var users = await _userRepository.GetAllAsync();
+            var users = await _userService.GetAllAsync();
             var flaggedUsers = users
                 .Where(user => (user.FlagCount ?? 0) > 0)
                 .OrderByDescending(user => user.FlagCount)
@@ -403,40 +425,6 @@ namespace RetradeBE.Services
                 ReportsReceived = _mapper.Map<List<ReportListDto>>(received)
             };
         }
-
-        private async Task ApplyUserBanAndHideAsync(string userId, DateTime now)
-        {
-            var user = await _userRepository.GetByIdAsync(userId);
-            if (user == null)
-            {
-                return;
-            }
-
-            var account = await _accountRepository.GetByIdAsync(user.UserId);
-            if (account != null)
-            {
-                await _accountService.BanUserAsync(account.AccountId);
-                account.IsDeleted = true;
-                account.UpdatedAt = now;
-                await _accountRepository.UpdateAsync(account);
-            }
-
-            user.IsDeleted = true;
-            user.UpdatedAt = now;
-            await _userRepository.UpdateAsync(user);
-
-            var products = await _productRepository.Query()
-                .Where(product => product.SellerId == userId)
-                .ToListAsync();
-
-            foreach (var product in products)
-            {
-                product.IsDeleted = true;
-                product.UpdatedAt = now;
-                await _productRepository.UpdateAsync(product);
-            }
-        }
-
         private async Task<string?> ResolveUserIdAsync(string accountId)
         {
             if (string.IsNullOrWhiteSpace(accountId))
@@ -444,7 +432,7 @@ namespace RetradeBE.Services
                 return null;
             }
 
-            var account = await _accountRepository.GetByIdAsync(accountId);
+            var account = await _accountService.GetByIdAsync(accountId);
             return account?.UserId;
         }
 

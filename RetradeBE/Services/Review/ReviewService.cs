@@ -28,6 +28,22 @@ namespace RetradeBE.Services
             _mapper = mapper;
         }
 
+        public Task<Review?> GetByIdForReportAsync(string reviewId) =>
+            _reviewRepository.GetByIdForReportAsync(reviewId);
+
+        public async Task HideForReportAsync(string reviewId, DateTime updatedAt)
+        {
+            var review = await _reviewRepository.GetByIdForReportAsync(reviewId);
+            if (review == null)
+            {
+                return;
+            }
+
+            review.IsDeleted = true;
+            review.UpdatedAt = updatedAt;
+            await _reviewRepository.UpdateAsync(review);
+        }
+
         public async Task<ReviewResponseDto?> GetByBuyerOrderAsync(string buyerId, string orderId)
         {
             if (string.IsNullOrWhiteSpace(buyerId) || string.IsNullOrWhiteSpace(orderId))
@@ -177,7 +193,7 @@ namespace RetradeBE.Services
             var now = DateTime.UtcNow;
             var report = new Report
             {
-                ReportId = Guid.NewGuid().ToString("N"),
+                ReportId = RetradeBE.Utils.IdGenerator.GenerateReportId("Review"),
                 TargetId = review.ReviewId, TargetType = "Review",
                 ReporterId = reporterId,
                 Reason = request.Reason.Trim(),

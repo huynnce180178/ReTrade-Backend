@@ -36,6 +36,12 @@ namespace RetradeBE.Repositories
             await _context.SaveChangesAsync();
         }
 
+        public async Task UpdateAsync(Review review)
+        {
+            _context.Review.Update(review);
+            await _context.SaveChangesAsync();
+        }
+
         public async Task AddReportAsync(Report report)
         {
             await _context.Report.AddAsync(report);

@@ -39,16 +39,6 @@ namespace RetradeBE.Repositories
                     report.TargetType == targetType);
         }
 
-        public async Task<Review?> GetReviewByIdAsync(string reviewId)
-        {
-            return await _context.Review
-                .AsNoTracking()
-                .Include(review => review.Order)
-                .Include(review => review.Reviewer)
-                .Include(review => review.Seller)
-                .FirstOrDefaultAsync(review => review.ReviewId == reviewId);
-        }
-
         public async Task<List<Report>> GetReportsByReporterAsync(string reporterId)
         {
             return await _context.Report
@@ -63,12 +53,12 @@ namespace RetradeBE.Repositories
         {
             var reviewReports = await _context.Report
                 .AsNoTracking()
-                .Where(report => report.TargetType == "review")
+                .Where(report => report.TargetType.ToLower() == "review")
                 .Join(_context.Review.AsNoTracking(),
                     report => report.TargetId,
                     review => review.ReviewId,
                     (report, review) => new { Report = report, Review = review })
-                .Where(x => x.Review.SellerId == userId || x.Review.ReviewerId == userId)
+                .Where(x => x.Review.ReviewerId == userId) // Chỉ hiển thị cho người viết đánh giá bị báo cáo
                 .Select(x => x.Report)
                 .Include(report => report.Reporter)
                 .OrderByDescending(report => report.CreatedAt)
@@ -76,12 +66,13 @@ namespace RetradeBE.Repositories
 
             var orderReports = await _context.Report
                 .AsNoTracking()
-                .Where(report => report.TargetType == "buyer" || report.TargetType == "seller")
+                .Where(report => report.TargetType.ToLower() == "buyer" || report.TargetType.ToLower() == "seller")
                 .Join(_context.Order.AsNoTracking(),
                     report => report.TargetId,
                     order => order.OrderId,
                     (report, order) => new { Report = report, Order = order })
-                .Where(x => x.Order.BuyerId == userId || x.Order.SellerId == userId)
+                .Where(x => (x.Report.TargetType.ToLower() == "buyer" && x.Order.BuyerId == userId) 
+                         || (x.Report.TargetType.ToLower() == "seller" && x.Order.SellerId == userId)) // Nhận báo cáo đúng đối tượng bị tố cáo
                 .Select(x => x.Report)
                 .Include(report => report.Reporter)
                 .OrderByDescending(report => report.CreatedAt)
@@ -131,11 +122,6 @@ namespace RetradeBE.Repositories
             await _context.SaveChangesAsync();
         }
 
-        public async Task UpdateReviewAsync(Review review)
-        {
-            _context.Review.Update(review);
-            await _context.SaveChangesAsync();
-        }
     }
 }
 
