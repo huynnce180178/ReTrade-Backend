@@ -104,6 +104,7 @@ namespace RetradeBE.Models.DTOs
         public string? SortBy { get; set; }
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 12;
+        public bool? IsPriorityOnly { get; set; }
     }
 
     public class PagedResultDto<T>

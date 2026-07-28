@@ -441,6 +441,12 @@ namespace RetradeBE.Services
 
         private IQueryable<RetradeBE.Models.Auction> ApplyAuctionFilters(IQueryable<RetradeBE.Models.Auction> auctions, AuctionQueryDto query)
         {
+            // Only show auctions with active categories for buyers
+            if (string.IsNullOrEmpty(query.SellerId))
+            {
+                auctions = auctions.Where(a => a.Product != null && a.Product.Category != null && a.Product.Category.Status == "Active");
+            }
+
             if (!string.IsNullOrWhiteSpace(query.SearchTerm))
             {
                 var search = query.SearchTerm.Trim().ToLower();

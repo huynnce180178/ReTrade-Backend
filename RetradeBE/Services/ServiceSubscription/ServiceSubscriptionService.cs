@@ -27,7 +27,7 @@ public class ServiceSubscriptionService : IServiceSubscriptionService
     {
         return await _serviceSubscriptionRepo.Query()
             .AsNoTracking()
-            .OrderByDescending(x => x.ServiceId == "SERVICE_UPGRADE_SELLER")
+            .OrderByDescending(x => x.ServiceId == "SERVICE_UPGRADE_SELLER" || x.ServiceId == "sub_20260701_100001")
             .ThenBy(x => x.Price)
             .Select(x => new ServiceSubscriptionDto
             {

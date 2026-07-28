@@ -44,7 +44,7 @@ public class CategoryService : ICategoryService
 
             if (parent == null)
                 throw new Exception(
-                    $"Parent category '{dto.ParentId}' không tồn tại");
+                    $"Parent category '{dto.ParentId}' does not exist.");
         }
 
         var categoryId = await GenerateCategoryIdAsync(dto.Name);
@@ -104,7 +104,7 @@ public class CategoryService : ICategoryService
 
         if (category == null)
             throw new Exception(
-                $"Category '{categoryId}' không tồn tại");
+                $"Category '{categoryId}' does not exist.");
 
         if (!string.IsNullOrWhiteSpace(dto.ParentId)
             && dto.ParentId != category.ParentId)
@@ -114,7 +114,7 @@ public class CategoryService : ICategoryService
 
             if (parent == null)
                 throw new Exception(
-                    $"Parent category '{dto.ParentId}' không tồn tại");
+                    $"Parent category '{dto.ParentId}' does not exist.");
         }
 
         category.Name = dto.Name ?? category.Name;
@@ -151,6 +151,11 @@ public class CategoryService : ICategoryService
                 var existingAttr = existingAttributes.FirstOrDefault(a => a.AttributeId == incomingAttr.AttributeId);
                 if (existingAttr != null)
                 {
+                    if (!string.Equals(existingAttr.DataType, incomingAttr.DataType, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new Exception($"Changing the data type of the attribute '{existingAttr.Name}' is not allowed. Please delete this attribute and create a new one.");
+                    }
+
                     existingAttr.Name = incomingAttr.Name ?? existingAttr.Name;
                     existingAttr.DataType = incomingAttr.DataType ?? existingAttr.DataType;
                     existingAttr.IsRequired = incomingAttr.IsRequired ?? existingAttr.IsRequired ?? false;
@@ -165,7 +170,7 @@ public class CategoryService : ICategoryService
                 }
                 else
                 {
-                    throw new Exception($"Attribute '{incomingAttr.AttributeId}' không thuộc Category này.");
+                    throw new Exception($"Attribute '{incomingAttr.AttributeId}' does not belong to this category.");
                 }
             }
 
@@ -233,7 +238,7 @@ public class CategoryService : ICategoryService
 
         if (category == null)
             throw new Exception(
-                $"Category '{categoryId}' không tồn tại");
+                $"Category '{categoryId}' does not exist.");
 
         category.Status = "Inactive";
         category.UpdatedAt = DateTime.UtcNow;
@@ -248,7 +253,7 @@ public class CategoryService : ICategoryService
 
         if (category == null)
             throw new Exception(
-                $"Category '{categoryId}' không tồn tại");
+                $"Category '{categoryId}' does not exist.");
 
         category.Status = "Active";
         category.UpdatedAt = DateTime.UtcNow;

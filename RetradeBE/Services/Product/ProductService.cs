@@ -393,6 +393,12 @@ namespace RetradeBE.Services
         {
             var queryable = _repository.Query();
 
+            // Filter out products from inactive categories for buyers
+            if (string.IsNullOrEmpty(query.SellerId))
+            {
+                queryable = queryable.Where(p => p.Category != null && p.Category.Status == "Active");
+            }
+
             // Filter Category and Subcategories
             if (!string.IsNullOrEmpty(query.CategoryId))
             {
@@ -434,6 +440,19 @@ namespace RetradeBE.Services
             if (!string.IsNullOrEmpty(query.SellerId))
             {
                 queryable = queryable.Where(p => p.SellerId == query.SellerId);
+            }
+
+            // Priority Only (Sellers with active priority subscription package)
+            if (query.IsPriorityOnly == true)
+            {
+                var now = DateTime.UtcNow;
+                var activePriorityUserIds = await _context.MyService
+                    .Where(s => s.Status == "Active" && (s.ServiceId == "SERVICE_PRIORITY_LISTING" || s.ServiceId == "sub_20260701_100003") && s.EndDate >= now)
+                    .Select(s => s.UserId)
+                    .Distinct()
+                    .ToListAsync();
+
+                queryable = queryable.Where(p => activePriorityUserIds.Contains(p.SellerId));
             }
 
             // Pagination
