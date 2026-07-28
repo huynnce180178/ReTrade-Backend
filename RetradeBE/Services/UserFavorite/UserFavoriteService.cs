@@ -36,17 +36,19 @@ namespace RetradeBE.Services
 
             var favorites = await _userFavoriteRepository.GetFavoritesByUserIdAsync(userId);
 
-            return favorites.Select(f => new UserFavoriteResponseDto
-            {
-                FavoriteId = f.FavoriteId,
-                CategoryId = f.CategoryId,
-                CategoryName = f.Category?.Name,
-                CategoryImageUrl = f.Category?.CategoryImage
-                    .OrderByDescending(ci => ci.CreatedAt)
-                    .Select(ci => ci.Image?.ImageUrl)
-                    .FirstOrDefault(),
-                CreatedAt = f.CreatedAt
-            }).ToList();
+            return favorites
+                .Where(f => f.Category != null && f.Category.Status == "Active")
+                .Select(f => new UserFavoriteResponseDto
+                {
+                    FavoriteId = f.FavoriteId,
+                    CategoryId = f.CategoryId,
+                    CategoryName = f.Category?.Name,
+                    CategoryImageUrl = f.Category?.CategoryImage
+                        .OrderByDescending(ci => ci.CreatedAt)
+                        .Select(ci => ci.Image?.ImageUrl)
+                        .FirstOrDefault(),
+                    CreatedAt = f.CreatedAt
+                }).ToList();
         }
 
         public async Task<UserFavoriteResponseDto> AddFavoriteAsync(string accountId, UserFavoriteCreateDto dto)

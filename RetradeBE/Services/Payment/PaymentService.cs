@@ -436,7 +436,7 @@ public class PaymentService : IPaymentService
         }
 
         // 3. Gán role Seller nếu là gói nâng cấp
-        if (serviceId == "SERVICE_UPGRADE_SELLER")
+        if (serviceId == "SERVICE_UPGRADE_SELLER" || serviceId == "sub_20260701_100001")
         {
             var targetRoleName = "Seller";
             var targetRole = await _context.Role

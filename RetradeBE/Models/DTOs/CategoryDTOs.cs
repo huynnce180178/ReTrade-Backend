@@ -15,6 +15,7 @@ namespace RetradeBE.Models.DTOs
         public int? DisplayOrder { get; set; }
         public bool? IsFilterable { get; set; }
         public bool? IsSearchable { get; set; }
+        public bool? IsDeleted { get; set; }
     }
 
     /// <summary>

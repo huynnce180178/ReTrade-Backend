@@ -42,6 +42,7 @@ namespace RetradeBE.Repositories
                     .ThenInclude(pi => pi.Image)
                 .Where(p => p.IsDeleted != true
                     && p.Status == "Ready"
+                    && p.Category != null && p.Category.Status == "Active"
                     && !p.Auction.Any(a => openStatuses.Contains(a.Status!) && (a.EndTime == null || a.EndTime > now)));
         }
 

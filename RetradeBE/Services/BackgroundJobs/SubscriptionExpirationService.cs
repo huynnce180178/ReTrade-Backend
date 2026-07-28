@@ -74,7 +74,7 @@ namespace RetradeBE.Services.BackgroundJobs
                 subscription.Status = "Expired";
                 subscription.UpdatedAt = now;
 
-                if (subscription.ServiceId == "SERVICE_UPGRADE_SELLER")
+                if (subscription.ServiceId == "SERVICE_UPGRADE_SELLER" || subscription.ServiceId == "sub_20260701_100001")
                 {
                     // Find the account associated with the user
                     var account = await context.Account
