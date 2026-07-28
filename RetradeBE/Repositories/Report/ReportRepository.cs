@@ -48,7 +48,6 @@ namespace RetradeBE.Repositories
                     report.ReporterId == reporterId &&
                     report.TargetType == targetType);
         }
-
         public async Task<List<Report>> GetReportsByReporterAsync(string reporterId)
         {
             return await _context.Report
