@@ -73,6 +73,7 @@ namespace RetradeBE.Models.DTOs
         public string? Status { get; set; }
         public DateTime? CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
+        public bool? IsDeleted { get; set; }
         public List<ProductImageDto> Images { get; set; } = new List<ProductImageDto>();
         public List<ProductAttributeValueDto> Attributes { get; set; } = new List<ProductAttributeValueDto>();
     }
@@ -90,6 +91,7 @@ namespace RetradeBE.Models.DTOs
         public string? SellerId { get; set; }
         public string? Condition { get; set; }
         public DateTime? CreatedAt { get; set; }
+        public bool? IsDeleted { get; set; }
     }
 
     public class ProductSearchQueryDto

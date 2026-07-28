@@ -9,6 +9,7 @@ namespace RetradeBE.Services
         IQueryable<UserListDto> QueryUserList();
         Task<bool> BanUserAsync(string accountId);
         Task<bool> DeactivateMyAccountAsync(string accountId);
+        Task<Account?> GetByUserIdAsync(string userId);
 
         Task<IEnumerable<Account>> GetAllAsync();
         Task<Account> GetByIdAsync(object id);

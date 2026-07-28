@@ -12,6 +12,7 @@ namespace RetradeBE.Repositories
 =======
         Task<Report?> GetReportByReporterAsync(string reviewId, string reporterId);
         Task AddAsync(Review review);
+        Task UpdateAsync(Review review);
         Task AddReportAsync(Report report);
 >>>>>>> df66243 (feature report)
     }

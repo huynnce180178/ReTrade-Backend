@@ -10,5 +10,6 @@ namespace RetradeBE.Services
         Task<ProductResponseDto?> GetProductByIdAsync(string productId);
         Task<PagedResultDto<ProductListDto>> GetProductsAsync(ProductSearchQueryDto query);
         Task DeleteProductAsync(string productId, string accountId);
+        Task HideProductsBySellerAsync(string sellerId, DateTime updatedAt);
     }
 }

@@ -1,4 +1,5 @@
 using RetradeBE.Models.DTOs;
+using RetradeBE.Models;
 
 namespace RetradeBE.Services
 {

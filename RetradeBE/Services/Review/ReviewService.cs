@@ -13,29 +13,18 @@ namespace RetradeBE.Services
 
         private readonly IOrderRepository _orderRepository;
         private readonly IReviewRepository _reviewRepository;
-<<<<<<< HEAD
         private readonly IReportRepository _reportRepository;
-=======
->>>>>>> df66243 (feature report)
         private readonly IAccountRepository _accountRepository;
 
         public ReviewService(
             IOrderRepository orderRepository,
             IReviewRepository reviewRepository,
-<<<<<<< HEAD
             IReportRepository reportRepository,
             IAccountRepository accountRepository)
         {
             _orderRepository = orderRepository;
             _reviewRepository = reviewRepository;
             _reportRepository = reportRepository;
-=======
-            IAccountRepository accountRepository,
-            IMapper mapper)
-        {
-            _orderRepository = orderRepository;
-            _reviewRepository = reviewRepository;
->>>>>>> df66243 (feature report)
             _accountRepository = accountRepository;
         }
 
@@ -46,7 +35,6 @@ namespace RetradeBE.Services
                 return null;
             }
 
-<<<<<<< HEAD
             var requesterId = await ResolveUserIdAsync(accountId);
             if (string.IsNullOrWhiteSpace(requesterId))
             {
@@ -63,10 +51,6 @@ namespace RetradeBE.Services
             return review == null
                 ? null
                 : MapReview(review, new List<Report>(), requesterId, includeReports: false, includeReviewerPrivateInfo: true);
-=======
-            var review = await _reviewRepository.GetByBuyerOrderAsync(buyerId, orderId);
-            return review == null ? null : _mapper.Map<ReviewResponseDto>(review);
->>>>>>> df66243 (feature report)
         }
 
         public async Task<PagedResultDto<ReviewResponseDto>> GetSellerReviewsAsync(string accountId, ReviewQueryDto query)
@@ -249,7 +233,7 @@ namespace RetradeBE.Services
             var now = DateTime.UtcNow;
             var report = new Report
             {
-                ReportId = Guid.NewGuid().ToString("N"),
+                ReportId = RetradeBE.Utils.IdGenerator.GenerateReportId("Review"),
                 TargetId = review.ReviewId, TargetType = "Review",
                 ReporterId = reporterId,
                 Reason = request.Reason.Trim(),

@@ -60,7 +60,11 @@ namespace RetradeBE.Services
         public async Task<AuctionDetailDto?> GetAuctionByIdAsync(string auctionId)
         {
             var auction = await _auctionRepository.GetByIdAsync(auctionId);
-            return auction == null ? null : MapToDetailDto(auction);
+            if (auction == null || (auction.Product != null && auction.Product.IsDeleted == true))
+            {
+                return null;
+            }
+            return MapToDetailDto(auction);
         }
 
         public async Task<PagedResultDto<ProductListDto>> GetEligibleProductsAsync(string accountId, AuctionQueryDto query)
@@ -441,10 +445,13 @@ namespace RetradeBE.Services
 
         private IQueryable<RetradeBE.Models.Auction> ApplyAuctionFilters(IQueryable<RetradeBE.Models.Auction> auctions, AuctionQueryDto query)
         {
+            // Không hiển thị các phiên đấu giá có sản phẩm đã bị ẩn/xóa
+            auctions = auctions.Where(a => a.Product != null && a.Product.IsDeleted != true);
+
             // Only show auctions with active categories for buyers
             if (string.IsNullOrEmpty(query.SellerId))
             {
-                auctions = auctions.Where(a => a.Product != null && a.Product.Category != null && a.Product.Category.Status == "Active");
+                auctions = auctions.Where(a => a.Product.Category != null && a.Product.Category.Status == "Active");
             }
 
             if (!string.IsNullOrWhiteSpace(query.SearchTerm))

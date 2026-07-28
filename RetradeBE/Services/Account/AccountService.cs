@@ -1,5 +1,6 @@
-﻿using AutoMapper;
+using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -70,8 +71,24 @@ namespace RetradeBE.Services
             account.Status = isCurrentlyInactive
                 ? RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString()
                 : RetradeBE.Models.Enums.AccountStatusEnum.Ban.ToString();
+            
+            // Đồng bộ trạng thái IsDeleted theo trạng thái Ban (ban thì IsDeleted = true, unban thì IsDeleted = false)
+            account.IsDeleted = !isCurrentlyInactive;
+
             account.UpdatedAt = DateTime.UtcNow;
             await _repository.UpdateAsync(account);
+
+            // Đồng bộ trạng thái IsDeleted của User tương ứng
+            if (!string.IsNullOrWhiteSpace(account.UserId))
+            {
+                var user = await _userRepository.GetByIdAsync(account.UserId);
+                if (user != null)
+                {
+                    user.IsDeleted = !isCurrentlyInactive;
+                    user.UpdatedAt = DateTime.UtcNow;
+                    await _userRepository.UpdateAsync(user);
+                }
+            }
 
             if (!isCurrentlyInactive)
             {
@@ -230,8 +247,11 @@ namespace RetradeBE.Services
             }
 
             return true;
+        }        public async Task<Account?> GetByUserIdAsync(string userId)
+        {
+            return await _repository.Query()
+                .FirstOrDefaultAsync(a => a.UserId == userId);
         }
-
 
         public async Task<IEnumerable<Account>> GetAllAsync() => await _repository.GetAllAsync();
         public async Task<Account> GetByIdAsync(object id) => await _repository.GetByIdAsync(id);
