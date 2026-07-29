@@ -18,17 +18,20 @@ namespace RetradeBE.Services
         private readonly IAccountRepository _accountRepository;
         private readonly AppDbContext _context;
         private readonly IMapper _mapper;
+        private readonly INotificationService _notificationService;
 
         public ProductService(
             IProductRepository repository,
             IAccountRepository accountRepository,
             AppDbContext context,
-            IMapper mapper)
+            IMapper mapper,
+            INotificationService notificationService)
         {
             _repository = repository;
             _accountRepository = accountRepository;
             _context = context;
             _mapper = mapper;
+            _notificationService = notificationService;
         }
 
         public async Task<ProductResponseDto> CreateProductAsync(string accountId, ProductCreateDto dto)
@@ -176,6 +179,14 @@ namespace RetradeBE.Services
             }
 
             await _repository.AddAsync(product);
+
+            // Send notification to Admins
+            await _notificationService.NotifyAdminsAsync(
+                "New Product Needs Approval",
+                $"A new product '{product.Name}' is pending your approval.",
+                nameof(NotificationTypeEnum.System),
+                productId
+            );
 
             // Re-fetch to return fully populated object
             var savedProduct = await _repository.GetByIdAsync(productId);

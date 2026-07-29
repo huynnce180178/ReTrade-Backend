@@ -5,7 +5,9 @@ using Microsoft.EntityFrameworkCore;
 using RetradeBE.Data;
 using RetradeBE.Models;
 using RetradeBE.Models.Enums;
+using RetradeBE.Models.DTOs;
 using RetradeBE.Services;
+using RetradeBE.Services.Refund;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -18,56 +20,52 @@ namespace RetradeBE.Controllers.Admin
     public class AdminController : ControllerBase
     {
         private readonly IAccountService _accountService;
-        private readonly AppDbContext _context;
+        private readonly IRefundService _refundService;
 
-        public AdminController(IAccountService accountService, AppDbContext context)
+        public AdminController(IAccountService accountService, IRefundService refundService)
         {
             _accountService = accountService;
-            _context = context;
+            _refundService = refundService;
         }
 
         [HttpGet("refunds")]
         public async Task<IActionResult> GetRefunds()
         {
-            var refunds = await _context.RefundRequest
-                .AsNoTracking()
-                .Include(r => r.User)
-                .OrderByDescending(r => r.RequestedAt)
-                .Select(r => new
-                {
-                    r.RefundRequestId,
-                    r.UserId,
-                    UserName = r.User != null ? (r.User.FirstName + " " + r.User.LastName).Trim() : string.Empty,
-                    UserEmail = r.User != null ? r.User.Email : string.Empty,
-                    r.Amount,
-                    r.Note,
-                    r.Status,
-                    r.RejectReason,
-                    r.RequestedAt,
-                    r.UpdatedAt,
-                    r.BankName,
-                    r.BankAccountNumber,
-                    r.BankAccountHolder
-                })
-                .ToListAsync();
-
+            var refunds = await _refundService.GetAllRefundsAsync();
             return Ok(refunds);
         }
 
         [HttpPost("refunds/{id}/done")]
         public async Task<IActionResult> MarkRefundDone(string id)
         {
-            var refund = await _context.RefundRequest.FindAsync(id);
-            if (refund == null) return NotFound("Refund request not found.");
+            var result = await _refundService.ApproveRefundAsync(id);
+            if (!result.Success)
+            {
+                if (result.Message.Contains("not found"))
+                    return NotFound(result.Message);
+                return BadRequest(result.Message);
+            }
 
-            if (refund.Status != "Pending")
-                return BadRequest("Only pending refund requests can be processed.");
+            return Ok(new { message = result.Message });
+        }
 
-            refund.Status = "Processed";
-            refund.UpdatedAt = DateTime.UtcNow.AddHours(7);
+        [HttpPost("refunds/{id}/reject")]
+        public async Task<IActionResult> RejectRefund(string id, [FromBody] RejectRefundRequestDto dto)
+        {
+            if (dto == null || string.IsNullOrWhiteSpace(dto.Reason))
+            {
+                return BadRequest("Reject reason is required.");
+            }
 
-            await _context.SaveChangesAsync();
-            return Ok(new { message = "Refund marked as processed." });
+            var result = await _refundService.RejectRefundAsync(id, dto);
+            if (!result.Success)
+            {
+                if (result.Message.Contains("not found"))
+                    return NotFound(result.Message);
+                return BadRequest(result.Message);
+            }
+
+            return Ok(new { message = result.Message });
         }
 
         [HttpGet("user-list")]

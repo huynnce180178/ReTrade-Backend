@@ -8,6 +8,7 @@ using RetradeBE.Data;
 using RetradeBE.Hubs;
 using RetradeBE.Models;
 using RetradeBE.Models.DTOs;
+using RetradeBE.Models.Enums;
 using RetradeBE.Services.Ghn;
 
 namespace RetradeBE.Services.Checkout
@@ -17,15 +18,18 @@ namespace RetradeBE.Services.Checkout
         private readonly AppDbContext _context;
         private readonly IGhnService _ghnService;
         private readonly IHubContext<OrderHub> _orderHub;
+        private readonly INotificationService _notificationService;
 
         public CheckoutService(
             AppDbContext context,
             IGhnService ghnService,
-            IHubContext<OrderHub> orderHub)
+            IHubContext<OrderHub> orderHub,
+            INotificationService notificationService)
         {
             _context = context;
             _ghnService = ghnService;
             _orderHub = orderHub;
+            _notificationService = notificationService;
         }
 
         public async Task<CalculateFeeResponseDto> CalculateShippingFeeAsync(CalculateFeeRequestDto request)
@@ -253,8 +257,46 @@ namespace RetradeBE.Services.Checkout
 
             await _context.SaveChangesAsync();
             await NotifySellerOrderChangedAsync(order, "Created");
+            await SendCheckoutNotificationsAsync(order, product);
 
             return order.OrderId;
+        }
+
+        private async Task SendCheckoutNotificationsAsync(Order order, Product product)
+        {
+            var productName = product.Name ?? "an item";
+            var orderCode = order.OrderCode ?? order.OrderId;
+
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(order.SellerId))
+                {
+                    await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                    {
+                        UserId = order.SellerId,
+                        Title = "New Order Received",
+                        Message = $"You have a new order #{orderCode} for \"{productName}\".",
+                        Type = nameof(NotificationTypeEnum.Order),
+                        ReferenceId = order.OrderId
+                    });
+                }
+
+                if (!string.IsNullOrWhiteSpace(order.BuyerId))
+                {
+                    await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                    {
+                        UserId = order.BuyerId,
+                        Title = "Order Placed",
+                        Message = $"Your order #{orderCode} for \"{productName}\" has been placed successfully.",
+                        Type = nameof(NotificationTypeEnum.Order),
+                        ReferenceId = order.OrderId
+                    });
+                }
+            }
+            catch (Exception)
+            {
+                // Notification failures should not break checkout
+            }
         }
 
         private async Task NotifySellerOrderChangedAsync(Order order, string eventType)
