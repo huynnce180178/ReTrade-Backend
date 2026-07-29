@@ -486,3 +486,8 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Local appsettings secrets
+RetradeBE/appsettings.Development.json
+RetradeBE/appsettings.Local.json
+
