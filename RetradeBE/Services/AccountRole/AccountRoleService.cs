@@ -1,4 +1,4 @@
-﻿using RetradeBE.Models.DTOs;
+using RetradeBE.Models.DTOs;
 using RetradeBE.Repositories.AccountRole;
 using RetradeBE.Repositories;
 using AutoMapper;
@@ -23,10 +23,17 @@ namespace RetradeBE.Services.AccountRole
 
         public async Task<ManageRoleDto?> GetManageRolesAsync(string accountId)
         {
+            if (string.IsNullOrWhiteSpace(accountId))
+            {
+                throw new System.Collections.Generic.KeyNotFoundException("Account does not exist.");
+            }
+
             var account = await _accountService.GetByIdAsync(accountId);
 
             if (account == null)
-                return null;
+            {
+                throw new System.Collections.Generic.KeyNotFoundException("Account does not exist.");
+            }
 
             var allRoles = await _repository.GetAllRolesAsync();
             var userRoles = await _repository.GetRolesByAccountIdAsync(accountId);

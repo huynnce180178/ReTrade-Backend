@@ -47,7 +47,7 @@ public class CategoryService : ICategoryService
                     $"Parent category '{dto.ParentId}' does not exist.");
         }
 
-        var categoryId = await GenerateCategoryIdAsync(dto.Name);
+        var categoryId = await GenerateCategoryIdAsync(dto.Name ?? "");
 
         var category = new Category
         {
@@ -203,7 +203,7 @@ public class CategoryService : ICategoryService
 
                 foreach (var newAttr in newAttrs)
                 {
-                    var cleanedName = RetradeBE.Utils.IdGenerator.CleanNameForId(newAttr.Name);
+                    var cleanedName = RetradeBE.Utils.IdGenerator.CleanNameForId(newAttr.Name ?? "");
                     category.Attributes.Add(new Attributes
                     {
                         AttributeId = $"{categoryId}_attr_{cleanedName}_{nextIndex:D3}",
