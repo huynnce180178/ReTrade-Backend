@@ -64,5 +64,22 @@ namespace RetradeBE.Controllers.Notification
 
             return Ok(new { message = "Notification deleted." });
         }
+
+        [HttpPost("test")]
+        public async Task<IActionResult> SendTestNotification([FromQuery] string userId)
+        {
+            if (string.IsNullOrWhiteSpace(userId)) return BadRequest("UserId is required.");
+            
+            var result = await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+            {
+                UserId = userId,
+                Title = "Test Notification for Admin",
+                Message = "This is a test notification to verify the bell dropdown works correctly.",
+                Type = "System",
+                ReferenceId = "test_123"
+            });
+
+            return Ok(result);
+        }
     }
 }

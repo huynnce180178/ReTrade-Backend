@@ -171,6 +171,14 @@ namespace RetradeBE.Services
             var saved = await _auctionRepository.GetByIdAsync(auction.AuctionId);
             var result = MapToDetailDto(saved!);
             await NotifyAuctionChangedAsync(result, "AuctionCreated");
+
+            await _notificationService.NotifyAdminsAsync(
+                "New Auction Created",
+                $"A new auction for product '{product.Name}' is pending approval.",
+                "System",
+                auction.AuctionId
+            );
+
             return result;
         }
 
@@ -773,6 +781,8 @@ namespace RetradeBE.Services
                 .Where(d => d.AuctionId == auction.AuctionId && d.Status == "Paid" && d.UserId != winnerId)
                 .ToListAsync();
 
+            bool hasNewRefund = false;
+
             foreach (var deposit in deposits)
             {
                 var refundAmount = Math.Max(0, (deposit.DepositAmount ?? 0) - MinimumDepositAmount);
@@ -800,7 +810,17 @@ namespace RetradeBE.Services
                     CreatedAt = GetAuctionNow(),
                     UpdatedAt = GetAuctionNow()
                 });
+                hasNewRefund = true;
+            }
 
+            if (hasNewRefund)
+            {
+                await _notificationService.NotifyAdminsAsync(
+                    "New Refund Requests",
+                    $"Refund requests have been generated for auction '{auction.AuctionId}'.",
+                    "Payment",
+                    auction.AuctionId
+                );
             }
         }
 
@@ -830,6 +850,12 @@ namespace RetradeBE.Services
                 UpdatedAt = GetAuctionNow()
             });
 
+            await _notificationService.NotifyAdminsAsync(
+                "New Refund Request",
+                $"A remainder refund request has been generated for auction '{auction.AuctionId}' winner.",
+                "Payment",
+                auction.AuctionId
+            );
         }
 
         private async Task<string?> GetDefaultAddressSnapshotAsync(string userId)

@@ -10,5 +10,6 @@ namespace RetradeBE.Services
         Task MarkAllAsReadAsync(string userId);
         Task<bool> DeleteNotificationAsync(string userId, string notificationId);
         Task<NotificationDto> CreateAndSendAsync(CreateNotificationDto dto);
+        Task NotifyAdminsAsync(string title, string message, string type, string? referenceId = null);
     }
 }

@@ -222,7 +222,10 @@ namespace RetradeBE.Services
                     ReferenceId = product.ProductId
                 });
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[AdminProductService] Error sending notification: {ex}");
+            }
 
             return true;
         }

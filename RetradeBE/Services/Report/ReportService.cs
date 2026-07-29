@@ -94,6 +94,14 @@ namespace RetradeBE.Services
             };
 
             await _reportRepository.AddAsync(report);
+
+            await _notificationService.NotifyAdminsAsync(
+                "New Report Submitted",
+                "A new report is waiting for your review.",
+                "Report",
+                report.ReportId
+            );
+
             return _mapper.Map<ReportDto>(report);
         }
 
@@ -161,6 +169,14 @@ namespace RetradeBE.Services
             };
 
             await _reportRepository.AddAsync(report);
+
+            await _notificationService.NotifyAdminsAsync(
+                "New Report Submitted",
+                "A new report is waiting for your review.",
+                "Report",
+                report.ReportId
+            );
+
             return _mapper.Map<ReportDto>(report);
         }
 
@@ -228,6 +244,14 @@ namespace RetradeBE.Services
             };
 
             await _reportRepository.AddAsync(report);
+
+            await _notificationService.NotifyAdminsAsync(
+                "New Report Submitted",
+                "A new report is waiting for your review.",
+                "Report",
+                report.ReportId
+            );
+
             return _mapper.Map<ReportDto>(report);
         }
 

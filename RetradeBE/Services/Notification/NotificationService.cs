@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using RetradeBE.Data;
 using RetradeBE.Hubs;
 using RetradeBE.Models;
 using RetradeBE.Models.DTOs;
@@ -11,13 +12,16 @@ namespace RetradeBE.Services
     {
         private readonly INotificationRepository _notificationRepository;
         private readonly IHubContext<NotificationHub> _notificationHub;
+        private readonly AppDbContext _context;
 
         public NotificationService(
             INotificationRepository notificationRepository,
-            IHubContext<NotificationHub> notificationHub)
+            IHubContext<NotificationHub> notificationHub,
+            AppDbContext context)
         {
             _notificationRepository = notificationRepository;
             _notificationHub = notificationHub;
+            _context = context;
         }
 
         public async Task<PagedResultDto<NotificationDto>> GetNotificationsAsync(string userId, NotificationQueryDto query)
@@ -179,6 +183,34 @@ namespace RetradeBE.Services
                 ReadAt = n.ReadAt,
                 CreatedAt = n.CreatedAt
             };
+        }
+        public async Task NotifyAdminsAsync(string title, string message, string type, string? referenceId = null)
+        {
+            try
+            {
+                var adminUserIds = await _context.Account
+                    .Where(a => a.AccountRole.Any(ar => ar.Role != null && ar.Role.Name == "Admin"))
+                    .Where(a => !string.IsNullOrEmpty(a.UserId))
+                    .Select(a => a.UserId!)
+                    .Distinct()
+                    .ToListAsync();
+
+                foreach (var adminId in adminUserIds)
+                {
+                    await CreateAndSendAsync(new CreateNotificationDto
+                    {
+                        UserId = adminId,
+                        Title = title,
+                        Message = message,
+                        Type = type,
+                        ReferenceId = referenceId
+                    });
+                }
+            }
+            catch
+            {
+                // Ignore errors so notification failure doesn't block the main flow
+            }
         }
     }
 }
