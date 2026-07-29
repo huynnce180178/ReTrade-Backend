@@ -21,6 +21,7 @@ namespace Test.Profile
         private readonly Mock<IHubContext<SellerHub>> _sellerHub;
         private readonly Mock<IMapper> _mapper;
         private readonly Mock<AppDbContext> _context;
+        private readonly Mock<ISubscriptionVoucherService> _subscriptionVoucherService;
         private readonly ProfileService _service;
 
         public GetMyProfileTests()
@@ -30,13 +31,15 @@ namespace Test.Profile
             _sellerHub = new Mock<IHubContext<SellerHub>>();
             _mapper = new Mock<IMapper>();
             _context = new Mock<AppDbContext>();
+            _subscriptionVoucherService = new Mock<ISubscriptionVoucherService>();
 
             _service = new ProfileService(
                 _profileRepository.Object,
                 _accountRepository.Object,
                 _sellerHub.Object,
                 _mapper.Object,
-                _context.Object);
+                _context.Object,
+                _subscriptionVoucherService.Object);
         }
 
         [Fact]

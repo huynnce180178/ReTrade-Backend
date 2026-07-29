@@ -23,6 +23,7 @@ namespace Test.Profile
         private readonly Mock<IClientProxy> _clientProxy;
         private readonly Mock<IMapper> _mapper;
         private readonly Mock<AppDbContext> _context;
+        private readonly Mock<ISubscriptionVoucherService> _subscriptionVoucherService;
         private readonly ProfileService _service;
 
         public FollowSellerTests()
@@ -34,6 +35,7 @@ namespace Test.Profile
             _clientProxy = new Mock<IClientProxy>();
             _mapper = new Mock<IMapper>();
             _context = new Mock<AppDbContext>();
+            _subscriptionVoucherService = new Mock<ISubscriptionVoucherService>();
 
             _hubClients.Setup(x => x.Group(It.IsAny<string>())).Returns(_clientProxy.Object);
             _sellerHub.SetupGet(x => x.Clients).Returns(_hubClients.Object);
@@ -46,7 +48,8 @@ namespace Test.Profile
                 _accountRepository.Object,
                 _sellerHub.Object,
                 _mapper.Object,
-                _context.Object);
+                _context.Object,
+                _subscriptionVoucherService.Object);
         }
 
         [Fact]
