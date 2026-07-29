@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using RetradeBE.Data;
 using RetradeBE.Models;
+using RetradeBE.Models.DTOs;
+using RetradeBE.Models.Enums;
 
 namespace RetradeBE.Services.BackgroundJobs
 {
@@ -24,6 +26,7 @@ namespace RetradeBE.Services.BackgroundJobs
             {
                 try
                 {
+                    await CheckAndNotifyExpiringSubscriptionsAsync(stoppingToken);
                     await CheckAndExpireSubscriptionsAsync(stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -48,6 +51,57 @@ namespace RetradeBE.Services.BackgroundJobs
             }
 
             _logger.LogInformation("SubscriptionExpirationService is stopping.");
+        }
+
+        private async Task CheckAndNotifyExpiringSubscriptionsAsync(CancellationToken stoppingToken)
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+
+            var now = DateTime.UtcNow;
+            var tomorrow = now.AddDays(1);
+
+            // Find active subscriptions expiring in the next 24 hours
+            var expiringSubscriptions = await context.MyService
+                .Include(s => s.Service)
+                .Where(s => s.Status == "Active" && s.EndDate.HasValue && s.EndDate.Value > now && s.EndDate.Value <= tomorrow)
+                .ToListAsync(stoppingToken);
+
+            if (!expiringSubscriptions.Any())
+            {
+                return;
+            }
+
+            foreach (var subscription in expiringSubscriptions)
+            {
+                if (string.IsNullOrWhiteSpace(subscription.UserId)) continue;
+
+                // Check if a warning notification was already sent for this subscription
+                var alreadyNotified = await context.Notification
+                    .AnyAsync(n => n.ReferenceId == subscription.UserSubId && n.Title == "Subscription Expiring Soon", stoppingToken);
+
+                if (!alreadyNotified)
+                {
+                    var serviceName = subscription.Service?.Name ?? "Service package";
+                    try
+                    {
+                        await notificationService.CreateAndSendAsync(new CreateNotificationDto
+                        {
+                            UserId = subscription.UserId,
+                            Title = "Subscription Expiring Soon",
+                            Message = $"Your {serviceName} will expire tomorrow. Please renew it to continue enjoying the benefits.",
+                            Type = nameof(NotificationTypeEnum.Subscription),
+                            ReferenceId = subscription.UserSubId
+                        });
+                        _logger.LogInformation($"Sent expiration warning to UserId {subscription.UserId} for subscription {subscription.UserSubId}.");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"Failed to send expiration warning for subscription {subscription.UserSubId}.");
+                    }
+                }
+            }
         }
 
         private async Task CheckAndExpireSubscriptionsAsync(CancellationToken stoppingToken)

@@ -2,6 +2,7 @@ using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using RetradeBE.Models;
 using RetradeBE.Models.DTOs;
+using RetradeBE.Models.Enums;
 using RetradeBE.Repositories;
 
 namespace RetradeBE.Services
@@ -23,6 +24,7 @@ namespace RetradeBE.Services
         private readonly IProductService _productService;
         private readonly IReviewService _reviewService;
         private readonly IMapper _mapper;
+        private readonly INotificationService _notificationService;
 
         public ReportService(
             IReportRepository reportRepository,
@@ -31,7 +33,8 @@ namespace RetradeBE.Services
             IUserService userService,
             IProductService productService,
             IReviewService reviewService,
-            IMapper mapper)
+            IMapper mapper,
+            INotificationService notificationService)
         {
             _reportRepository = reportRepository;
             _orderService = orderService;
@@ -40,6 +43,7 @@ namespace RetradeBE.Services
             _productService = productService;
             _reviewService = reviewService;
             _mapper = mapper;
+            _notificationService = notificationService;
         }
 
         public async Task<ReportDto> ReportReviewAsync(string accountId, string reviewId, ReportCreateDto request)
@@ -293,6 +297,20 @@ namespace RetradeBE.Services
                 report.ReviewedAt = now;
                 report.UpdatedAt = now;
                 await _reportRepository.UpdateAsync(report);
+
+                try
+                {
+                    await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                    {
+                        UserId = report.ReporterId,
+                        Title = "Report Reviewed",
+                        Message = $"Your report regarding a {report.TargetType} has been reviewed and rejected.",
+                        Type = nameof(NotificationTypeEnum.Report),
+                        ReferenceId = report.ReportId
+                    });
+                }
+                catch { }
+
                 return _mapper.Map<ReportDto>(report);
             }
 
@@ -305,6 +323,34 @@ namespace RetradeBE.Services
                 await _reviewService.HideForReportAsync(report.TargetId, now);
 
                 await _reportRepository.UpdateAsync(report);
+
+                try
+                {
+                    await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                    {
+                        UserId = report.ReporterId,
+                        Title = "Report Accepted",
+                        Message = $"Thank you! Your report regarding a {report.TargetType} has been reviewed and accepted. Appropriate actions have been taken.",
+                        Type = nameof(NotificationTypeEnum.Report),
+                        ReferenceId = report.ReportId
+                    });
+
+                    // TargetId here is the ReviewId. We could notify the review author if we fetch it, but it requires an extra query.
+                    var review = await _reviewService.GetByIdForReportAsync(report.TargetId);
+                    if (review != null)
+                    {
+                        await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                        {
+                            UserId = review.ReviewerId,
+                            Title = "Review Removed",
+                            Message = "Your review has been removed due to a violation of community guidelines.",
+                            Type = nameof(NotificationTypeEnum.System),
+                            ReferenceId = review.ReviewId
+                        });
+                    }
+                }
+                catch { }
+
                 return _mapper.Map<ReportDto>(report);
             }
 
@@ -345,6 +391,32 @@ namespace RetradeBE.Services
                 }
 
                 await _reportRepository.UpdateAsync(report);
+
+                try
+                {
+                    await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                    {
+                        UserId = report.ReporterId,
+                        Title = "Report Accepted",
+                        Message = $"Thank you! Your report regarding a {report.TargetType} has been reviewed and accepted. Appropriate actions have been taken.",
+                        Type = nameof(NotificationTypeEnum.Report),
+                        ReferenceId = report.ReportId
+                    });
+
+                    if (order != null && !string.IsNullOrWhiteSpace(order.BuyerId))
+                    {
+                        await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                        {
+                            UserId = order.BuyerId,
+                            Title = "Account Penalty",
+                            Message = "Your account has received a penalty due to violations of community guidelines.",
+                            Type = nameof(NotificationTypeEnum.System),
+                            ReferenceId = report.ReportId
+                        });
+                    }
+                }
+                catch { }
+
                 return _mapper.Map<ReportDto>(report);
             }
 
@@ -381,6 +453,32 @@ namespace RetradeBE.Services
                 }
 
                 await _reportRepository.UpdateAsync(report);
+
+                try
+                {
+                    await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                    {
+                        UserId = report.ReporterId,
+                        Title = "Report Accepted",
+                        Message = $"Thank you! Your report regarding a {report.TargetType} has been reviewed and accepted. Appropriate actions have been taken.",
+                        Type = nameof(NotificationTypeEnum.Report),
+                        ReferenceId = report.ReportId
+                    });
+
+                    if (order != null && !string.IsNullOrWhiteSpace(order.SellerId))
+                    {
+                        await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                        {
+                            UserId = order.SellerId,
+                            Title = "Account Penalty",
+                            Message = "Your account has received a penalty due to violations of community guidelines.",
+                            Type = nameof(NotificationTypeEnum.System),
+                            ReferenceId = report.ReportId
+                        });
+                    }
+                }
+                catch { }
+
                 return _mapper.Map<ReportDto>(report);
             }
 

@@ -12,13 +12,16 @@ namespace RetradeBE.Services
     {
         private readonly IVoucherRepository _voucherRepo;
         private readonly IMyVoucherRepository _myVoucherRepo;
+        private readonly INotificationService _notificationService;
 
         public SubscriptionVoucherService(
             IVoucherRepository voucherRepo,
-            IMyVoucherRepository myVoucherRepo)
+            IMyVoucherRepository myVoucherRepo,
+            INotificationService notificationService)
         {
             _voucherRepo = voucherRepo;
             _myVoucherRepo = myVoucherRepo;
+            _notificationService = notificationService;
         }
 
         private class VoucherTemplate
@@ -147,6 +150,18 @@ namespace RetradeBE.Services
 
             await _voucherRepo.SaveChangesAsync();
             await _myVoucherRepo.SaveChangesAsync();
+
+            try
+            {
+                await _notificationService.CreateAndSendAsync(new Models.DTOs.CreateNotificationDto
+                {
+                    UserId = userId,
+                    Title = "New Vouchers Received",
+                    Message = "You have received new vouchers from your subscription. Check your wallet now!",
+                    Type = nameof(Models.Enums.NotificationTypeEnum.Voucher)
+                });
+            }
+            catch { }
 
             return newVouchers;
         }

@@ -717,12 +717,18 @@ public partial class AppDbContext : DbContext
 
             entity.ToTable("notification");
 
+            entity.HasIndex(e => new { e.UserId, e.CreatedAt }, "idx_notification_user_created");
+            entity.HasIndex(e => new { e.UserId, e.IsRead }, "idx_notification_user_is_read");
+
             entity.Property(e => e.NotificationId)
                 .HasMaxLength(100)
                 .HasColumnName("notification_id");
             entity.Property(e => e.CreatedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
+            entity.Property(e => e.IsDeleted)
+                .HasDefaultValue(false)
+                .HasColumnName("is_deleted");
             entity.Property(e => e.IsRead).HasColumnName("is_read");
             entity.Property(e => e.Message).HasColumnName("message");
             entity.Property(e => e.ReadAt)

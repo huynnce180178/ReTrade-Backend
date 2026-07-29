@@ -14,6 +14,7 @@ namespace RetradeBE.Services
         Task<CreateVnPayPaymentResponseDto> CreateDepositPaymentUrlAsync(string accountId, string auctionId, AuctionDepositPaymentRequestDto dto, string ipAddress);
         Task<AuctionBidResultDto> PlaceBidAsync(string accountId, string auctionId, AuctionBidCreateDto dto);
         Task<int> ProcessDueAuctionsAsync(CancellationToken cancellationToken = default);
+        Task<int> NotifyUpcomingAuctionsAsync(CancellationToken cancellationToken = default);
         Task<List<UserBidHistoryDto>> GetUserBidHistoryAsync(string accountId);
     }
 }

@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using RetradeBE.Data;
 using RetradeBE.Models;
 using RetradeBE.Models.Enums;
+using RetradeBE.Models.DTOs;
 using RetradeBE.Services;
 using System;
 using System.Linq;
@@ -19,11 +20,13 @@ namespace RetradeBE.Controllers.Admin
     {
         private readonly IAccountService _accountService;
         private readonly AppDbContext _context;
+        private readonly INotificationService _notificationService;
 
-        public AdminController(IAccountService accountService, AppDbContext context)
+        public AdminController(IAccountService accountService, AppDbContext context, INotificationService notificationService)
         {
             _accountService = accountService;
             _context = context;
+            _notificationService = notificationService;
         }
 
         [HttpGet("refunds")]
@@ -67,6 +70,20 @@ namespace RetradeBE.Controllers.Admin
             refund.UpdatedAt = DateTime.UtcNow.AddHours(7);
 
             await _context.SaveChangesAsync();
+
+            try
+            {
+                await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                {
+                    UserId = refund.UserId,
+                    Title = "Refund Processed",
+                    Message = $"Your refund request for {refund.Amount:N0} VND has been processed and transferred to your bank account.",
+                    Type = nameof(NotificationTypeEnum.Payment),
+                    ReferenceId = refund.RefundRequestId
+                });
+            }
+            catch { }
+
             return Ok(new { message = "Refund marked as processed." });
         }
 

@@ -15,13 +15,16 @@ namespace RetradeBE.Services
     {
         private readonly IAdminProductRepository _repository;
         private readonly AppDbContext _context;
+        private readonly INotificationService _notificationService;
 
         public AdminProductService(
             IAdminProductRepository repository,
-            AppDbContext context)
+            AppDbContext context,
+            INotificationService notificationService)
         {
             _repository = repository;
             _context = context;
+            _notificationService = notificationService;
         }
 
         public IQueryable<ProductListDto> Query()
@@ -206,22 +209,20 @@ namespace RetradeBE.Services
             product.UpdatedAt = DateTime.UtcNow;
             await _repository.UpdateAsync(product);
 
-            // Create notification for Seller
-            var notification = new Notification
+            try
             {
-                NotificationId = $"NT{Guid.NewGuid().ToString().Substring(0, 8).ToUpper()}",
-                UserId = product.SellerId,
-                Title = dto.IsApproved ? "Product Approved" : "Product Rejected",
-                Message = dto.IsApproved
-                    ? $"Your product '{product.Name}' has been approved and is ready to be displayed on the platform."
-                    : $"Your product '{product.Name}' has been rejected. Reason: {dto.RejectReason}",
-                Type = "ProductApproval",
-                ReferenceId = product.ProductId,
-                IsRead = false,
-                CreatedAt = DateTime.UtcNow
-            };
-            await _context.Notification.AddAsync(notification);
-            await _context.SaveChangesAsync();
+                await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                {
+                    UserId = product.SellerId,
+                    Title = dto.IsApproved ? "Product Approved" : "Product Rejected",
+                    Message = dto.IsApproved
+                        ? $"Your product '{product.Name}' has been approved and is ready to be displayed on the platform."
+                        : $"Your product '{product.Name}' has been rejected. Reason: {dto.RejectReason}",
+                    Type = nameof(NotificationTypeEnum.System),
+                    ReferenceId = product.ProductId
+                });
+            }
+            catch { }
 
             return true;
         }

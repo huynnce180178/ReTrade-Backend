@@ -1,0 +1,105 @@
+classDiagram
+    direction LR
+    class ServiceSubscription {
+        <<Entity>>
+        + ServiceId : string
+        + Name : string?
+        + TargetRole : string?
+        + Price : decimal?
+        + DurationDays : int?
+        + BenefitsDescription : string?
+        + CreatedAt : DateTime?
+    }
+
+    class MyService {
+        <<Entity>>
+        + UserSubId : string
+        + UserId : string?
+        + ServiceId : string?
+        + StartDate : DateTime?
+        + EndDate : DateTime?
+        + Status : string?
+        + CreatedAt : DateTime?
+        + UpdatedAt : DateTime?
+    }
+
+    MyService "0..*" --> "1" ServiceSubscription
+
+    class PackageStatisticDto {
+        + ServiceId : string
+        + ServiceName : string
+        + SubscriberCount : int
+        + Revenue : decimal
+    }
+
+    class SubscriptionStatisticsDto {
+        + TotalSubscribers : int
+        + ActiveSubscribers : int
+        + TotalRevenue : decimal
+        + PackageBreakdown : List~PackageStatisticDto~
+    }
+
+    class AdminDashboardController {
+        <<controller>>
+        - _dashboardService : IAdminDashboardService
+        + GetSubscriptionStatistics() : Task~IActionResult~
+    }
+
+    class IAdminDashboardService {
+        <<Interface>>
+        + GetSubscriptionStatisticsAsync() : Task~SubscriptionStatisticsDto~
+    }
+
+    class AdminDashboardService {
+        <<Service>>
+        - _myServiceRepo : IMyServiceRepository
+        - _serviceSubscriptionRepo : IServiceSubscriptionRepository
+        + GetSubscriptionStatisticsAsync() : Task~SubscriptionStatisticsDto~
+    }
+
+    class IMyServiceRepository {
+        <<Interface>>
+        + Query() : IQueryable~MyService~
+    }
+
+    class MyServiceRepository {
+        <<Repository>>
+        - _context : AppDbContext
+        + Query() : IQueryable~MyService~
+    }
+
+    class IServiceSubscriptionRepository {
+        <<Interface>>
+        + Query() : IQueryable~ServiceSubscription~
+    }
+
+    class ServiceSubscriptionRepository {
+        <<Repository>>
+        - _context : AppDbContext
+        + Query() : IQueryable~ServiceSubscription~
+    }
+
+    MyServiceRepository --> MyService
+    IMyServiceRepository <|.. MyServiceRepository
+    ServiceSubscriptionRepository --> ServiceSubscription
+    IServiceSubscriptionRepository <|.. ServiceSubscriptionRepository
+    AdminDashboardService --> IMyServiceRepository
+    AdminDashboardService --> IServiceSubscriptionRepository
+    IAdminDashboardService <|.. AdminDashboardService
+    AdminDashboardController --> IAdminDashboardService
+    AdminDashboardController --> SubscriptionStatisticsDto
+    IAdminDashboardService --> SubscriptionStatisticsDto
+    AdminDashboardService --> SubscriptionStatisticsDto
+    SubscriptionStatisticsDto --> PackageStatisticDto
+
+    style ServiceSubscription fill:#ffffff,stroke:#000000,color:#000000
+    style MyService fill:#ffffff,stroke:#000000,color:#000000
+    style PackageStatisticDto fill:#ffffff,stroke:#000000,color:#000000
+    style SubscriptionStatisticsDto fill:#ffffff,stroke:#000000,color:#000000
+    style AdminDashboardController fill:#dae8fc,stroke:#6c8ebf,color:#000000
+    style IAdminDashboardService fill:#ffffff,stroke:#000000,color:#000000
+    style AdminDashboardService fill:#ffffff,stroke:#000000,color:#000000
+    style IMyServiceRepository fill:#ffffff,stroke:#000000,color:#000000
+    style MyServiceRepository fill:#ffffff,stroke:#000000,color:#000000
+    style IServiceSubscriptionRepository fill:#ffffff,stroke:#000000,color:#000000
+    style ServiceSubscriptionRepository fill:#ffffff,stroke:#000000,color:#000000
