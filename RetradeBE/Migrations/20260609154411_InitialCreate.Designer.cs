@@ -96,34 +96,6 @@ namespace RetradeBE.Migrations
 
                     b.ToTable("account", (string)null);
 
-                    b.HasData(
-                        new
-                        {
-                            AccountId = "ACC_ADMIN",
-                            PasswordHash = "$2a$11$D8rpGqj4uPb34Kf9BhHud.b5wrpHqo25Om7dHv5MSJCyc7D8A8iuO",
-                            Provider = "LOCAL",
-                            Status = "Active",
-                            UserId = "USER_ADMIN",
-                            Username = "admin"
-                        },
-                        new
-                        {
-                            AccountId = "ACC_BUYER",
-                            PasswordHash = "$2a$11$EvX6TGoRi2u0C9KWIRwDguqF4ci/fYcPT.6Wdced7L57NQ6g59OC6",
-                            Provider = "LOCAL",
-                            Status = "Active",
-                            UserId = "USER_BUYER",
-                            Username = "buyer"
-                        },
-                        new
-                        {
-                            AccountId = "ACC_SELLER",
-                            PasswordHash = "$2a$11$FxpVyrvrrOXIGWFyR2clfOrXx58Pp87rkmST//6jwUM3lD3xP0bnO",
-                            Provider = "LOCAL",
-                            Status = "Active",
-                            UserId = "USER_SELLER",
-                            Username = "seller"
-                        });
                 });
 
             modelBuilder.Entity("RetradeBE.Models.AccountRole", b =>
@@ -148,22 +120,6 @@ namespace RetradeBE.Migrations
 
                     b.ToTable("account_role", (string)null);
 
-                    b.HasData(
-                        new
-                        {
-                            AccountId = "ACC_ADMIN",
-                            RoleId = 1
-                        },
-                        new
-                        {
-                            AccountId = "ACC_BUYER",
-                            RoleId = 2
-                        },
-                        new
-                        {
-                            AccountId = "ACC_SELLER",
-                            RoleId = 3
-                        });
                 });
 
             modelBuilder.Entity("RetradeBE.Models.Address", b =>
@@ -1460,28 +1416,6 @@ namespace RetradeBE.Migrations
 
                     b.ToTable("User");
 
-                    b.HasData(
-                        new
-                        {
-                            UserId = "USER_ADMIN",
-                            Email = "admin@retrade.com",
-                            FirstName = "Admin",
-                            LastName = "System"
-                        },
-                        new
-                        {
-                            UserId = "USER_BUYER",
-                            Email = "buyer@retrade.com",
-                            FirstName = "Demo",
-                            LastName = "Buyer"
-                        },
-                        new
-                        {
-                            UserId = "USER_SELLER",
-                            Email = "seller@retrade.com",
-                            FirstName = "Demo",
-                            LastName = "Seller"
-                        });
                 });
 
             modelBuilder.Entity("RetradeBE.Models.UserFavorite", b =>

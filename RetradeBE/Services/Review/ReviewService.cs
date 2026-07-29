@@ -28,6 +28,22 @@ namespace RetradeBE.Services
             _accountRepository = accountRepository;
         }
 
+        public Task<Review?> GetByIdForReportAsync(string reviewId) =>
+            _reviewRepository.GetByIdForReportAsync(reviewId);
+
+        public async Task HideForReportAsync(string reviewId, DateTime updatedAt)
+        {
+            var review = await _reviewRepository.GetByIdForReportAsync(reviewId);
+            if (review == null)
+            {
+                return;
+            }
+
+            review.IsDeleted = true;
+            review.UpdatedAt = updatedAt;
+            await _reviewRepository.UpdateAsync(review);
+        }
+
         public async Task<ReviewResponseDto?> GetByBuyerOrderAsync(string accountId, string buyerId, string orderId, bool isAdmin)
         {
             if (string.IsNullOrWhiteSpace(buyerId) || string.IsNullOrWhiteSpace(orderId))
@@ -216,7 +232,7 @@ namespace RetradeBE.Services
                 throw new UnauthorizedAccessException("You can only report reviews for your own store.");
             }
 
-            var existingReport = await _reportRepository.GetReportByReporterAsync(reviewId, reporterId);
+            var existingReport = await _reviewRepository.GetReportByReporterAsync(reviewId, reporterId);
             if (existingReport != null)
             {
                 throw new InvalidOperationException("You have already reported this review.");
@@ -225,7 +241,7 @@ namespace RetradeBE.Services
             var now = DateTime.UtcNow;
             var report = new Report
             {
-                ReportId = Guid.NewGuid().ToString("N"),
+                ReportId = RetradeBE.Utils.IdGenerator.GenerateReportId("Review"),
                 TargetId = review.ReviewId, TargetType = "Review",
                 ReporterId = reporterId,
                 Reason = request.Reason.Trim(),
@@ -235,7 +251,7 @@ namespace RetradeBE.Services
                 UpdatedAt = now
             };
 
-            await _reportRepository.AddReportAsync(report);
+            await _reportRepository.AddAsync(report);
             return MapReport(report);
         }
 
@@ -439,7 +455,6 @@ namespace RetradeBE.Services
                 UpdatedAt = report.UpdatedAt
             };
         }
-
         private static string? FormatUserName(User? user)
         {
             if (user == null) return null;

@@ -514,6 +514,24 @@ namespace RetradeBE.Services
             await _context.SaveChangesAsync();
         }
 
+        public async Task HideProductsBySellerAsync(string sellerId, DateTime updatedAt)
+        {
+            var products = await _context.Product
+                .Where(product => product.SellerId == sellerId && product.IsDeleted != true)
+                .ToListAsync();
+
+            foreach (var product in products)
+            {
+                product.IsDeleted = true;
+                product.UpdatedAt = updatedAt;
+            }
+
+            if (products.Count > 0)
+            {
+                await _context.SaveChangesAsync();
+            }
+        }
+
         #region Helper Methods
 
         private List<string> GetCategoryAndChildrenIds(string parentId, List<Category> allCategories)

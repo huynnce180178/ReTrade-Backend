@@ -26,6 +26,8 @@ namespace RetradeBE.Services
             _orderHub = orderHub;
         }
 
+        public Task<Order?> GetByIdAsync(string orderId) => _orderRepository.GetByIdAsync(orderId);
+
         public async Task<PagedResultDto<OrderListDto>> GetMyOrdersAsync(string userId, OrderSearchQueryDto query)
         {
             if (string.IsNullOrWhiteSpace(userId))

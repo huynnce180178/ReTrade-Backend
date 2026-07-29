@@ -1,9 +1,11 @@
 using RetradeBE.Models.DTOs;
+using RetradeBE.Models;
 
 namespace RetradeBE.Services
 {
     public interface IOrderService
     {
+        Task<Order?> GetByIdAsync(string orderId);
         Task<PagedResultDto<OrderListDto>> GetMyOrdersAsync(string userId, OrderSearchQueryDto query);
         Task<PagedResultDto<OrderListDto>> GetSellerOrdersAsync(string sellerId, OrderSearchQueryDto query);
         Task<SellerSalesStatisticsDto> GetSellerSalesStatisticsAsync(string sellerId, int periodDays);

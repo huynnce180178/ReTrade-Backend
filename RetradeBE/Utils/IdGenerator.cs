@@ -13,6 +13,20 @@ namespace RetradeBE.Utils
             return $"{prefix}_{datePart}_{randomPart}";
         }
 
+        public static string GenerateReportId(string targetType)
+        {
+            string targetPart = targetType.Trim().ToLowerInvariant() switch
+            {
+                "review" => "REV",
+                "buyer" => "BUY",
+                "seller" => "SEL",
+                _ => CleanNameForId(targetType, 6).ToUpperInvariant()
+            };
+            string datePart = DateTime.UtcNow.ToString("yyyyMMdd");
+            int randomPart = _random.Next(100000, 1000000);
+            return $"RP_{targetPart}_{datePart}_{randomPart}";
+        }
+
         public static string GenerateOrderId(int sequence)
         {
             string datePart = DateTime.UtcNow.ToString("yyyyMMdd");
