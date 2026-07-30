@@ -41,17 +41,13 @@ namespace RetradeBE.Services
             if (product == null)
                 throw new Exception("Product does not exist or has been deleted.");
 
-            if (product.Status != ProductStatusEnum.Accepted.ToString() && product.Status != ProductStatusEnum.Ready.ToString())
+            if (product.Status != ProductStatusEnum.Accepted.ToString())
                 throw new Exception("Product is not available to be added to the wishlist.");
 
             if (product.SellerId == userId)
                 throw new Exception("You cannot add your own product to your wishlist.");
 
             var wishlist = await GetActiveWishlistAsync(userId);
-
-            var alreadyAdded = await _wishlistRepository.IsProductInWishlistAsync(wishlist.WishlistId, dto.ProductId);
-            if (alreadyAdded)
-                throw new Exception("Product is already in the wishlist.");
 
             var item = new WishlistItem
             {
