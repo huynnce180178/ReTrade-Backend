@@ -30,7 +30,8 @@ public class PaymentController : ControllerBase
         }
 
         var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
-        var response = await _paymentService.CreateVnPayPaymentUrlAsync(accountId, request, ipAddress);
+        var callbackUrl = $"{Request.Scheme}://{Request.Host}/api/Payment/vnpay-return";
+        var response = await _paymentService.CreateVnPayPaymentUrlAsync(accountId, request, ipAddress, callbackUrl);
         return Ok(response);
     }
 

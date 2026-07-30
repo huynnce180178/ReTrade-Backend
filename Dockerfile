@@ -12,6 +12,6 @@ RUN dotnet publish "RetradeBE.csproj" -c Release -o /app/publish /p:UseAppHost=f
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-ENV ASPNETCORE_URLS=http://+:8385
-EXPOSE 8385
+ENV ASPNETCORE_URLS=http://+:8386
+EXPOSE 8386
 ENTRYPOINT ["dotnet", "RetradeBE.dll"]

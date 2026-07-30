@@ -72,13 +72,11 @@ namespace RetradeBE.Services
                 ? RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString()
                 : RetradeBE.Models.Enums.AccountStatusEnum.Ban.ToString();
             
-            // Đồng bộ trạng thái IsDeleted theo trạng thái Ban (ban thì IsDeleted = true, unban thì IsDeleted = false)
             account.IsDeleted = !isCurrentlyInactive;
 
             account.UpdatedAt = DateTime.UtcNow;
             await _repository.UpdateAsync(account);
 
-            // Đồng bộ trạng thái IsDeleted của User tương ứng
             if (!string.IsNullOrWhiteSpace(account.UserId))
             {
                 var user = await _userRepository.GetByIdAsync(account.UserId);
@@ -247,7 +245,9 @@ namespace RetradeBE.Services
             }
 
             return true;
-        }        public async Task<Account?> GetByUserIdAsync(string userId)
+        }
+
+        public async Task<Account?> GetByUserIdAsync(string userId)
         {
             return await _repository.Query()
                 .FirstOrDefaultAsync(a => a.UserId == userId);
@@ -278,18 +278,14 @@ namespace RetradeBE.Services
             string userId = await GenerateUserIdAsync();
             string accountId = await GenerateAccountIdAsync();
 
-            // Táº¡o User
             var user = _mapper.Map<User>(dto);
             user.UserId = userId;
             await _userRepository.AddAsync(user);
 
-            // Sinh mÃ£ OTP 6 sá»‘
             string otp = new Random().Next(100000, 999999).ToString();
 
-            // LÆ°u OTP vÃ o MemoryCache vá»›i thá»i háº¡n 3 phÃºt
             _cache.Set(dto.Email, otp, TimeSpan.FromMinutes(3));
 
-            // Táº¡o Account
             var account = _mapper.Map<Account>(dto);
             account.AccountId = accountId;
             account.UserId = userId;
@@ -297,11 +293,9 @@ namespace RetradeBE.Services
             account.IsPasswordSet = true;
             await _repository.AddAsync(account);
 
-            // GÃ¡n quyá»n dá»±a trÃªn RoleId Ä‘Ã£ cÃ³ trong DB (1â€‘Admin, 2â€‘Buyer, 3â€‘Seller)
             string roleName = ((RetradeBE.Models.Enums.RoleEnum)dto.RoleId).ToString();
             await _repository.AssignRoleAsync(accountId, roleName);
 
-            // Gá»­i OTP qua email
             string template = await GetEmailTemplateAsync("VerificationOtp.html");
             string emailBody = template.Replace("{{OTP}}", otp);
             await _emailService.SendEmailAsync(dto.Email, "ReTrade Account Verification", emailBody);
@@ -311,7 +305,6 @@ namespace RetradeBE.Services
 
         public async Task<bool> VerifyAsync(VerifyDto dto)
         {
-            // Kiá»ƒm tra OTP trong Cache
             if (!_cache.TryGetValue(dto.Email, out string? savedOtp) || savedOtp != dto.Otp)
             {
                 return false;
@@ -320,17 +313,14 @@ namespace RetradeBE.Services
             var user = await _userRepository.GetByEmailAsync(dto.Email);
             if (user == null) return false;
 
-            // Láº¥y Account liÃªn káº¿t
             var allAccounts = await _repository.GetAllAsync();
             var account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
 
             if (account == null) return false;
 
-            // Cáº­p nháº­t tráº¡ng thÃ¡i account
             account.Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString();
             await _repository.UpdateAsync(account);
 
-            // XÃ³a OTP khá»i Cache
             _cache.Remove(dto.Email);
 
             return true;
@@ -341,13 +331,10 @@ namespace RetradeBE.Services
             var user = await _userRepository.GetByEmailAsync(email);
             if (user == null) return "User not found.";
             
-            // Sinh mÃ£ OTP 6 sá»‘ má»›i
             string otp = new Random().Next(100000, 999999).ToString();
 
-            // LÆ°u OTP vÃ o MemoryCache vá»›i thá»i háº¡n 3 phÃºt (Ä‘Ã¨ lÃªn mÃ£ cÅ© náº¿u cÃ³)
             _cache.Set(email, otp, TimeSpan.FromMinutes(3));
 
-            // Gá»­i OTP qua email
             string template = await GetEmailTemplateAsync("VerificationOtp.html");
             string emailBody = template.Replace("{{OTP}}", otp);
             await _emailService.SendEmailAsync(email, "ReTrade Resend OTP", emailBody);
@@ -388,9 +375,6 @@ namespace RetradeBE.Services
                 roles = new List<string> { RetradeBE.Models.Enums.RoleEnum.Buyer.ToString() };
             }
 
-            // 2FA removed: proceed to issue JWT immediately
-
-            // Sinh JWT
             var tokenHandler = new JwtSecurityTokenHandler();
             var key = Encoding.ASCII.GetBytes(_jwtSettings.SecretKey);
             var claims = new List<Claim>
@@ -414,7 +398,6 @@ namespace RetradeBE.Services
 
             var token = tokenHandler.CreateToken(tokenDescriptor);
             
-            // Update last login
             account.LastLoginAt = DateTime.UtcNow;
             await _repository.UpdateAsync(account);
 
@@ -450,7 +433,6 @@ namespace RetradeBE.Services
 
         public async Task<object?> LoginWithGoogleAsync(string accessToken)
         {
-            // Gá»i Google UserInfo API Ä‘á»ƒ láº¥y thÃ´ng tin user
             using var httpClient = _httpClientFactory.CreateClient();
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
             var response = await httpClient.GetAsync("https://www.googleapis.com/oauth2/v3/userinfo");
@@ -466,17 +448,14 @@ namespace RetradeBE.Services
             if (string.IsNullOrEmpty(email)) return null;
             const string googleProvider = "Google";
 
-            // TÃ¬m user theo email
             var user = await _userRepository.GetByEmailAsync(email);
             Account? account = null;
 
             if (user == null)
             {
-                // Táº¡o má»›i User & Account náº¿u chÆ°a cÃ³
                 string userId = await GenerateUserIdAsync();
                 string accountId = await GenerateAccountIdAsync();
 
-                // Táº¡o username tá»« email (pháº§n trÆ°á»›c @)
                 string baseUsername = email.Split('@')[0].Replace(".", "").Replace("+", "");
                 string username = baseUsername;
                 int suffix = 1;
@@ -503,8 +482,8 @@ namespace RetradeBE.Services
                     Provider = googleProvider,
                     Username = username,
                     ProviderUserId = providerUserId ?? email,
-                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()), // random password
-                    Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString(), // Google accounts bá» qua verify
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()),
+                    Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString(),
                     IsPasswordSet = false,
                     CreatedAt = DateTime.UtcNow
                 };
@@ -513,7 +492,6 @@ namespace RetradeBE.Services
             }
             else
             {
-                // TÃ¬m account theo userId
                 var allAccounts = await _repository.GetAllAsync();
                 account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
                 if (account == null || account.IsDeleted == true) return null;
@@ -523,7 +501,6 @@ namespace RetradeBE.Services
                     throw new InvalidOperationException("ACCOUNT_INACTIVE");
                 }
 
-                // Tá»± Ä‘á»™ng activate náº¿u Pending (Ä‘Äƒng nháº­p Google láº§n Ä‘áº§u sau khi register thÆ°á»ng)
                 if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Pending.ToString())
                 {
                     account.Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString();
@@ -535,7 +512,6 @@ namespace RetradeBE.Services
                 await _repository.UpdateAsync(account);
             }
 
-            // Sinh JWT
             var roles = await _repository.GetRolesAsync(account.AccountId);
             if (roles == null || !roles.Any())
                 roles = new List<string> { RetradeBE.Models.Enums.RoleEnum.Buyer.ToString() };
@@ -583,18 +559,14 @@ namespace RetradeBE.Services
             var user = await _userRepository.GetByEmailAsync(email);
             if (user == null) return "Email not found.";
 
-            // Check if there is a linked account
             var allAccounts = await _repository.GetAllAsync();
             var account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
             if (account == null) return "No account associated with this email.";
 
-            // Generate OTP
             string otp = new Random().Next(100000, 999999).ToString();
 
-            // Save OTP to cache with prefix to avoid collision, 3 minutes expiration
             _cache.Set($"forgot_pwd_{email}", otp, TimeSpan.FromMinutes(3));
 
-            // Send Email
             string template = await GetEmailTemplateAsync("ForgotPasswordOtp.html");
             string emailBody = template.Replace("{{OTP}}", otp);
             await _emailService.SendEmailAsync(email, "ReTrade Password Reset OTP", emailBody);
@@ -629,32 +601,28 @@ namespace RetradeBE.Services
         public async Task<string> PasswordRecoveryAsync(string email)
         {
             var user = await _userRepository.GetByEmailAsync(email);
-            if (user == null) return "User not found.";
+            if (user == null) return "No account is associated with this email address.";
 
             var allAccounts = await _repository.GetAllAsync();
             var account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
-            if (account == null) return "Account not found.";
+            if (account == null) return "No account is associated with this email address.";
 
-            // Generate Random Password
             string newPassword = GenerateRandomPassword();
 
-            // Update Password and mark MustChangePassword
             account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
             account.MustChangePassword = true;
             account.UpdatedAt = DateTime.UtcNow;
             await _repository.UpdateAsync(account);
 
-            // Send Email
             string template = await GetEmailTemplateAsync("ResetPasswordAuto.html");
             string emailBody = template.Replace("{{NEW_PASSWORD}}", newPassword);
             await _emailService.SendEmailAsync(email, "ReTrade Password Generated", emailBody);
 
-            return "A new password has been generated and sent to your email.";
+            return "Password reset successful. Please check your email for your new password.";
         }
 
         public async Task<string> ResetPasswordAsync(ResetPasswordDto dto)
         {
-            // Verify OTP
             if (!_cache.TryGetValue($"forgot_pwd_{dto.Email}", out string? savedOtp) || savedOtp != dto.Otp)
             {
                 return "Invalid or expired OTP.";
@@ -667,14 +635,11 @@ namespace RetradeBE.Services
             var account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
             if (account == null) return "Account not found.";
 
-            // Update Password
             account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
             await _repository.UpdateAsync(account);
 
-            // Remove OTP from cache
             _cache.Remove($"forgot_pwd_{dto.Email}");
 
-            // Send Success Email
             string template = await GetEmailTemplateAsync("ResetPasswordSuccess.html");
             string emailBody = template;
             await _emailService.SendEmailAsync(dto.Email, "ReTrade Password Reset Successful", emailBody);
@@ -690,6 +655,26 @@ namespace RetradeBE.Services
             if (!BCrypt.Net.BCrypt.Verify(dto.OldPassword, account.PasswordHash))
             {
                 return "Old password is incorrect.";
+            }
+
+            if (string.IsNullOrEmpty(dto.NewPassword) || dto.NewPassword.Length < 8)
+            {
+                return "Password must be at least 8 characters long.";
+            }
+
+            if (dto.NewPassword.Length > 50)
+            {
+                return "Password exceeds the maximum allowed length.";
+            }
+
+            if (!System.Text.RegularExpressions.Regex.IsMatch(dto.NewPassword, @"[A-Z]"))
+            {
+                return "Password must contain at least one uppercase letter.";
+            }
+
+            if (!System.Text.RegularExpressions.Regex.IsMatch(dto.NewPassword, @"[@$!%*?&._\-]"))
+            {
+                return "Password must contain at least one special character.";
             }
 
             account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
@@ -714,8 +699,5 @@ namespace RetradeBE.Services
 
             return "Password set successfully.";
         }
-
-
-
     }
 }

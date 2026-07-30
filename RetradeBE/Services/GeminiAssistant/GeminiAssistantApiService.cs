@@ -76,7 +76,8 @@ namespace RetradeBE.Services.GeminiAssistant
             
             var candidateModels = new List<string> { primaryModel };
             if (!candidateModels.Contains("gemini-2.5-flash")) candidateModels.Add("gemini-2.5-flash");
-            if (!candidateModels.Contains("gemini-2.0-flash-lite")) candidateModels.Add("gemini-2.0-flash-lite");
+            if (!candidateModels.Contains("gemini-flash-latest")) candidateModels.Add("gemini-flash-latest");
+            if (!candidateModels.Contains("gemini-3.6-flash")) candidateModels.Add("gemini-3.6-flash");
             if (!candidateModels.Contains("gemini-2.0-flash")) candidateModels.Add("gemini-2.0-flash");
 
             var payload = JsonSerializer.Serialize(request, JsonOptions);

@@ -64,7 +64,7 @@ public class ServiceSubscriptionService : IServiceSubscriptionService
             .ToListAsync();
     }
 
-    public async Task<CreateVnPayPaymentResponseDto> CreatePurchasePaymentUrlAsync(string accountId, string serviceId, string ipAddress)
+    public async Task<CreateVnPayPaymentResponseDto> CreatePurchasePaymentUrlAsync(string accountId, string serviceId, string ipAddress, string? overrideCallbackUrl = null)
     {
         var service = await _serviceSubscriptionRepo.Query()
             .AsNoTracking()
@@ -88,6 +88,6 @@ public class ServiceSubscriptionService : IServiceSubscriptionService
             Locale = "vn"
         };
 
-        return await _paymentService.CreateVnPayPaymentUrlAsync(accountId, request, ipAddress);
+        return await _paymentService.CreateVnPayPaymentUrlAsync(accountId, request, ipAddress, overrideCallbackUrl);
     }
 }

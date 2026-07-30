@@ -83,8 +83,12 @@ namespace RetradeBE.Services.AssistantChat
 
             var history = await _chatMessageRepository.GetBySessionIdAsync(session.SessionId);
             var geminiContents = BuildGeminiContents(history);
-            await InjectUserOrderContextAsync(userId, geminiContents, cancellationToken);
+            var orderProducts = await InjectUserOrderContextAsync(userId, geminiContents, cancellationToken);
             var suggestedProducts = new List<AssistantProductSuggestionDto>();
+            if (orderProducts != null && orderProducts.Count > 0)
+            {
+                suggestedProducts.AddRange(orderProducts);
+            }
             string finalText;
 
             try
@@ -357,14 +361,15 @@ namespace RetradeBE.Services.AssistantChat
             return $"AI Assistant returned an error: {message}";
         }
 
-        private async Task InjectUserOrderContextAsync(
+        private async Task<List<AssistantProductSuggestionDto>> InjectUserOrderContextAsync(
             string? userId,
             List<GeminiContentDto> geminiContents,
             CancellationToken cancellationToken)
         {
+            var resultProducts = new List<AssistantProductSuggestionDto>();
             if (string.IsNullOrWhiteSpace(userId))
             {
-                return;
+                return resultProducts;
             }
 
             try
@@ -373,19 +378,70 @@ namespace RetradeBE.Services.AssistantChat
                     .Take(5)
                     .ToListAsync(cancellationToken);
 
-                string contextText;
                 if (recentOrders.Count == 0)
                 {
-                    contextText = "[System Context]: Current user has no orders placed on ReTrade.";
+                    geminiContents.Insert(0, new GeminiContentDto
+                    {
+                        Role = UserRole,
+                        Parts = new List<GeminiPartDto>
+                        {
+                            new() { Text = "[System Context]: Current user has no orders placed on ReTrade." }
+                        }
+                    });
+                    return resultProducts;
                 }
-                else
-                {
-                    var orderSummaries = recentOrders.Select(o =>
-                        $"- Order Code: #{o.OrderCode ?? o.OrderId} | Product: {o.ProductName ?? "ReTrade Product"} | Total: {o.FinalAmount ?? o.TotalAmount ?? 0:N0} VND | Status: {TranslateOrderStatus(o.Status)} | Date: {(o.CreatedAt.HasValue ? o.CreatedAt.Value.ToString("dd/MM/yyyy HH:mm") : "N/A")}"
-                    );
 
-                    contextText = "[Current User's Real Order Data from ReTrade System]:\n" + string.Join("\n", orderSummaries);
+                var productIds = recentOrders
+                    .Select(o => o.ProductId)
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Distinct()
+                    .ToList();
+
+                var productsDict = await _productRepository.Query()
+                    .AsNoTracking()
+                    .Where(p => productIds.Contains(p.ProductId))
+                    .Select(p => new AssistantProductSuggestionDto
+                    {
+                        ProductId = p.ProductId,
+                        Name = p.Name,
+                        CategoryName = p.Category != null ? p.Category.Name : null,
+                        Price = p.Price,
+                        StockQuantity = p.StockQuantity,
+                        Status = p.Status,
+                        Condition = p.Condition,
+                        SellerId = p.SellerId,
+                        SellerName = p.Seller != null ? $"{p.Seller.FirstName} {p.Seller.LastName}".Trim() : null,
+                        MainImageUrl = p.ProductImage
+                            .Where(pi => pi.IsMain == true)
+                            .Select(pi => pi.Image.ImageUrl)
+                            .FirstOrDefault()
+                            ?? p.ProductImage
+                                .OrderBy(pi => pi.SortOrder)
+                                .Select(pi => pi.Image.ImageUrl)
+                                .FirstOrDefault()
+                    })
+                    .ToDictionaryAsync(p => p.ProductId, cancellationToken);
+
+                var orderSummaries = new List<string>();
+                foreach (var o in recentOrders)
+                {
+                    var pId = o.ProductId;
+                    var pName = o.ProductName ?? (pId != null && productsDict.TryGetValue(pId, out var prod) ? prod.Name : "ReTrade Product");
+                    var summary = $"- Order Code: #{o.OrderCode ?? o.OrderId} | Product: {pName} | Total: {o.FinalAmount ?? o.TotalAmount ?? 0:N0} VND | Status: {TranslateOrderStatus(o.Status)} | Date: {(o.CreatedAt.HasValue ? o.CreatedAt.Value.ToString("dd/MM/yyyy HH:mm") : "N/A")}";
+                    if (!string.IsNullOrWhiteSpace(pId))
+                    {
+                        summary += $" | Link: [View Details](/product/{pId})";
+                    }
+                    orderSummaries.Add(summary);
+
+                    if (!string.IsNullOrWhiteSpace(pId) && productsDict.TryGetValue(pId, out var itemDto) && !resultProducts.Any(x => x.ProductId == pId))
+                    {
+                        resultProducts.Add(itemDto);
+                    }
                 }
+
+                var contextText = "[Current User's Real Order Data from ReTrade System]:\n" + string.Join("\n", orderSummaries) +
+                    "\nNote: Present each order with product name, order code, total price, and status. Always include markdown links like [View Details](/product/PRODUCT_ID) and [View All Orders](/purchase-history) so the user can click to view details.";
 
                 geminiContents.Insert(0, new GeminiContentDto
                 {
@@ -400,6 +456,8 @@ namespace RetradeBE.Services.AssistantChat
             {
                 _logger.LogWarning(ex, "Failed to fetch user order context for AI assistant.");
             }
+
+            return resultProducts;
         }
 
         private static string TranslateOrderStatus(string? status)

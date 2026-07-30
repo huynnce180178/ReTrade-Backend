@@ -26,6 +26,10 @@ namespace RetradeBE
             AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
             var builder = WebApplication.CreateBuilder(args);
+            builder.Configuration.AddJsonFile("appsettings.Development.local.json", optional: true, reloadOnChange: true);
+            builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
+            builder.Configuration.AddEnvironmentVariables();
+
             builder.Logging.ClearProviders();
             builder.Logging.AddConsole();
             builder.Logging.AddDebug();
@@ -219,7 +223,7 @@ namespace RetradeBE
                 app.UseSwaggerUI();
             }
 
-            app.UseHttpsRedirection();
+            // app.UseHttpsRedirection();
 
             // Đăng ký Global Exception Middleware để bắt mọi lỗi phát sinh
             app.UseMiddleware<RetradeBE.Middlewares.GlobalExceptionMiddleware>();
