@@ -16,6 +16,7 @@ namespace Test.ReviewTests
         private readonly Mock<IReviewRepository> _reviewRepository;
         private readonly Mock<IReportRepository> _reportRepository;
         private readonly Mock<IAccountRepository> _accountRepository;
+        private readonly Mock<INotificationService> _notificationService;
         private readonly ReviewService _service;
 
         public ReviewReportReviewTests()
@@ -24,12 +25,14 @@ namespace Test.ReviewTests
             _reviewRepository = new Mock<IReviewRepository>();
             _reportRepository = new Mock<IReportRepository>();
             _accountRepository = new Mock<IAccountRepository>();
+            _notificationService = new Mock<INotificationService>();
 
             _service = new ReviewService(
                 _orderRepository.Object,
                 _reviewRepository.Object,
                 _reportRepository.Object,
-                _accountRepository.Object
+                _accountRepository.Object,
+                _notificationService.Object
             );
         }
 

@@ -15,12 +15,14 @@ namespace Test.CategoryTests
     public class CategoryQueryTests
     {
         private readonly Mock<ICategoryRepository> _categoryRepository;
+        private readonly Mock<INotificationService> _notificationService;
         private readonly IMapper _mapper;
         private readonly CategoryService _service;
 
         public CategoryQueryTests()
         {
             _categoryRepository = new Mock<ICategoryRepository>();
+            _notificationService = new Mock<INotificationService>();
 
             var configuration = new MapperConfiguration(cfg =>
             {
@@ -28,7 +30,7 @@ namespace Test.CategoryTests
             }, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
             _mapper = configuration.CreateMapper();
 
-            _service = new CategoryService(_categoryRepository.Object, _mapper);
+            _service = new CategoryService(_categoryRepository.Object, _mapper, _notificationService.Object);
         }
 
         [Fact]

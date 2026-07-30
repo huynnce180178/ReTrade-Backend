@@ -20,6 +20,7 @@ namespace Test.ReportTests
         private readonly Mock<IProductService> _productService;
         private readonly Mock<IReviewService> _reviewService;
         private readonly IMapper _mapper;
+        private readonly Mock<INotificationService> _notificationService;
         private readonly ReportService _service;
 
         public ReportGetByIdTests()
@@ -36,6 +37,7 @@ namespace Test.ReportTests
                 cfg.AddProfile<AutoMapperProfile>();
             }, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
             _mapper = configuration.CreateMapper();
+            _notificationService = new Mock<INotificationService>();
 
             _service = new ReportService(
                 _reportRepository.Object,
@@ -44,7 +46,8 @@ namespace Test.ReportTests
                 _userService.Object,
                 _productService.Object,
                 _reviewService.Object,
-                _mapper
+                _mapper,
+                _notificationService.Object
             );
         }
 

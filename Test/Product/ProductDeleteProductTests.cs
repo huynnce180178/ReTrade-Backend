@@ -20,6 +20,7 @@ namespace Test.ProductTests
         private readonly Mock<IProductRepository> _productRepository;
         private readonly Mock<IAccountRepository> _accountRepository;
         private readonly Mock<AppDbContext> _context;
+        private readonly Mock<INotificationService> _notificationService;
         private readonly IMapper _mapper;
         private readonly ProductService _service;
 
@@ -28,6 +29,7 @@ namespace Test.ProductTests
             _productRepository = new Mock<IProductRepository>();
             _accountRepository = new Mock<IAccountRepository>();
             _context = new Mock<AppDbContext>();
+            _notificationService = new Mock<INotificationService>();
 
             var configuration = new MapperConfiguration(cfg =>
             {
@@ -39,7 +41,8 @@ namespace Test.ProductTests
                 _productRepository.Object,
                 _accountRepository.Object,
                 _context.Object,
-                _mapper
+                _mapper,
+                _notificationService.Object
             );
         }
 

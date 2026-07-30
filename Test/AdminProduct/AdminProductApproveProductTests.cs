@@ -18,16 +18,19 @@ namespace Test.AdminProductTests
     {
         private readonly Mock<IAdminProductRepository> _adminProductRepository;
         private readonly Mock<AppDbContext> _context;
+        private readonly Mock<INotificationService> _notificationService;
         private readonly AdminProductService _service;
 
         public AdminProductApproveProductTests()
         {
             _adminProductRepository = new Mock<IAdminProductRepository>();
             _context = new Mock<AppDbContext>();
+            _notificationService = new Mock<INotificationService>();
 
             _service = new AdminProductService(
                 _adminProductRepository.Object,
-                _context.Object
+                _context.Object,
+                _notificationService.Object
             );
         }
 
