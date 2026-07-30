@@ -27,6 +27,12 @@ namespace RetradeBE.Services.BackgroundJobs
                     {
                         _logger.LogInformation("Processed {Count} due auctions.", processed);
                     }
+
+                    var notified = await auctionService.NotifyUpcomingAuctionsAsync(stoppingToken);
+                    if (notified > 0)
+                    {
+                        _logger.LogInformation("Notified {Count} users about upcoming auctions.", notified);
+                    }
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {

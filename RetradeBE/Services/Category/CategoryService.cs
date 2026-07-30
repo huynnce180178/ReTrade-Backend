@@ -9,13 +9,16 @@ public class CategoryService : ICategoryService
 {
     private readonly ICategoryRepository _repository;
     private readonly IMapper _mapper;
+    private readonly INotificationService _notificationService;
 
     public CategoryService(
         ICategoryRepository repository,
-        IMapper mapper)
+        IMapper mapper,
+        INotificationService notificationService)
     {
         _repository = repository;
         _mapper = mapper;
+        _notificationService = notificationService;
     }
 
     public IQueryable<CategoryResponseDto> Query()
@@ -91,6 +94,16 @@ public class CategoryService : ICategoryService
         }
 
         await _repository.AddAsync(category);
+
+        if (string.Equals(category.Status, "Pending", StringComparison.OrdinalIgnoreCase))
+        {
+            await _notificationService.NotifyAdminsAsync(
+                "New Category Request",
+                $"A new category '{category.Name}' has been suggested and requires your review.",
+                "System",
+                category.CategoryId
+            );
+        }
 
         return _mapper.Map<CategoryResponseDto>(category);
     }

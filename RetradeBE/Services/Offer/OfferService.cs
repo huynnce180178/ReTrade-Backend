@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.SignalR;
 using RetradeBE.Data;
 using RetradeBE.Hubs;
@@ -19,6 +19,7 @@ namespace RetradeBE.Services.Offer
         private readonly IAddressRepository _addressRepo;
         private readonly IOrderRepository _orderRepo;
         private readonly IWishlistRepository _wishlistRepo;
+        private readonly INotificationService _notificationService;
 
         public OfferService(
             ICheckoutService checkoutService, 
@@ -29,7 +30,8 @@ namespace RetradeBE.Services.Offer
             IUserRepository userRepo,
             IAddressRepository addressRepo,
             IOrderRepository orderRepo,
-            IWishlistRepository wishlistRepo)
+            IWishlistRepository wishlistRepo,
+            INotificationService notificationService)
         {
             _checkoutService = checkoutService;
             _orderHub = orderHub;
@@ -40,6 +42,7 @@ namespace RetradeBE.Services.Offer
             _addressRepo = addressRepo;
             _orderRepo = orderRepo;
             _wishlistRepo = wishlistRepo;
+            _notificationService = notificationService;
         }
 
         public async Task<OfferDto> MakeOfferAsync(string accountId, MakeOfferRequestDto request)
@@ -81,6 +84,15 @@ namespace RetradeBE.Services.Offer
             };
 
             await _repo.AddAsync(offer);
+
+            await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+            {
+                UserId = product.SellerId,
+                Title = "New Offer Received",
+                Message = $"You received a new offer of {request.OfferPrice:N0} VND for '{product.Name}'.",
+                Type = "Offer",
+                ReferenceId = offer.OfferId
+            });
 
             var buyer = await _userRepo.GetByIdAsync(buyerUserId);
             var mainImage = product.ProductImage
@@ -156,6 +168,15 @@ namespace RetradeBE.Services.Offer
 
             offer.Status = accept ? "Accepted" : "Rejected";
             await _repo.UpdateAsync(offer);
+
+            await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+            {
+                UserId = offer.BuyerId,
+                Title = accept ? "Offer Accepted" : "Offer Rejected",
+                Message = $"Your offer for '{offer.Product?.Name}' was {(accept ? "accepted" : "rejected")} by the seller.",
+                Type = "Offer",
+                ReferenceId = offer.OfferId
+            });
 
             var mainImage = offer.Product?.ProductImage
                 .OrderBy(pi => pi.SortOrder)
@@ -327,6 +348,15 @@ namespace RetradeBE.Services.Offer
             offer.Status = "CounterOffer";
 
             await _repo.UpdateAsync(offer);
+
+            await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+            {
+                UserId = offer.BuyerId,
+                Title = "Counter Offer Received",
+                Message = $"The seller made a counter offer of {request.CounterPrice:N0} VND for '{offer.Product?.Name}'.",
+                Type = "Offer",
+                ReferenceId = offer.OfferId
+            });
 
             var mainImage = offer.Product?.ProductImage
                 .OrderBy(pi => pi.SortOrder)

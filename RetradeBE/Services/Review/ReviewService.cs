@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using RetradeBE.Models;
 using RetradeBE.Models.DTOs;
+using RetradeBE.Models.Enums;
 using RetradeBE.Repositories;
 
 namespace RetradeBE.Services
@@ -15,17 +16,20 @@ namespace RetradeBE.Services
         private readonly IReviewRepository _reviewRepository;
         private readonly IReportRepository _reportRepository;
         private readonly IAccountRepository _accountRepository;
+        private readonly INotificationService _notificationService;
 
         public ReviewService(
             IOrderRepository orderRepository,
             IReviewRepository reviewRepository,
             IReportRepository reportRepository,
-            IAccountRepository accountRepository)
+            IAccountRepository accountRepository,
+            INotificationService notificationService)
         {
             _orderRepository = orderRepository;
             _reviewRepository = reviewRepository;
             _reportRepository = reportRepository;
             _accountRepository = accountRepository;
+            _notificationService = notificationService;
         }
 
         public Task<Review?> GetByIdForReportAsync(string reviewId) =>
@@ -199,6 +203,20 @@ namespace RetradeBE.Services
 
             await _reviewRepository.AddAsync(review);
             review.Order = order;
+
+            try
+            {
+                await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                {
+                    UserId = review.SellerId,
+                    Title = "New Review Received",
+                    Message = $"You have received a new {review.Rating}-star review for order {review.Order.OrderCode}.",
+                    Type = nameof(NotificationTypeEnum.Review),
+                    ReferenceId = review.ReviewId
+                });
+            }
+            catch { }
+
             return MapReview(review, new List<Report>(), authenticatedBuyerId, includeReports: false, includeReviewerPrivateInfo: true);
         }
 

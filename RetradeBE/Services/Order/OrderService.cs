@@ -17,13 +17,16 @@ namespace RetradeBE.Services
 
         private readonly IOrderRepository _orderRepository;
         private readonly IHubContext<OrderHub> _orderHub;
+        private readonly INotificationService _notificationService;
 
         public OrderService(
             IOrderRepository orderRepository,
-            IHubContext<OrderHub> orderHub)
+            IHubContext<OrderHub> orderHub,
+            INotificationService notificationService)
         {
             _orderRepository = orderRepository;
             _orderHub = orderHub;
+            _notificationService = notificationService;
         }
 
         public Task<Order?> GetByIdAsync(string orderId) => _orderRepository.GetByIdAsync(orderId);
@@ -200,6 +203,7 @@ namespace RetradeBE.Services
             await _orderRepository.UpdateAsync(order);
             var updatedOrder = ToDetailDto(order);
             await NotifySellerOrderStatusChangedAsync(updatedOrder);
+            await SendOrderNotificationsAsync(order, nextStatus);
 
             return updatedOrder;
         }
@@ -218,6 +222,7 @@ namespace RetradeBE.Services
             await _orderRepository.UpdateAsync(order);
             var updatedOrder = ToDetailDto(order);
             await NotifySellerOrderStatusChangedAsync(updatedOrder);
+            await SendOrderNotificationsAsync(order, OrderStatusEnum.Returned);
 
             return updatedOrder;
         }
@@ -236,6 +241,7 @@ namespace RetradeBE.Services
             await _orderRepository.UpdateAsync(order);
             var updatedOrder = ToDetailDto(order);
             await NotifySellerOrderStatusChangedAsync(updatedOrder);
+            await SendOrderNotificationsAsync(order, OrderStatusEnum.ReturnRejected);
 
             return updatedOrder;
         }
@@ -272,6 +278,7 @@ namespace RetradeBE.Services
 
                 await _orderRepository.UpdateAsync(order);
                 await NotifySellerOrderStatusChangedAsync(ToDetailDto(order));
+                await SendOrderNotificationsAsync(order, carrierSucceeded ? OrderStatusEnum.Delivered : OrderStatusEnum.DeliveryFailed);
                 processedCount++;
             }
 
@@ -629,6 +636,100 @@ namespace RetradeBE.Services
                 await _orderHub.Clients
                     .Group(OrderHub.GetBuyerOrderGroupName(order.BuyerId))
                     .SendAsync("BuyerOrderStatusChanged", payload);
+            }
+        }
+
+        private async Task SendOrderNotificationsAsync(Order order, OrderStatusEnum newStatus)
+        {
+            var productName = order.Product?.Name ?? "your item";
+            var orderCode = order.OrderCode ?? order.OrderId;
+
+            string buyerTitle;
+            string buyerMessage;
+            string sellerTitle;
+            string sellerMessage;
+
+            switch (newStatus)
+            {
+                case OrderStatusEnum.Confirmed:
+                    buyerTitle = "Order Confirmed";
+                    buyerMessage = $"Your order #{orderCode} for \"{productName}\" has been confirmed by the seller.";
+                    sellerTitle = "Order Confirmed";
+                    sellerMessage = $"You confirmed order #{orderCode} for \"{productName}\".";
+                    break;
+                case OrderStatusEnum.Shipping:
+                    buyerTitle = "Out for Delivery";
+                    buyerMessage = $"GHN shipper is delivering your order {orderCode}, please pay attention to your phone!";
+                    sellerTitle = "Order Shipped";
+                    sellerMessage = $"Order {orderCode} has been shipped.";
+                    break;
+                case OrderStatusEnum.Delivered:
+                    buyerTitle = "Order Delivered";
+                    buyerMessage = $"Your order #{orderCode} for \"{productName}\" has been delivered successfully.";
+                    sellerTitle = "Order Delivered";
+                    sellerMessage = $"Order #{orderCode} for \"{productName}\" was delivered to the buyer.";
+                    break;
+                case OrderStatusEnum.DeliveryFailed:
+                    buyerTitle = "Delivery Failed";
+                    buyerMessage = $"Delivery of your order {orderCode} has failed. Please contact support.";
+                    sellerTitle = "Delivery Failed";
+                    sellerMessage = $"Delivery failed for order {orderCode}, GHN will try to redeliver tomorrow.";
+                    break;
+                case OrderStatusEnum.Cancelled:
+                    buyerTitle = "Order Cancelled";
+                    buyerMessage = $"Your order #{orderCode} for \"{productName}\" has been cancelled.";
+                    sellerTitle = "Order Cancelled";
+                    sellerMessage = $"Order #{orderCode} for \"{productName}\" has been cancelled.";
+                    break;
+                case OrderStatusEnum.Returned:
+                    buyerTitle = "Return Approved";
+                    buyerMessage = $"Your return request for order #{orderCode} (\"{productName}\") has been approved.";
+                    sellerTitle = "Return Approved";
+                    sellerMessage = $"You approved the return for order #{orderCode} (\"{productName}\").";
+                    break;
+                case OrderStatusEnum.ReturnRejected:
+                    buyerTitle = "Return Rejected";
+                    buyerMessage = $"Your return request for order #{orderCode} (\"{productName}\") has been rejected.";
+                    sellerTitle = "Return Rejected";
+                    sellerMessage = $"You rejected the return for order #{orderCode} (\"{productName}\").";
+                    break;
+                default:
+                    buyerTitle = "Order Update";
+                    buyerMessage = $"Your order #{orderCode} status changed to {newStatus}.";
+                    sellerTitle = "Order Update";
+                    sellerMessage = $"Order #{orderCode} status changed to {newStatus}.";
+                    break;
+            }
+
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(order.BuyerId))
+                {
+                    await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                    {
+                        UserId = order.BuyerId,
+                        Title = buyerTitle,
+                        Message = buyerMessage,
+                        Type = nameof(NotificationTypeEnum.Order),
+                        ReferenceId = order.OrderId
+                    });
+                }
+
+                if (!string.IsNullOrWhiteSpace(order.SellerId))
+                {
+                    await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                    {
+                        UserId = order.SellerId,
+                        Title = sellerTitle,
+                        Message = sellerMessage,
+                        Type = nameof(NotificationTypeEnum.Order),
+                        ReferenceId = order.OrderId
+                    });
+                }
+            }
+            catch (Exception)
+            {
+                // Notification failures should not break order operations
             }
         }
 

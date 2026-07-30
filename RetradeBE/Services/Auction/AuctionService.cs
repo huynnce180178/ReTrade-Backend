@@ -18,19 +18,22 @@ namespace RetradeBE.Services
         private readonly AppDbContext _context;
         private readonly IPaymentService _paymentService;
         private readonly IHubContext<AuctionHub> _auctionHub;
+        private readonly INotificationService _notificationService;
 
         public AuctionService(
             IAuctionRepository auctionRepository,
             IAccountRepository accountRepository,
             AppDbContext context,
             IPaymentService paymentService,
-            IHubContext<AuctionHub> auctionHub)
+            IHubContext<AuctionHub> auctionHub,
+            INotificationService notificationService)
         {
             _auctionRepository = auctionRepository;
             _accountRepository = accountRepository;
             _context = context;
             _paymentService = paymentService;
             _auctionHub = auctionHub;
+            _notificationService = notificationService;
         }
 
         public async Task<PagedResultDto<AuctionListDto>> GetAuctionsAsync(AuctionQueryDto query)
@@ -168,6 +171,14 @@ namespace RetradeBE.Services
             var saved = await _auctionRepository.GetByIdAsync(auction.AuctionId);
             var result = MapToDetailDto(saved!);
             await NotifyAuctionChangedAsync(result, "AuctionCreated");
+
+            await _notificationService.NotifyAdminsAsync(
+                "New Auction Created",
+                $"A new auction for product '{product.Name}' is pending approval.",
+                "System",
+                auction.AuctionId
+            );
+
             return result;
         }
 
@@ -367,6 +378,7 @@ namespace RetradeBE.Services
             await NotifyAuctionChangedAsync(mapped, endedByBuyNow ? "AuctionEndedByBuyNow" : "BidPlaced");
             await NotifyAuctionDepositChangedAsync(deposit, endedByBuyNow ? "DepositAppliedToOrder" : "BidPlaced");
 
+            var productName = auction.Product?.Name ?? "product";
             foreach (var outbidUserId in outbidUserIds.Where(id => id != userId))
             {
                 var outbidDeposit = await _context.AuctionDeposit
@@ -378,6 +390,19 @@ namespace RetradeBE.Services
                 {
                     await NotifyAuctionDepositChangedAsync(outbidDeposit, "BidReleased");
                 }
+
+                try
+                {
+                    await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                    {
+                        UserId = outbidUserId,
+                        Title = "You have been outbid!",
+                        Message = $"Someone has placed a higher bid on '{productName}'. Place a new bid now!",
+                        Type = nameof(NotificationTypeEnum.Auction),
+                        ReferenceId = auction.AuctionId
+                    });
+                }
+                catch { }
             }
 
             return new AuctionBidResultDto
@@ -388,6 +413,64 @@ namespace RetradeBE.Services
                 OrderId = orderId,
                 Message = endedByBuyNow ? "Bid matched buy now price. Auction ended." : "Bid placed successfully."
             };
+        }
+
+        public async Task<int> NotifyUpcomingAuctionsAsync(CancellationToken cancellationToken = default)
+        {
+            var now = GetAuctionNow();
+            var targetTime = now.AddMinutes(30);
+
+            var upcomingAuctions = await _context.Auction
+                .Include(a => a.Product)
+                .Where(a => a.Status == "Upcoming"
+                    && a.StartTime.HasValue
+                    && a.StartTime.Value <= targetTime
+                    && a.StartTime.Value > now)
+                .ToListAsync(cancellationToken);
+
+            var notifiedCount = 0;
+
+            foreach (var auction in upcomingAuctions)
+            {
+                var wishlistUserIds = await _context.WishlistItem
+                    .Where(wi => wi.ProductId == auction.ProductId 
+                        && wi.Wishlist != null 
+                        && wi.Wishlist.IsDeleted != true 
+                        && wi.Wishlist.Status == "Active")
+                    .Select(wi => wi.Wishlist!.UserId)
+                    .Distinct()
+                    .ToListAsync(cancellationToken);
+
+                foreach (var userId in wishlistUserIds)
+                {
+                    if (string.IsNullOrWhiteSpace(userId)) continue;
+
+                    var alreadyNotified = await _context.Notification
+                        .AnyAsync(n => n.UserId == userId 
+                            && n.ReferenceId == auction.AuctionId 
+                            && n.Title == "Auction Starting Soon", cancellationToken);
+
+                    if (!alreadyNotified)
+                    {
+                        try
+                        {
+                            var productName = auction.Product?.Name ?? "product";
+                            await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                            {
+                                UserId = userId,
+                                Title = "Auction Starting Soon",
+                                Message = $"The auction for '{productName}' in your wishlist will start in 30 minutes!",
+                                Type = nameof(NotificationTypeEnum.Auction),
+                                ReferenceId = auction.AuctionId
+                            });
+                            notifiedCount++;
+                        }
+                        catch { }
+                    }
+                }
+            }
+
+            return notifiedCount;
         }
 
         public async Task<int> ProcessDueAuctionsAsync(CancellationToken cancellationToken = default)
@@ -425,6 +508,19 @@ namespace RetradeBE.Services
                     if (saved != null)
                     {
                         await NotifyAuctionChangedAsync(MapToDetailDto(saved), "AuctionEndedNoBid");
+                        try
+                        {
+                            var productName = saved.Product?.Name ?? "product";
+                            await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                            {
+                                UserId = auction.SellerId,
+                                Title = "Auction Ended",
+                                Message = $"The auction for '{productName}' has ended with no winner.",
+                                Type = nameof(NotificationTypeEnum.Auction),
+                                ReferenceId = auction.AuctionId
+                            });
+                        }
+                        catch { }
                     }
                 }
                 else
@@ -662,6 +758,20 @@ namespace RetradeBE.Services
             await CreateWinnerRemainderRefundAsync(auction, winnerDeposit, winningAmount);
             await _context.SaveChangesAsync();
 
+            try
+            {
+                var productName = auction.Product?.Name ?? "product";
+                await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                {
+                    UserId = winnerBid.UserId,
+                    Title = "Congratulations! You won the auction",
+                    Message = $"You have won the auction for '{productName}'. Please complete the payment!",
+                    Type = nameof(NotificationTypeEnum.Auction),
+                    ReferenceId = auction.AuctionId
+                });
+            }
+            catch { }
+
             return order.OrderId;
         }
 
@@ -670,6 +780,8 @@ namespace RetradeBE.Services
             var deposits = await _context.AuctionDeposit
                 .Where(d => d.AuctionId == auction.AuctionId && d.Status == "Paid" && d.UserId != winnerId)
                 .ToListAsync();
+
+            bool hasNewRefund = false;
 
             foreach (var deposit in deposits)
             {
@@ -698,7 +810,17 @@ namespace RetradeBE.Services
                     CreatedAt = GetAuctionNow(),
                     UpdatedAt = GetAuctionNow()
                 });
+                hasNewRefund = true;
+            }
 
+            if (hasNewRefund)
+            {
+                await _notificationService.NotifyAdminsAsync(
+                    "New Refund Requests",
+                    $"Refund requests have been generated for auction '{auction.AuctionId}'.",
+                    "Payment",
+                    auction.AuctionId
+                );
             }
         }
 
@@ -728,6 +850,12 @@ namespace RetradeBE.Services
                 UpdatedAt = GetAuctionNow()
             });
 
+            await _notificationService.NotifyAdminsAsync(
+                "New Refund Request",
+                $"A remainder refund request has been generated for auction '{auction.AuctionId}' winner.",
+                "Payment",
+                auction.AuctionId
+            );
         }
 
         private async Task<string?> GetDefaultAddressSnapshotAsync(string userId)
