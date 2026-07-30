@@ -48,7 +48,8 @@ public class ServiceSubscriptionController : ControllerBase
         }
 
         var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
-        var response = await _serviceSubscriptionService.CreatePurchasePaymentUrlAsync(accountId, serviceId, ipAddress);
+        var callbackUrl = $"{Request.Scheme}://{Request.Host}/api/Payment/vnpay-return";
+        var response = await _serviceSubscriptionService.CreatePurchasePaymentUrlAsync(accountId, serviceId, ipAddress, callbackUrl);
         return Ok(response);
     }
 }

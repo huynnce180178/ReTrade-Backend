@@ -41,7 +41,7 @@ namespace RetradeBE.Services
             if (product == null)
                 throw new Exception("Product does not exist or has been deleted.");
 
-            if (product.Status != ProductStatusEnum.Accepted.ToString())
+            if (product.Status != ProductStatusEnum.Accepted.ToString() && product.Status != ProductStatusEnum.Ready.ToString())
                 throw new Exception("Product is not available to be added to the wishlist.");
 
             if (product.SellerId == userId)

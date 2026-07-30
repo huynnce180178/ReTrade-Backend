@@ -44,7 +44,8 @@ public class PaymentService : IPaymentService
     public async Task<CreateVnPayPaymentResponseDto> CreateVnPayPaymentUrlAsync(
         string accountId,
         CreateVnPayPaymentRequestDto request,
-        string ipAddress)
+        string ipAddress,
+        string? overrideCallbackUrl = null)
     {
         ValidateSettings();
 
@@ -150,7 +151,7 @@ public class PaymentService : IPaymentService
             ["vnp_Locale"] = locale,
             ["vnp_OrderInfo"] = request.OrderDescription.Trim(),
             ["vnp_OrderType"] = "other",
-            ["vnp_ReturnUrl"] = _vnPaySettings.CallbackUrl,
+            ["vnp_ReturnUrl"] = !string.IsNullOrWhiteSpace(overrideCallbackUrl) ? overrideCallbackUrl : _vnPaySettings.CallbackUrl,
             ["vnp_TxnRef"] = paymentId,
             ["vnp_ExpireDate"] = createDate.AddMinutes(15).ToString("yyyyMMddHHmmss")
         };

@@ -504,8 +504,9 @@ namespace RetradeBE.Services
                     Username = username,
                     ProviderUserId = providerUserId ?? email,
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()), // random password
-                    Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString(), // Google accounts bá» qua verify
+                    Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString(), // Google accounts bỏ qua verify
                     IsPasswordSet = false,
+                    LastLoginAt = DateTime.UtcNow,
                     CreatedAt = DateTime.UtcNow
                 };
                 await _repository.AddAsync(account);
@@ -513,7 +514,7 @@ namespace RetradeBE.Services
             }
             else
             {
-                // TÃ¬m account theo userId
+                // Tìm account theo userId
                 var allAccounts = await _repository.GetAllAsync();
                 account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
                 if (account == null || account.IsDeleted == true) return null;
@@ -523,7 +524,7 @@ namespace RetradeBE.Services
                     throw new InvalidOperationException("ACCOUNT_INACTIVE");
                 }
 
-                // Tá»± Ä‘á»™ng activate náº¿u Pending (Ä‘Äƒng nháº­p Google láº§n Ä‘áº§u sau khi register thÆ°á»ng)
+                // Tự động activate nếu Pending (đăng nhập Google lần đầu sau khi register thường)
                 if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Pending.ToString())
                 {
                     account.Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString();
@@ -531,6 +532,7 @@ namespace RetradeBE.Services
 
                 account.Provider = googleProvider;
                 account.ProviderUserId = providerUserId ?? email;
+                account.LastLoginAt = DateTime.UtcNow;
                 account.UpdatedAt = DateTime.UtcNow;
                 await _repository.UpdateAsync(account);
             }
