@@ -111,11 +111,19 @@ namespace RetradeBE.Services.Checkout
             if (product == null)
                 throw new Exception("Product not found");
 
+            if (product.IsDeleted == true ||
+                product.Status != RetradeBE.Models.Enums.ProductStatusEnum.Accepted.ToString() ||
+                !product.StockQuantity.HasValue ||
+                product.StockQuantity.Value <= 0)
+            {
+                throw new Exception("Product is out of stock or no longer available for purchase.");
+            }
+
             var address = await _context.Address.FirstOrDefaultAsync(a => a.AddressId == request.AddressId);
             if (address == null)
                 throw new Exception("Address not found");
 
-            if (product.StockQuantity < request.Quantity)
+            if (product.StockQuantity.Value < request.Quantity)
                 throw new Exception("Not enough stock");
 
             // Calculate Fee again to verify

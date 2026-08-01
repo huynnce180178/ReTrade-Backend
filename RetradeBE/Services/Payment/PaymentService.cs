@@ -286,16 +286,23 @@ public class PaymentService : IPaymentService
         }
 
         await _context.SaveChangesAsync();
-        if (updatedOrder != null)
+        try
         {
-            await NotifySellerOrderChangedAsync(updatedOrder, "PaymentConfirmed");
+            if (updatedOrder != null)
+            {
+                await NotifySellerOrderChangedAsync(updatedOrder, "PaymentConfirmed");
+            }
+            if (updatedDeposit != null)
+            {
+                var eventType = isSuccess
+                    ? (wasAuctionDepositAlreadyPaid ? "DepositToppedUp" : "DepositPaid")
+                    : (wasAuctionDepositAlreadyPaid ? "DepositTopUpFailed" : "DepositFailed");
+                await NotifyAuctionDepositChangedAsync(updatedDeposit, eventType);
+            }
         }
-        if (updatedDeposit != null)
+        catch (Exception ex)
         {
-            var eventType = isSuccess
-                ? (wasAuctionDepositAlreadyPaid ? "DepositToppedUp" : "DepositPaid")
-                : (wasAuctionDepositAlreadyPaid ? "DepositTopUpFailed" : "DepositFailed");
-            await NotifyAuctionDepositChangedAsync(updatedDeposit, eventType);
+            _logger.LogWarning(ex, "Payment callback was processed, but realtime notification failed for PaymentId {PaymentId}.", payment.PaymentId);
         }
 
         return new VnPayReturnResponseDto

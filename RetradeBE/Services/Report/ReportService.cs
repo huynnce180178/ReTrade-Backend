@@ -12,9 +12,9 @@ namespace RetradeBE.Services
         private const string PendingStatus = "Pending";
         private const string RejectedStatus = "Rejected";
         private const string AcceptedStatus = "Accepted";
-        private const string ReviewTargetType = "review";
-        private const string BuyerTargetType = "buyer";
-        private const string SellerTargetType = "seller";
+        private const string ReviewTargetType = "Review";
+        private const string BuyerTargetType = "Buyer";
+        private const string SellerTargetType = "Seller";
         private static readonly HashSet<string> AllowedReportOrderStatuses = new(StringComparer.OrdinalIgnoreCase)
         {
             "Delivered",

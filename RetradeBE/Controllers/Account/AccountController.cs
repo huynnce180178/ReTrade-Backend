@@ -21,7 +21,13 @@ namespace RetradeBE.Controllers.Account
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDto dto)
         {
-            return Ok(await _service.RegisterAsync(dto));
+            var result = await _service.RegisterAsync(dto);
+            if (result != "Register success. Please check your email for OTP.")
+            {
+                return BadRequest(new { message = result });
+            }
+
+            return Ok(new { message = result });
         }
 
         [HttpGet]

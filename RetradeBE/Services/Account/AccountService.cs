@@ -269,6 +269,9 @@ namespace RetradeBE.Services
 
         public async Task<string> RegisterAsync(RegisterDto dto)
         {
+            var pwdValidation = ValidatePasswordStrength(dto.Password);
+            if (pwdValidation != null) return pwdValidation;
+
             var existingUser = await _userRepository.GetByEmailAsync(dto.Email);
             if (existingUser != null) return "Email already exists.";
 

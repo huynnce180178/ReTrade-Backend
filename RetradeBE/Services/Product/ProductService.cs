@@ -404,10 +404,22 @@ namespace RetradeBE.Services
         {
             var queryable = _repository.Query();
 
-            // Filter out products from inactive categories for buyers
+            // Filter buyer-facing product lists to only purchasable products.
+            // Seller profile/admin flows pass SellerId/Status and should still be able to see sold/out-of-stock items.
             if (string.IsNullOrEmpty(query.SellerId))
             {
-                queryable = queryable.Where(p => p.Category != null && p.Category.Status == "Active");
+                queryable = queryable.Where(p =>
+                    p.Category != null &&
+                    p.Category.Status == "Active" &&
+                    p.StockQuantity.HasValue &&
+                    p.StockQuantity.Value > 0 &&
+                    p.Status != ProductStatusEnum.Sold.ToString() &&
+                    p.Status != ProductStatusEnum.Inactive.ToString());
+
+                if (string.IsNullOrWhiteSpace(query.Status))
+                {
+                    queryable = queryable.Where(p => p.Status == ProductStatusEnum.Accepted.ToString());
+                }
             }
 
             // Filter Category and Subcategories

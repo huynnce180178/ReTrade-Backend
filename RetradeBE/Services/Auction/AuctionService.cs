@@ -245,7 +245,8 @@ namespace RetradeBE.Services
             string accountId,
             string auctionId,
             AuctionDepositPaymentRequestDto dto,
-            string ipAddress)
+            string ipAddress,
+            string? overrideCallbackUrl = null)
         {
             var account = await GetAccountAsync(accountId);
             var userId = account.UserId ?? throw new Exception("Account is not linked to a user.");
@@ -297,7 +298,7 @@ namespace RetradeBE.Services
                 OrderDescription = $"Auction deposit for {auction.Product?.Name ?? auction.AuctionId}",
                 BankCode = dto.BankCode,
                 Locale = dto.Locale
-            }, ipAddress);
+            }, ipAddress, overrideCallbackUrl);
         }
 
         public async Task<AuctionBidResultDto> PlaceBidAsync(string accountId, string auctionId, AuctionBidCreateDto dto)
