@@ -276,6 +276,20 @@ namespace RetradeBE.Services
             return count;
         }
 
+        public async Task<bool> ClearRoomMessagesAsync(string accountId, string roomId)
+        {
+            var principal = await ResolvePrincipalAsync(accountId);
+            var room = await EnsureCanAccessRoomAsync(roomId, principal);
+
+            await _chatRepository.ClearRoomMessagesAsync(roomId, principal.UserId);
+            await _hubContext.Clients
+                .Group(ChatHub.GetUserGroupName(principal.UserId))
+                .SendAsync("ChatCleared", new { RoomId = room.RoomId, UserId = principal.UserId });
+
+            return true;
+        }
+
+
         private async Task<ChatRoom> EnsureCanAccessRoomAsync(string roomId, ChatPrincipal principal)
         {
             var room = await _chatRepository.GetRoomByIdAsync(roomId);

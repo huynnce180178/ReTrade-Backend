@@ -554,6 +554,24 @@ namespace RetradeBE.Services
             };
         }
 
+        private static string? ValidatePasswordStrength(string? password)
+        {
+            if (string.IsNullOrWhiteSpace(password) || password.Length < 8)
+                return "Password must be at least 8 characters long.";
+            if (password.Length > 50)
+                return "Password must not exceed 50 characters.";
+            if (!System.Text.RegularExpressions.Regex.IsMatch(password, @"[A-Z]"))
+                return "Password must contain at least one uppercase letter.";
+            if (!System.Text.RegularExpressions.Regex.IsMatch(password, @"[a-z]"))
+                return "Password must contain at least one lowercase letter.";
+            if (!System.Text.RegularExpressions.Regex.IsMatch(password, @"[0-9]"))
+                return "Password must contain at least one number.";
+            if (!System.Text.RegularExpressions.Regex.IsMatch(password, @"[!@#$%^&*(),.?"":{}|<>_\-]"))
+                return "Password must contain at least one special character.";
+
+            return null;
+        }
+
         public async Task<string> ForgotPasswordAsync(string email)
         {
             var user = await _userRepository.GetByEmailAsync(email);
@@ -601,11 +619,11 @@ namespace RetradeBE.Services
         public async Task<string> PasswordRecoveryAsync(string email)
         {
             var user = await _userRepository.GetByEmailAsync(email);
-            if (user == null) return "No account is associated with this email address.";
+            if (user == null) return "Email not found.";
 
             var allAccounts = await _repository.GetAllAsync();
             var account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
-            if (account == null) return "No account is associated with this email address.";
+            if (account == null) return "No account associated with this email.";
 
             string newPassword = GenerateRandomPassword();
 
@@ -627,6 +645,9 @@ namespace RetradeBE.Services
             {
                 return "Invalid or expired OTP.";
             }
+
+            var pwdValidation = ValidatePasswordStrength(dto.NewPassword);
+            if (pwdValidation != null) return pwdValidation;
 
             var user = await _userRepository.GetByEmailAsync(dto.Email);
             if (user == null) return "User not found.";
@@ -657,25 +678,8 @@ namespace RetradeBE.Services
                 return "Old password is incorrect.";
             }
 
-            if (string.IsNullOrEmpty(dto.NewPassword) || dto.NewPassword.Length < 8)
-            {
-                return "Password must be at least 8 characters long.";
-            }
-
-            if (dto.NewPassword.Length > 50)
-            {
-                return "Password exceeds the maximum allowed length.";
-            }
-
-            if (!System.Text.RegularExpressions.Regex.IsMatch(dto.NewPassword, @"[A-Z]"))
-            {
-                return "Password must contain at least one uppercase letter.";
-            }
-
-            if (!System.Text.RegularExpressions.Regex.IsMatch(dto.NewPassword, @"[@$!%*?&._\-]"))
-            {
-                return "Password must contain at least one special character.";
-            }
+            var pwdValidation = ValidatePasswordStrength(dto.NewPassword);
+            if (pwdValidation != null) return pwdValidation;
 
             account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
             account.IsPasswordSet = true;
@@ -691,6 +695,9 @@ namespace RetradeBE.Services
             var account = await _repository.GetByIdAsync(accountId);
             if (account == null) return "Account not found.";
 
+            var pwdValidation = ValidatePasswordStrength(dto.NewPassword);
+            if (pwdValidation != null) return pwdValidation;
+
             account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
             account.IsPasswordSet = true;
             account.MustChangePassword = false;
@@ -699,5 +706,7 @@ namespace RetradeBE.Services
 
             return "Password set successfully.";
         }
+
+
     }
 }

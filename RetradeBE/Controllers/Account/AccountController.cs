@@ -83,9 +83,9 @@ namespace RetradeBE.Controllers.Account
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
         {
             var result = await _service.ForgotPasswordAsync(dto.Email);
-            if (result.Contains("not found") || result.Contains("No account"))
+            if (result != "Password reset OTP has been sent to your email.")
             {
-                return BadRequest(result);
+                return BadRequest(new { message = result });
             }
             return Ok(new { message = result });
         }
@@ -94,9 +94,9 @@ namespace RetradeBE.Controllers.Account
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
         {
             var result = await _service.ResetPasswordAsync(dto);
-            if (result.Contains("Invalid") || result.Contains("not found"))
+            if (result != "Password has been reset successfully.")
             {
-                return BadRequest(result);
+                return BadRequest(new { message = result });
             }
             return Ok(new { message = result });
         }
@@ -105,9 +105,9 @@ namespace RetradeBE.Controllers.Account
         public async Task<IActionResult> PasswordRecovery([FromBody] ForgotPasswordDto dto)
         {
             var result = await _service.PasswordRecoveryAsync(dto.Email);
-            if (result.Contains("not found"))
+            if (result != "Password reset successful. Please check your email for your new password.")
             {
-                return BadRequest(result);
+                return BadRequest(new { message = result });
             }
             return Ok(new { message = result });
         }
@@ -120,7 +120,10 @@ namespace RetradeBE.Controllers.Account
             if (string.IsNullOrEmpty(accountId)) return Unauthorized();
 
             var result = await _service.ChangePasswordAsync(accountId, dto);
-            if (result.Contains("incorrect") || result.Contains("not found")) return BadRequest(result);
+            if (result != "Password changed successfully.")
+            {
+                return BadRequest(new { message = result });
+            }
             return Ok(new { message = result });
         }
 
@@ -132,9 +135,14 @@ namespace RetradeBE.Controllers.Account
             if (string.IsNullOrEmpty(accountId)) return Unauthorized();
 
             var result = await _service.SetPasswordAsync(accountId, dto);
-            if (result.Contains("not found")) return BadRequest(result);
+            if (result != "Password set successfully.")
+            {
+                return BadRequest(new { message = result });
+            }
             return Ok(new { message = result });
         }
+
+
 
 
 

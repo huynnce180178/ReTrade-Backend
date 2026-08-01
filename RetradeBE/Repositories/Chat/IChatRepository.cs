@@ -15,5 +15,7 @@ namespace RetradeBE.Repositories
         Task<List<Chat>> GetMessagesByRoomIdAsync(string roomId, string userId, int page, int limit);
         Task<List<ChatRoomListDto>> GetRoomsForUserAsync(string userId, bool isAdmin);
         Task<int> MarkMessagesAsReadAsync(string roomId, string userId);
+        Task<int> ClearRoomMessagesAsync(string roomId, string userId);
     }
 }
+

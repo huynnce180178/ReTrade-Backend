@@ -15,9 +15,18 @@ namespace RetradeBE.Services
         private const string ReviewTargetType = "review";
         private const string BuyerTargetType = "buyer";
         private const string SellerTargetType = "seller";
-        private const string CompletedStatus = "Completed";
+        private static readonly HashSet<string> AllowedReportOrderStatuses = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Delivered",
+            "DeliveryFailed",
+            "Completed",
+            "ReturnRequested",
+            "ReturnRejected",
+            "Returned"
+        };
 
         private readonly IReportRepository _reportRepository;
+
         private readonly IOrderService _orderService;
         private readonly IAccountService _accountService;
         private readonly IUserService _userService;
@@ -129,9 +138,9 @@ namespace RetradeBE.Services
                 throw new KeyNotFoundException("Order not found.");
             }
 
-            if (!string.Equals(order.Status, CompletedStatus, StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(order.Status) || !AllowedReportOrderStatuses.Contains(order.Status))
             {
-                throw new InvalidOperationException("Only completed orders can be reported.");
+                throw new InvalidOperationException("Orders can only be reported after delivery or completion.");
             }
 
             if (string.IsNullOrWhiteSpace(order.SellerId) || string.IsNullOrWhiteSpace(order.BuyerId))
@@ -204,9 +213,9 @@ namespace RetradeBE.Services
                 throw new KeyNotFoundException("Order not found.");
             }
 
-            if (!string.Equals(order.Status, CompletedStatus, StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(order.Status) || !AllowedReportOrderStatuses.Contains(order.Status))
             {
-                throw new InvalidOperationException("Only completed orders can be reported.");
+                throw new InvalidOperationException("Orders can only be reported after delivery or completion.");
             }
 
             if (string.IsNullOrWhiteSpace(order.SellerId) || string.IsNullOrWhiteSpace(order.BuyerId))
