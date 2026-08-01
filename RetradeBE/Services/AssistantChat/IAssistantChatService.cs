@@ -4,7 +4,7 @@ namespace RetradeBE.Services.AssistantChat
 {
     public interface IAssistantChatService
     {
-        Task<AssistantChatResponseDto> SendMessageAsync(string? accountId, AssistantChatRequestDto request, CancellationToken cancellationToken = default);
+        Task<AssistantChatResponseDto> SendChatAssistantAsync(string? accountId, AssistantChatRequestDto request, CancellationToken cancellationToken = default);
         Task<List<AssistantChatMessageDto>> GetSessionHistoryAsync(string? accountId, string sessionId);
     }
 }

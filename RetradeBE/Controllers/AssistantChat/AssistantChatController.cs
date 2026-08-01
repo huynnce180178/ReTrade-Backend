@@ -23,7 +23,7 @@ namespace RetradeBE.Controllers.AssistantChat
 
             try
             {
-                var response = await _assistantChatService.SendMessageAsync(accountId, request, cancellationToken);
+                var response = await _assistantChatService.SendChatAssistantAsync(accountId, request, cancellationToken);
                 return Ok(response);
             }
             catch (UnauthorizedAccessException ex)

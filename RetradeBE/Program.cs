@@ -5,7 +5,6 @@ using RetradeBE.Repositories;
 using RetradeBE.Services;
 using RetradeBE.Services.BackgroundJobs;
 using System.Reflection;
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -41,9 +40,6 @@ namespace RetradeBE
             builder.Services.Configure<RetradeBE.Config.GhnSettings>(builder.Configuration.GetSection("GHN"));
             builder.Services.Configure<RetradeBE.Config.GeminiSettings>(builder.Configuration.GetSection("Gemini"));
 
-            builder.Services.AddDataProtection()
-                .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "DataProtectionKeys")))
-                .SetApplicationName("ReTrade");
 
             builder.Services.AddHttpClient();
             builder.Services.AddSignalR();
