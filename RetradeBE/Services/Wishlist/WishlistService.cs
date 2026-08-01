@@ -49,10 +49,6 @@ namespace RetradeBE.Services
 
             var wishlist = await GetActiveWishlistAsync(userId);
 
-            var alreadyAdded = await _wishlistRepository.IsProductInWishlistAsync(wishlist.WishlistId, dto.ProductId);
-            if (alreadyAdded)
-                throw new Exception("Product is already in the wishlist.");
-
             var item = new WishlistItem
             {
                 WishlistItemId = $"WI_{Guid.NewGuid():N}",
