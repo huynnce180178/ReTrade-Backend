@@ -11,5 +11,7 @@ namespace RetradeBE.Services
         Task<bool> DeleteMessageAsync(string accountId, string roomId, string messageId);
         Task<ChatMessageDto> RecallMessageAsync(string accountId, string roomId, string messageId);
         Task<int> MarkMessagesAsReadAsync(string accountId, string roomId);
+        Task<bool> ClearRoomMessagesAsync(string accountId, string roomId);
     }
 }
+

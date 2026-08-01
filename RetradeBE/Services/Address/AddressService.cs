@@ -106,8 +106,7 @@ namespace RetradeBE.Services
 
                 if (nextDefault != null)
                 {
-                    nextDefault.IsDefault = true;
-                    nextDefault.UpdatedAt = DateTime.UtcNow;
+                    await SetOnlyDefaultAddressAsync(userId, nextDefault.AddressId);
                     await _repository.SaveChangesAsync();
                 }
             }
@@ -139,6 +138,21 @@ namespace RetradeBE.Services
             {
                 address.IsDefault = false;
                 address.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
+        private async Task SetOnlyDefaultAddressAsync(string userId, string defaultAddressId)
+        {
+            var addresses = await _repository.GetActiveByUserIdAsync(userId);
+
+            foreach (var address in addresses)
+            {
+                var shouldBeDefault = address.AddressId == defaultAddressId;
+                if (address.IsDefault != shouldBeDefault)
+                {
+                    address.IsDefault = shouldBeDefault;
+                    address.UpdatedAt = DateTime.UtcNow;
+                }
             }
         }
 

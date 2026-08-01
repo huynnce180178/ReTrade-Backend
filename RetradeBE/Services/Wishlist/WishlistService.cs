@@ -44,6 +44,9 @@ namespace RetradeBE.Services
             if (product.Status != ProductStatusEnum.Accepted.ToString())
                 throw new Exception("Product is not available to be added to the wishlist.");
 
+            if (!product.StockQuantity.HasValue || product.StockQuantity.Value <= 0)
+                throw new Exception("Product is out of stock and cannot be added to the wishlist.");
+
             if (product.SellerId == userId)
                 throw new Exception("You cannot add your own product to your wishlist.");
 

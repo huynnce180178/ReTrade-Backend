@@ -211,6 +211,37 @@ namespace RetradeBE.Repositories
             return messages.Count;
         }
 
+        public async Task<int> ClearRoomMessagesAsync(string roomId, string userId)
+        {
+            var messages = await _context.Chat
+                .Where(c => c.RoomId == roomId && c.IsDeleted != true && c.MessageType != "Auto")
+                .ToListAsync();
+
+
+            var now = DateTime.UtcNow;
+            foreach (var message in messages)
+            {
+                if (message.SenderId == userId)
+                {
+                    message.DeletedForSender = true;
+                }
+                else
+                {
+                    message.DeletedForReceiver = true;
+                }
+
+                message.UpdatedAt = now;
+                if (message.DeletedForSender == true && message.DeletedForReceiver == true)
+                {
+                    message.IsDeleted = true;
+                }
+            }
+
+            await _context.SaveChangesAsync();
+            return messages.Count;
+        }
+
+
         private static ChatParticipantDto? MapParticipant(User? user)
         {
             if (user == null) return null;

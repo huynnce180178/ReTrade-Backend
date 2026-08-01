@@ -4,9 +4,18 @@ namespace RetradeBE.Models.DTOs
 {
     public class RegisterDto
     {
+        [Required]
         public string Username { get; set; } = string.Empty;
+
+        [Required]
+        [EmailAddress]
         public string Email { get; set; } = string.Empty;
+
+        [Required]
+        [RegularExpression(@"^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[!@#$%^&*(),.?"":{}|<>_\-])[A-Za-z\d!@#$%^&*(),.?"":{}|<>_\-]{8,50}$",
+            ErrorMessage = "Password must be 8 to 50 characters long, contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character.")]
         public string Password { get; set; } = string.Empty;
+
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;
         public int RoleId { get; set; } = 2;

@@ -137,7 +137,8 @@ namespace RetradeBE.Controllers
             try
             {
                 var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
-                var result = await _auctionService.CreateDepositPaymentUrlAsync(accountId, id, dto, ipAddress);
+                var callbackUrl = $"{Request.Scheme}://{Request.Host}/api/Payment/vnpay-return";
+                var result = await _auctionService.CreateDepositPaymentUrlAsync(accountId, id, dto, ipAddress, callbackUrl);
                 return Ok(result);
             }
             catch (Exception ex)

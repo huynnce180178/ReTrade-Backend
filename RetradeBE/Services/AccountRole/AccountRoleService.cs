@@ -26,7 +26,7 @@ namespace RetradeBE.Services.AccountRole
             var account = await _accountService.GetByIdAsync(accountId);
 
             if (account == null)
-                return null;
+                throw new KeyNotFoundException("Account not found.");
 
             var allRoles = await _repository.GetAllRolesAsync();
             var userRoles = await _repository.GetRolesByAccountIdAsync(accountId);
@@ -42,33 +42,45 @@ namespace RetradeBE.Services.AccountRole
         public async Task<bool> AssignRoleAsync(string accountId, int roleId)
         {
             if (string.IsNullOrEmpty(accountId))
-                return false;
+                throw new KeyNotFoundException("Account not found.");
 
             var account = await _accountService.GetByIdAsync(accountId);
             if (account == null)
-                return false;
+                throw new KeyNotFoundException("Account not found.");
 
             var allRoles = await _repository.GetAllRolesAsync();
             if (!allRoles.Any(r => r.RoleId == roleId))
-                return false;
+                throw new KeyNotFoundException("Role not found.");
 
-            return await _repository.AssignRoleAsync(accountId, roleId);
+            var assigned = await _repository.AssignRoleAsync(accountId, roleId);
+            if (!assigned)
+            {
+                throw new InvalidOperationException("Role is already assigned to this account.");
+            }
+
+            return true;
         }
 
         public async Task<bool> RemoveRoleAsync(string accountId, int roleId)
         {
             if (string.IsNullOrEmpty(accountId))
-                return false;
+                throw new KeyNotFoundException("Account not found.");
 
             var account = await _accountService.GetByIdAsync(accountId);
             if (account == null)
-                return false;
+                throw new KeyNotFoundException("Account not found.");
 
             var allRoles = await _repository.GetAllRolesAsync();
             if (!allRoles.Any(r => r.RoleId == roleId))
-                return false;
+                throw new KeyNotFoundException("Role not found.");
 
-            return await _repository.RemoveRoleAsync(accountId, roleId);
+            var removed = await _repository.RemoveRoleAsync(accountId, roleId);
+            if (!removed)
+            {
+                throw new KeyNotFoundException("Role assignment not found.");
+            }
+
+            return true;
         }
     }
 }

@@ -285,7 +285,7 @@ namespace RetradeBE.Services
             query.Page = query.Page < 1 ? 1 : query.Page;
             query.PageSize = query.PageSize < 1 ? 12 : Math.Min(query.PageSize, 100);
             var reviewReports = _reportRepository.Query()
-                .Where(report => report.TargetType == ReviewReportTargetType);
+                .Where(report => report.TargetType.ToLower() == "review");
 
             if (query.Rating is >= 1 and <= 5)
             {
@@ -341,16 +341,19 @@ namespace RetradeBE.Services
             bool includeReports,
             bool includeReviewerPrivateInfo)
         {
-            reviews = ApplyFilters(reviews, query);
-            var totalItems = await reviews.CountAsync();
-            var totalPages = (int)Math.Ceiling((double)totalItems / query.PageSize);
-            var items = await reviews
+            var filteredReviews = ApplyFilters(reviews, query);
+            var totalItems = await filteredReviews.CountAsync();
+            var totalPages = (int)Math.Ceiling(totalItems / (double)query.PageSize);
+            totalPages = totalPages < 1 ? 1 : totalPages;
+
+            var items = await filteredReviews
+                .OrderByDescending(review => review.CreatedAt)
                 .Skip((query.Page - 1) * query.PageSize)
                 .Take(query.PageSize)
                 .ToListAsync();
             var reviewIds = items.Select(review => review.ReviewId).ToList();
             var pageReports = await _reportRepository.Query()
-                .Where(report => report.TargetType == ReviewReportTargetType && reviewIds.Contains(report.TargetId))
+                .Where(report => report.TargetType.ToLower() == "review" && reviewIds.Contains(report.TargetId))
                 .OrderByDescending(report => report.CreatedAt)
                 .ToListAsync();
             var reportsByReviewId = pageReports
@@ -380,7 +383,7 @@ namespace RetradeBE.Services
                 : 0;
             var reviewIds = reviews.Select(review => review.ReviewId);
             var reportedReviews = await _reportRepository.Query()
-                .Where(report => report.TargetType == ReviewReportTargetType && reviewIds.Contains(report.TargetId))
+                .Where(report => report.TargetType.ToLower() == "review" && reviewIds.Contains(report.TargetId))
                 .Select(report => report.TargetId)
                 .Distinct()
                 .CountAsync();
@@ -427,6 +430,10 @@ namespace RetradeBE.Services
                 ? reports.FirstOrDefault(report => report.ReporterId == currentUserId)
                 : null;
             var latestReport = reports.FirstOrDefault();
+            var isReportApproved = reports.Any(report =>
+                string.Equals(report.Status, "Accepted", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(report.Status, "Approved", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(report.Status, "Resolved", StringComparison.OrdinalIgnoreCase));
 
             return new ReviewResponseDto
             {
@@ -449,6 +456,7 @@ namespace RetradeBE.Services
                 UpdatedAt = review.UpdatedAt,
                 ReportCount = reports.Count,
                 ReportedByCurrentUser = currentUserReport != null,
+                IsReportApproved = isReportApproved,
                 LatestReportStatus = latestReport?.Status,
                 LatestReportReason = latestReport?.Reason,
                 LatestReportCreatedAt = latestReport?.CreatedAt,

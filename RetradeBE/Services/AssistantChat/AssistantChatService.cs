@@ -49,7 +49,7 @@ namespace RetradeBE.Services.AssistantChat
             _logger = logger;
         }
 
-        public async Task<AssistantChatResponseDto> SendMessageAsync(
+        public async Task<AssistantChatResponseDto> SendChatAssistantAsync(
             string? accountId,
             AssistantChatRequestDto request,
             CancellationToken cancellationToken = default)
