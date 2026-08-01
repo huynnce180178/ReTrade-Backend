@@ -490,4 +490,7 @@ $RECYCLE.BIN/
 # Local appsettings secrets
 RetradeBE/appsettings.Development.json
 RetradeBE/appsettings.Local.json
+RetradeBE/appsettings.local.json
+RetradeBE/appsettings.Development.local.json
+
 
