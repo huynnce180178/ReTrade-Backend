@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using RetradeBE.Models;
@@ -91,16 +92,24 @@ namespace RetradeBE.Services.AssistantChat
             {
                 suggestedProducts.AddRange(orderProducts);
             }
+            await InjectProductSearchContextAsync(message, geminiContents, suggestedProducts, cancellationToken);
             string finalText;
 
             try
             {
                 finalText = await GenerateGeminiResponseAsync(geminiContents, suggestedProducts, session.SessionId, cancellationToken);
+                if (IsDomainBoundaryDecline(finalText) && suggestedProducts.Count > 0)
+                {
+                    finalText = BuildProductSuggestionResponse(message, suggestedProducts);
+                }
             }
             catch (InvalidOperationException ex) when (!cancellationToken.IsCancellationRequested)
             {
                 _logger.LogWarning(ex, "Gemini assistant chat request failed.");
-                finalText = await BuildOfflineAssistantResponseAsync(message, userId, suggestedProducts, cancellationToken);
+                var failureMessage = BuildGeminiFailureMessage(ex);
+                finalText = failureMessage == "i18n:chat.assistant_error_unavailable"
+                    ? await BuildOfflineAssistantResponseAsync(message, userId, suggestedProducts, cancellationToken)
+                    : failureMessage;
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
             {
@@ -392,6 +401,115 @@ namespace RetradeBE.Services.AssistantChat
             return "i18n:chat.assistant_offline_general";
         }
 
+        private async Task InjectProductSearchContextAsync(
+            string message,
+            List<GeminiContentDto> geminiContents,
+            List<AssistantProductSuggestionDto> suggestedProducts,
+            CancellationToken cancellationToken)
+        {
+            var args = BuildHeuristicProductSearchArgs(message);
+            if (args == null)
+            {
+                return;
+            }
+
+            var products = await SearchProductsAsync(args, cancellationToken);
+            AddDistinctProducts(suggestedProducts, products);
+
+            var contextText = products.Count > 0
+                ? "[Relevant ReTrade Product Search Results from Database]:\n" +
+                  string.Join("\n", products.Select((p, index) =>
+                      $"- {index + 1}. {p.Name} | Price: {p.Price ?? 0:N0} VND | Category: {p.CategoryName ?? "N/A"} | Condition: {p.Condition ?? "N/A"} | Stock: {p.StockQuantity ?? 0} | ProductId: {p.ProductId}"))
+                : "[Relevant ReTrade Product Search Results from Database]: No matching products were found.";
+
+            contextText += "\nInstruction: This is a ReTrade product-shopping request. Answer in the user's language and only mention products listed above.";
+
+            geminiContents.Insert(0, new GeminiContentDto
+            {
+                Role = UserRole,
+                Parts = new List<GeminiPartDto>
+                {
+                    new() { Text = contextText }
+                }
+            });
+        }
+
+        private static ProductSearchToolArgs? BuildHeuristicProductSearchArgs(string message)
+        {
+            var normalized = NormalizeForMatch(message);
+            var isProductQuery = ContainsAny(
+                normalized,
+                "product",
+                "san pham",
+                "search",
+                "find",
+                "tim",
+                "mua",
+                "phone",
+                "dien thoai",
+                "smartphone",
+                "iphone",
+                "samsung",
+                "laptop",
+                "may tinh",
+                "macbook");
+
+            if (!isProductQuery)
+            {
+                return null;
+            }
+
+            var isPhoneQuery = ContainsAny(normalized, "phone", "dien thoai", "smartphone", "iphone", "samsung");
+            var isComputerQuery = ContainsAny(normalized, "laptop", "computer", "may tinh", "macbook");
+
+            return new ProductSearchToolArgs
+            {
+                Keyword = isPhoneQuery || isComputerQuery ? null : message,
+                Category = isPhoneQuery ? "Mobile Phones" : isComputerQuery ? "Computers" : null,
+                MinStorageGb = ExtractMinStorageGb(normalized),
+                Limit = 5
+            };
+        }
+
+        private static int? ExtractMinStorageGb(string normalizedMessage)
+        {
+            var match = Regex.Match(normalizedMessage, @"(?<value>\d{2,4})\s*(gb|g)\b", RegexOptions.IgnoreCase);
+            if (!match.Success || !int.TryParse(match.Groups["value"].Value, out var value))
+            {
+                return null;
+            }
+
+            return value;
+        }
+
+        private static bool IsDomainBoundaryDecline(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return false;
+            }
+
+            return text.Contains("specialized strictly", StringComparison.OrdinalIgnoreCase) ||
+                   text.Contains("Please ask me questions related to ReTrade", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string BuildProductSuggestionResponse(string message, List<AssistantProductSuggestionDto> products)
+        {
+            var normalized = NormalizeForMatch(message);
+            var isVietnamese = ContainsAny(normalized, "toi", "muon", "mua", "dien thoai", "san pham", "dung luong", "tro len", "tim");
+
+            if (isVietnamese)
+            {
+                return products.Count == 0
+                    ? "Mình chưa tìm thấy sản phẩm phù hợp trong dữ liệu ReTrade hiện tại."
+                    : "Mình tìm thấy một số sản phẩm ReTrade phù hợp với yêu cầu của bạn:";
+            }
+
+            return products.Count == 0
+                ? "I couldn't find matching products in the current ReTrade database."
+                : "I found some ReTrade products that match your request:";
+        }
+
         private static void AddDistinctProducts(
             List<AssistantProductSuggestionDto> target,
             IEnumerable<AssistantProductSuggestionDto> products)
@@ -624,6 +742,19 @@ namespace RetradeBE.Services.AssistantChat
                 query = query.Where(p => p.Condition != null && p.Condition.ToLower() == condition);
             }
 
+            if (args.MinStorageGb.HasValue)
+            {
+                var allowedStorageValues = BuildAllowedStorageValues(args.MinStorageGb.Value);
+                query = query.Where(p => p.ProductAttribute.Any(pa =>
+                    pa.IsDeleted != true &&
+                    pa.Value != null &&
+                    allowedStorageValues.Contains(pa.Value.ToLower()) &&
+                    (pa.AttributeId == "att_mobl_storage" ||
+                     (pa.Attribute != null &&
+                      pa.Attribute.Name != null &&
+                      pa.Attribute.Name.ToLower().Contains("storage")))));
+            }
+
             if (args.MinPrice.HasValue)
             {
                 query = query.Where(p => p.Price.HasValue && p.Price >= args.MinPrice.Value);
@@ -669,6 +800,7 @@ namespace RetradeBE.Services.AssistantChat
             public decimal? MaxPrice { get; init; }
             public string? Condition { get; init; }
             public int? Limit { get; init; }
+            public int? MinStorageGb { get; init; }
 
             public static ProductSearchToolArgs FromGeminiArgs(Dictionary<string, JsonElement>? args)
             {
@@ -707,7 +839,8 @@ namespace RetradeBE.Services.AssistantChat
                     MinPrice = GetDecimal(args, "minPrice"),
                     MaxPrice = GetDecimal(args, "maxPrice"),
                     Condition = GetString(args, "condition"),
-                    Limit = GetInt(args, "limit")
+                    Limit = GetInt(args, "limit"),
+                    MinStorageGb = GetInt(args, "minStorageGb")
                 };
             }
 
@@ -769,6 +902,21 @@ namespace RetradeBE.Services.AssistantChat
                 value = match.Value;
                 return !string.IsNullOrEmpty(match.Key);
             }
+        }
+
+        private static List<string> BuildAllowedStorageValues(int minStorageGb)
+        {
+            var knownStorageValues = new[] { 32, 64, 128, 256, 512, 1024, 2048 };
+
+            return knownStorageValues
+                .Where(value => value >= minStorageGb)
+                .SelectMany(value => new[]
+                {
+                    value.ToString(CultureInfo.InvariantCulture),
+                    $"{value.ToString(CultureInfo.InvariantCulture)}gb",
+                    $"{value.ToString(CultureInfo.InvariantCulture)} gb"
+                })
+                .ToList();
         }
     }
 }
