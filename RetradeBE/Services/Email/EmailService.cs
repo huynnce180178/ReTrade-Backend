@@ -17,6 +17,11 @@ namespace RetradeBE.Services
 
         public async Task SendEmailAsync(string toEmail, string subject, string body)
         {
+            if (string.IsNullOrWhiteSpace(_emailSettings?.SenderEmail) || string.IsNullOrWhiteSpace(_emailSettings?.Password))
+            {
+                return;
+            }
+
             var email = new MimeMessage();
             email.Sender = MailboxAddress.Parse(_emailSettings.SenderEmail);
             email.Sender.Name = _emailSettings.SenderName;
