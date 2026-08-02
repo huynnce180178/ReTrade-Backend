@@ -52,6 +52,49 @@ namespace Test.ReportTests
             );
         }
 
+        #region Normal Tests (N)
+        [Fact]
+        public async Task ReportBuyerAsync_ShouldCreateReport_WhenParametersAreValid()
+        {
+            // Arrange
+            string accountId = "acc_id";
+            string orderId = "order_id";
+            string reporterId = "seller_id";
+            string buyerId = "buyer_id";
+            var account = new Account { AccountId = accountId, UserId = reporterId };
+            var order = new Order { OrderId = orderId, Status = "Completed", SellerId = reporterId, BuyerId = buyerId };
+            var buyer = new User { UserId = buyerId };
+            var request = new ReportCreateDto { Reason = "Scam", Description = "Fake payment slip" };
+
+            _accountService.Setup(x => x.GetByIdAsync(accountId)).ReturnsAsync(account);
+            _orderService.Setup(x => x.GetByIdAsync(orderId)).ReturnsAsync(order);
+            _userService.Setup(x => x.GetByIdAsync(buyerId)).ReturnsAsync(buyer);
+            _reportRepository.Setup(x => x.ExistsAsync(orderId, reporterId, "buyer")).ReturnsAsync(false);
+            _reportRepository.Setup(x => x.AddAsync(It.IsAny<Report>())).Returns(Task.CompletedTask);
+
+            // Act
+            var result = await _service.ReportBuyerAsync(accountId, orderId, request);
+
+            // Assert
+            result.Should().NotBeNull();
+            result.Reason.Should().Be("Scam");
+            result.Description.Should().Be("Fake payment slip");
+            result.TargetId.Should().Be(orderId);
+            result.ReporterId.Should().Be(reporterId);
+            result.TargetType.Should().Be("buyer");
+            result.Status.Should().Be("Pending");
+
+            _reportRepository.Verify(x => x.AddAsync(It.Is<Report>(r =>
+                r.ReporterId == reporterId &&
+                r.TargetId == orderId &&
+                r.TargetType == "buyer" &&
+                r.Reason == "Scam" &&
+                r.Description == "Fake payment slip"
+            )), Times.Once);
+        }
+        #endregion
+
+        #region Abnormal Tests (A)
         [Fact]
         public async Task ReportBuyerAsync_ShouldThrowUnauthorizedAccessException_WhenAccountNotFound()
         {
@@ -223,9 +266,11 @@ namespace Test.ReportTests
             // Assert
             await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("You have already reported this buyer for this order.");
         }
+        #endregion
 
+        #region Boundary Tests (B)
         [Fact]
-        public async Task ReportBuyerAsync_ShouldCreateReport_WhenParametersAreValid()
+        public async Task ReportBuyerAsync_ShouldTrimReasonAndDescription_WhenTheyHaveLeadingOrTrailingWhitespaces()
         {
             // Arrange
             string accountId = "acc_id";
@@ -235,7 +280,7 @@ namespace Test.ReportTests
             var account = new Account { AccountId = accountId, UserId = reporterId };
             var order = new Order { OrderId = orderId, Status = "Completed", SellerId = reporterId, BuyerId = buyerId };
             var buyer = new User { UserId = buyerId };
-            var request = new ReportCreateDto { Reason = "Scam", Description = "Fake payment slip" };
+            var request = new ReportCreateDto { Reason = "   Scam   ", Description = "   Fake payment slip   " };
 
             _accountService.Setup(x => x.GetByIdAsync(accountId)).ReturnsAsync(account);
             _orderService.Setup(x => x.GetByIdAsync(orderId)).ReturnsAsync(order);
@@ -250,18 +295,75 @@ namespace Test.ReportTests
             result.Should().NotBeNull();
             result.Reason.Should().Be("Scam");
             result.Description.Should().Be("Fake payment slip");
-            result.TargetId.Should().Be(orderId);
-            result.ReporterId.Should().Be(reporterId);
-            result.TargetType.Should().Be("buyer");
-            result.Status.Should().Be("Pending");
 
             _reportRepository.Verify(x => x.AddAsync(It.Is<Report>(r =>
-                r.ReporterId == reporterId &&
-                r.TargetId == orderId &&
-                r.TargetType == "buyer" &&
                 r.Reason == "Scam" &&
                 r.Description == "Fake payment slip"
             )), Times.Once);
         }
+
+        [Fact]
+        public async Task ReportBuyerAsync_ShouldCreateReportWithNullDescription_WhenDescriptionIsNull()
+        {
+            // Arrange
+            string accountId = "acc_id";
+            string orderId = "order_id";
+            string reporterId = "seller_id";
+            string buyerId = "buyer_id";
+            var account = new Account { AccountId = accountId, UserId = reporterId };
+            var order = new Order { OrderId = orderId, Status = "Completed", SellerId = reporterId, BuyerId = buyerId };
+            var buyer = new User { UserId = buyerId };
+            var request = new ReportCreateDto { Reason = "Scam", Description = null };
+
+            _accountService.Setup(x => x.GetByIdAsync(accountId)).ReturnsAsync(account);
+            _orderService.Setup(x => x.GetByIdAsync(orderId)).ReturnsAsync(order);
+            _userService.Setup(x => x.GetByIdAsync(buyerId)).ReturnsAsync(buyer);
+            _reportRepository.Setup(x => x.ExistsAsync(orderId, reporterId, "buyer")).ReturnsAsync(false);
+            _reportRepository.Setup(x => x.AddAsync(It.IsAny<Report>())).Returns(Task.CompletedTask);
+
+            // Act
+            var result = await _service.ReportBuyerAsync(accountId, orderId, request);
+
+            // Assert
+            result.Should().NotBeNull();
+            result.Description.Should().BeNull();
+
+            _reportRepository.Verify(x => x.AddAsync(It.Is<Report>(r =>
+                r.Reason == "Scam" &&
+                r.Description == null
+            )), Times.Once);
+        }
+
+        [Theory]
+        [InlineData("COMPLETED")]
+        [InlineData("completed")]
+        [InlineData("CoMpLeTeD")]
+        public async Task ReportBuyerAsync_ShouldProceedSuccessfully_WhenOrderStatusIsCompletedInDifferentCase(string status)
+        {
+            // Arrange
+            string accountId = "acc_id";
+            string orderId = "order_id";
+            string reporterId = "seller_id";
+            string buyerId = "buyer_id";
+            var account = new Account { AccountId = accountId, UserId = reporterId };
+            var order = new Order { OrderId = orderId, Status = status, SellerId = reporterId, BuyerId = buyerId };
+            var buyer = new User { UserId = buyerId };
+            var request = new ReportCreateDto { Reason = "Scam" };
+
+            _accountService.Setup(x => x.GetByIdAsync(accountId)).ReturnsAsync(account);
+            _orderService.Setup(x => x.GetByIdAsync(orderId)).ReturnsAsync(order);
+            _userService.Setup(x => x.GetByIdAsync(buyerId)).ReturnsAsync(buyer);
+            _reportRepository.Setup(x => x.ExistsAsync(orderId, reporterId, "buyer")).ReturnsAsync(false);
+            _reportRepository.Setup(x => x.AddAsync(It.IsAny<Report>())).Returns(Task.CompletedTask);
+
+            // Act
+            var result = await _service.ReportBuyerAsync(accountId, orderId, request);
+
+            // Assert
+            result.Should().NotBeNull();
+            _reportRepository.Verify(x => x.AddAsync(It.IsAny<Report>()), Times.Once);
+        }
+        #endregion
     }
 }
+

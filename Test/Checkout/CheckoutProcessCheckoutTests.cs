@@ -10,6 +10,7 @@ using RetradeBE.Data;
 using RetradeBE.Hubs;
 using RetradeBE.Models;
 using RetradeBE.Models.DTOs;
+using RetradeBE.Services;
 using RetradeBE.Services.Checkout;
 using RetradeBE.Services.Ghn;
 using Xunit;
@@ -21,6 +22,7 @@ namespace Test.CheckoutTests
         private readonly Mock<AppDbContext> _context;
         private readonly Mock<IGhnService> _ghnService;
         private readonly Mock<IHubContext<OrderHub>> _orderHub;
+        private readonly Mock<INotificationService> _notificationService;
         private readonly CheckoutService _service;
 
         public CheckoutProcessCheckoutTests()
@@ -28,11 +30,13 @@ namespace Test.CheckoutTests
             _context = new Mock<AppDbContext>();
             _ghnService = new Mock<IGhnService>();
             _orderHub = new Mock<IHubContext<OrderHub>>();
+            _notificationService = new Mock<INotificationService>();
 
             _service = new CheckoutService(
                 _context.Object,
                 _ghnService.Object,
-                _orderHub.Object
+                _orderHub.Object,
+                _notificationService.Object
             );
         }
 

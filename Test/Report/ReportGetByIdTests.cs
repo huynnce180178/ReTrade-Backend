@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using AutoMapper;
 using FluentAssertions;
@@ -32,6 +33,7 @@ namespace Test.ReportTests
             _productService = new Mock<IProductService>();
             _reviewService = new Mock<IReviewService>();
 
+            // Setup AutoMapper with NullLoggerFactory to comply with prompt dựng test code.md
             var configuration = new AutoMapper.MapperConfiguration(cfg =>
             {
                 cfg.AddProfile<AutoMapperProfile>();
@@ -51,21 +53,7 @@ namespace Test.ReportTests
             );
         }
 
-        [Fact]
-        public async Task GetByIdAsync_ShouldReturnNull_WhenReportDoesNotExist()
-        {
-            // Arrange
-            string reportId = "invalid_id";
-            _reportRepository.Setup(x => x.GetByIdAsync(reportId)).ReturnsAsync((Report?)null);
-
-            // Act
-            var result = await _service.GetByIdAsync(reportId);
-
-            // Assert
-            result.Should().BeNull();
-            _reportRepository.Verify(x => x.GetByIdAsync(reportId), Times.Once);
-        }
-
+        #region Normal Tests (N)
         [Fact]
         public async Task GetByIdAsync_ShouldReturnDetailsWithReview_WhenTargetTypeIsReview()
         {
@@ -198,5 +186,197 @@ namespace Test.ReportTests
             _userService.Verify(x => x.GetByIdAsync("seller_456"), Times.Once);
             _orderService.Verify(x => x.GetByIdAsync("order_456"), Times.Once);
         }
+        #endregion
+
+        #region Abnormal Tests (A)
+        [Fact]
+        public async Task GetByIdAsync_ShouldReturnNull_WhenReportDoesNotExist()
+        {
+            // Arrange
+            string reportId = "invalid_id";
+            _reportRepository.Setup(x => x.GetByIdAsync(reportId)).ReturnsAsync((Report?)null);
+
+            // Act
+            var result = await _service.GetByIdAsync(reportId);
+
+            // Assert
+            result.Should().BeNull();
+            _reportRepository.Verify(x => x.GetByIdAsync(reportId), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetByIdAsync_ShouldReturnDetailsWithNullReview_WhenTargetTypeIsReviewButReviewNotFound()
+        {
+            // Arrange
+            string reportId = "R1";
+            var report = new Report
+            {
+                ReportId = reportId,
+                TargetType = "review",
+                TargetId = "review_999",
+                Reason = "Spam"
+            };
+
+            _reportRepository.Setup(x => x.GetByIdAsync(reportId)).ReturnsAsync(report);
+            _reviewService.Setup(x => x.GetByIdForReportAsync("review_999")).ReturnsAsync((Review?)null);
+
+            // Act
+            var result = await _service.GetByIdAsync(reportId);
+
+            // Assert
+            result.Should().NotBeNull();
+            result!.Review.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task GetByIdAsync_ShouldReturnDetailsWithNullOrder_WhenTargetTypeIsBuyerButOrderNotFound()
+        {
+            // Arrange
+            string reportId = "R2";
+            var report = new Report
+            {
+                ReportId = reportId,
+                TargetType = "buyer",
+                TargetId = "order_999",
+                Reason = "Scam"
+            };
+
+            _reportRepository.Setup(x => x.GetByIdAsync(reportId)).ReturnsAsync(report);
+            _orderService.Setup(x => x.GetByIdAsync("order_999")).ReturnsAsync((Order?)null);
+
+            // Act
+            var result = await _service.GetByIdAsync(reportId);
+
+            // Assert
+            result.Should().NotBeNull();
+            result!.Order.Should().BeNull();
+            result.Buyer.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task GetByIdAsync_ShouldReturnDetailsWithNullBuyer_WhenTargetTypeIsBuyerAndOrderExistsButBuyerNotFound()
+        {
+            // Arrange
+            string reportId = "R2";
+            var report = new Report
+            {
+                ReportId = reportId,
+                TargetType = "buyer",
+                TargetId = "order_123",
+                Reason = "Scam"
+            };
+
+            var order = new Order
+            {
+                OrderId = "order_123",
+                BuyerId = "buyer_999",
+                Status = "Completed"
+            };
+
+            _reportRepository.Setup(x => x.GetByIdAsync(reportId)).ReturnsAsync(report);
+            _orderService.Setup(x => x.GetByIdAsync("order_123")).ReturnsAsync(order);
+            _userService.Setup(x => x.GetByIdAsync("buyer_999")).ReturnsAsync((User?)null);
+
+            // Act
+            var result = await _service.GetByIdAsync(reportId);
+
+            // Assert
+            result.Should().NotBeNull();
+            result!.Order.Should().NotBeNull();
+            result.Buyer.Should().BeNull();
+        }
+        #endregion
+
+        #region Boundary Tests (B)
+        [Fact]
+        public async Task GetByIdAsync_ShouldHandleReviewTargetTypeCaseInsensitively()
+        {
+            // Arrange
+            string reportId = "R1";
+            var report = new Report
+            {
+                ReportId = reportId,
+                TargetType = "ReViEw", // Mixed case
+                TargetId = "review_123",
+                Reason = "Spam"
+            };
+
+            var review = new Review { ReviewId = "review_123", Rating = 3 };
+
+            _reportRepository.Setup(x => x.GetByIdAsync(reportId)).ReturnsAsync(report);
+            _reviewService.Setup(x => x.GetByIdForReportAsync("review_123")).ReturnsAsync(review);
+
+            // Act
+            var result = await _service.GetByIdAsync(reportId);
+
+            // Assert
+            result.Should().NotBeNull();
+            result!.Review.Should().NotBeNull();
+            result.Review!.ReviewId.Should().Be("review_123");
+        }
+
+        [Fact]
+        public async Task GetByIdAsync_ShouldHandleBuyerTargetTypeCaseInsensitively()
+        {
+            // Arrange
+            string reportId = "R2";
+            var report = new Report
+            {
+                ReportId = reportId,
+                TargetType = "BuYeR", // Mixed case
+                TargetId = "order_123",
+                Reason = "Scam"
+            };
+
+            var order = new Order { OrderId = "order_123", BuyerId = "buyer_123", Status = "Completed" };
+            var buyer = new User { UserId = "buyer_123", FirstName = "Jane" };
+
+            _reportRepository.Setup(x => x.GetByIdAsync(reportId)).ReturnsAsync(report);
+            _orderService.Setup(x => x.GetByIdAsync("order_123")).ReturnsAsync(order);
+            _userService.Setup(x => x.GetByIdAsync("buyer_123")).ReturnsAsync(buyer);
+
+            // Act
+            var result = await _service.GetByIdAsync(reportId);
+
+            // Assert
+            result.Should().NotBeNull();
+            result!.Order.Should().NotBeNull();
+            result.Buyer.Should().NotBeNull();
+        }
+
+        [Fact]
+        public async Task GetByIdAsync_ShouldNotFetchBuyerOrSeller_WhenOrderLacksBuyerOrSellerId()
+        {
+            // Arrange
+            string reportId = "R2";
+            var report = new Report
+            {
+                ReportId = reportId,
+                TargetType = "buyer",
+                TargetId = "order_123",
+                Reason = "Scam"
+            };
+
+            var order = new Order
+            {
+                OrderId = "order_123",
+                BuyerId = null, // null buyer ID
+                Status = "Completed"
+            };
+
+            _reportRepository.Setup(x => x.GetByIdAsync(reportId)).ReturnsAsync(report);
+            _orderService.Setup(x => x.GetByIdAsync("order_123")).ReturnsAsync(order);
+
+            // Act
+            var result = await _service.GetByIdAsync(reportId);
+
+            // Assert
+            result.Should().NotBeNull();
+            result!.Order.Should().NotBeNull();
+            result.Buyer.Should().BeNull();
+            _userService.Verify(x => x.GetByIdAsync(It.IsAny<string>()), Times.Never);
+        }
+        #endregion
     }
 }
+

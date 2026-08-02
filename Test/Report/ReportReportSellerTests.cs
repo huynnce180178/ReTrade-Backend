@@ -33,10 +33,11 @@ namespace Test.ReportTests
             _productService = new Mock<IProductService>();
             _reviewService = new Mock<IReviewService>();
 
+            // Setup AutoMapper with NullLoggerFactory to comply with prompt dựng test code.md
             var configuration = new AutoMapper.MapperConfiguration(cfg =>
             {
                 cfg.AddProfile<AutoMapperProfile>();
-            }, new Mock<Microsoft.Extensions.Logging.ILoggerFactory>().Object);
+            }, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
             _mapper = configuration.CreateMapper();
             _notificationService = new Mock<INotificationService>();
 
@@ -52,6 +53,49 @@ namespace Test.ReportTests
             );
         }
 
+        #region Normal Tests (N)
+        [Fact]
+        public async Task ReportSellerAsync_ShouldCreateReport_WhenParametersAreValid()
+        {
+            // Arrange
+            string accountId = "acc_id";
+            string orderId = "order_id";
+            string reporterId = "buyer_id";
+            string sellerId = "seller_id";
+            var account = new Account { AccountId = accountId, UserId = reporterId };
+            var order = new Order { OrderId = orderId, Status = "Completed", SellerId = sellerId, BuyerId = reporterId };
+            var seller = new User { UserId = sellerId };
+            var request = new ReportCreateDto { Reason = "Scam", Description = "Fake seller listing" };
+
+            _accountService.Setup(x => x.GetByIdAsync(accountId)).ReturnsAsync(account);
+            _orderService.Setup(x => x.GetByIdAsync(orderId)).ReturnsAsync(order);
+            _userService.Setup(x => x.GetByIdAsync(sellerId)).ReturnsAsync(seller);
+            _reportRepository.Setup(x => x.ExistsAsync(orderId, reporterId, "seller")).ReturnsAsync(false);
+            _reportRepository.Setup(x => x.AddAsync(It.IsAny<Report>())).Returns(Task.CompletedTask);
+
+            // Act
+            var result = await _service.ReportSellerAsync(accountId, orderId, request);
+
+            // Assert
+            result.Should().NotBeNull();
+            result.Reason.Should().Be("Scam");
+            result.Description.Should().Be("Fake seller listing");
+            result.TargetId.Should().Be(orderId);
+            result.ReporterId.Should().Be(reporterId);
+            result.TargetType.Should().Be("seller");
+            result.Status.Should().Be("Pending");
+
+            _reportRepository.Verify(x => x.AddAsync(It.Is<Report>(r =>
+                r.ReporterId == reporterId &&
+                r.TargetId == orderId &&
+                r.TargetType == "seller" &&
+                r.Reason == "Scam" &&
+                r.Description == "Fake seller listing"
+            )), Times.Once);
+        }
+        #endregion
+
+        #region Abnormal Tests (A)
         [Fact]
         public async Task ReportSellerAsync_ShouldThrowUnauthorizedAccessException_WhenAccountNotFound()
         {
@@ -223,9 +267,11 @@ namespace Test.ReportTests
             // Assert
             await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("You have already reported this seller for this order.");
         }
+        #endregion
 
+        #region Boundary Tests (B)
         [Fact]
-        public async Task ReportSellerAsync_ShouldCreateReport_WhenParametersAreValid()
+        public async Task ReportSellerAsync_ShouldTrimReasonAndDescription_WhenTheyHaveLeadingOrTrailingWhitespaces()
         {
             // Arrange
             string accountId = "acc_id";
@@ -235,7 +281,7 @@ namespace Test.ReportTests
             var account = new Account { AccountId = accountId, UserId = reporterId };
             var order = new Order { OrderId = orderId, Status = "Completed", SellerId = sellerId, BuyerId = reporterId };
             var seller = new User { UserId = sellerId };
-            var request = new ReportCreateDto { Reason = "Scam", Description = "Fake seller listing" };
+            var request = new ReportCreateDto { Reason = "   Scam   ", Description = "   Fake seller listing   " };
 
             _accountService.Setup(x => x.GetByIdAsync(accountId)).ReturnsAsync(account);
             _orderService.Setup(x => x.GetByIdAsync(orderId)).ReturnsAsync(order);
@@ -250,18 +296,75 @@ namespace Test.ReportTests
             result.Should().NotBeNull();
             result.Reason.Should().Be("Scam");
             result.Description.Should().Be("Fake seller listing");
-            result.TargetId.Should().Be(orderId);
-            result.ReporterId.Should().Be(reporterId);
-            result.TargetType.Should().Be("seller");
-            result.Status.Should().Be("Pending");
 
             _reportRepository.Verify(x => x.AddAsync(It.Is<Report>(r =>
-                r.ReporterId == reporterId &&
-                r.TargetId == orderId &&
-                r.TargetType == "seller" &&
                 r.Reason == "Scam" &&
                 r.Description == "Fake seller listing"
             )), Times.Once);
         }
+
+        [Fact]
+        public async Task ReportSellerAsync_ShouldCreateReportWithNullDescription_WhenDescriptionIsNull()
+        {
+            // Arrange
+            string accountId = "acc_id";
+            string orderId = "order_id";
+            string reporterId = "buyer_id";
+            string sellerId = "seller_id";
+            var account = new Account { AccountId = accountId, UserId = reporterId };
+            var order = new Order { OrderId = orderId, Status = "Completed", SellerId = sellerId, BuyerId = reporterId };
+            var seller = new User { UserId = sellerId };
+            var request = new ReportCreateDto { Reason = "Scam", Description = null };
+
+            _accountService.Setup(x => x.GetByIdAsync(accountId)).ReturnsAsync(account);
+            _orderService.Setup(x => x.GetByIdAsync(orderId)).ReturnsAsync(order);
+            _userService.Setup(x => x.GetByIdAsync(sellerId)).ReturnsAsync(seller);
+            _reportRepository.Setup(x => x.ExistsAsync(orderId, reporterId, "seller")).ReturnsAsync(false);
+            _reportRepository.Setup(x => x.AddAsync(It.IsAny<Report>())).Returns(Task.CompletedTask);
+
+            // Act
+            var result = await _service.ReportSellerAsync(accountId, orderId, request);
+
+            // Assert
+            result.Should().NotBeNull();
+            result.Description.Should().BeNull();
+
+            _reportRepository.Verify(x => x.AddAsync(It.Is<Report>(r =>
+                r.Reason == "Scam" &&
+                r.Description == null
+            )), Times.Once);
+        }
+
+        [Theory]
+        [InlineData("COMPLETED")]
+        [InlineData("completed")]
+        [InlineData("CoMpLeTeD")]
+        public async Task ReportSellerAsync_ShouldProceedSuccessfully_WhenOrderStatusIsCompletedInDifferentCase(string status)
+        {
+            // Arrange
+            string accountId = "acc_id";
+            string orderId = "order_id";
+            string reporterId = "buyer_id";
+            string sellerId = "seller_id";
+            var account = new Account { AccountId = accountId, UserId = reporterId };
+            var order = new Order { OrderId = orderId, Status = status, SellerId = sellerId, BuyerId = reporterId };
+            var seller = new User { UserId = sellerId };
+            var request = new ReportCreateDto { Reason = "Scam" };
+
+            _accountService.Setup(x => x.GetByIdAsync(accountId)).ReturnsAsync(account);
+            _orderService.Setup(x => x.GetByIdAsync(orderId)).ReturnsAsync(order);
+            _userService.Setup(x => x.GetByIdAsync(sellerId)).ReturnsAsync(seller);
+            _reportRepository.Setup(x => x.ExistsAsync(orderId, reporterId, "seller")).ReturnsAsync(false);
+            _reportRepository.Setup(x => x.AddAsync(It.IsAny<Report>())).Returns(Task.CompletedTask);
+
+            // Act
+            var result = await _service.ReportSellerAsync(accountId, orderId, request);
+
+            // Assert
+            result.Should().NotBeNull();
+            _reportRepository.Verify(x => x.AddAsync(It.IsAny<Report>()), Times.Once);
+        }
+        #endregion
     }
 }
+
