@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -98,16 +100,16 @@ namespace RetradeBE.Services.AssistantChat
             catch (InvalidOperationException ex) when (!cancellationToken.IsCancellationRequested)
             {
                 _logger.LogWarning(ex, "Gemini assistant chat request failed.");
-                finalText = BuildGeminiFailureMessage(ex);
+                finalText = await BuildOfflineAssistantResponseAsync(message, userId, suggestedProducts, cancellationToken);
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
             {
                 _logger.LogError(ex, "Assistant chat request failed.");
-                finalText = "Xin lỗi, hiện trợ lý AI đang gặp lỗi khi xử lý yêu cầu. Bạn thử lại sau ít phút nhé.";
+                finalText = "i18n:chat.assistant_error_unavailable";
             }
             if (string.IsNullOrWhiteSpace(finalText))
             {
-                finalText = "Xin lỗi, hiện mình chưa thể tạo câu trả lời phù hợp. Bạn thử diễn đạt lại nhu cầu tìm sản phẩm giúp mình nhé.";
+                finalText = "i18n:chat.assistant_offline_general";
             }
 
             var assistantMessage = new ChatMessage
@@ -323,6 +325,111 @@ namespace RetradeBE.Services.AssistantChat
                 .Trim();
         }
 
+        private async Task<string> BuildOfflineAssistantResponseAsync(
+            string message,
+            string? userId,
+            List<AssistantProductSuggestionDto> suggestedProducts,
+            CancellationToken cancellationToken)
+        {
+            var normalized = NormalizeForMatch(message);
+
+            if (ContainsAny(normalized, "purchase history", "order history", "my orders", "lich su mua", "don hang", "mua hang"))
+            {
+                if (string.IsNullOrWhiteSpace(userId))
+                {
+                    return "i18n:chat.assistant_offline_purchase_login";
+                }
+
+                return suggestedProducts.Count > 0
+                    ? "i18n:chat.assistant_offline_purchase_found"
+                    : "i18n:chat.assistant_offline_purchase_empty";
+            }
+
+            if (ContainsAny(normalized, "auction", "bid", "dau gia", "tra gia"))
+            {
+                return "i18n:chat.assistant_offline_auction_help";
+            }
+
+            if (ContainsAny(normalized, "sell", "selling", "post product", "list product", "dang ban", "ban san pham", "rao ban"))
+            {
+                return "i18n:chat.assistant_offline_selling_help";
+            }
+
+            if (ContainsAny(normalized, "wishlist", "favorite", "favourite", "yeu thich"))
+            {
+                return "i18n:chat.assistant_offline_wishlist_help";
+            }
+
+            if (ContainsAny(
+                normalized,
+                "product",
+                "products",
+                "featured",
+                "latest",
+                "search",
+                "find",
+                "san pham",
+                "noi bat",
+                "moi nhat",
+                "tim",
+                "iphone",
+                "phone",
+                "laptop",
+                "macbook",
+                "camera",
+                "computer",
+                "clothing",
+                "sneaker",
+                "vespa"))
+            {
+                var products = await SearchProductsAsync(new ProductSearchToolArgs { Limit = 5 }, cancellationToken);
+                AddDistinctProducts(suggestedProducts, products);
+                return products.Count > 0
+                    ? "i18n:chat.assistant_offline_products"
+                    : "i18n:chat.assistant_offline_no_products";
+            }
+
+            return "i18n:chat.assistant_offline_general";
+        }
+
+        private static void AddDistinctProducts(
+            List<AssistantProductSuggestionDto> target,
+            IEnumerable<AssistantProductSuggestionDto> products)
+        {
+            foreach (var product in products)
+            {
+                if (!target.Any(current => current.ProductId == product.ProductId))
+                {
+                    target.Add(product);
+                }
+            }
+        }
+
+        private static bool ContainsAny(string value, params string[] patterns)
+        {
+            return patterns.Any(pattern => value.Contains(pattern, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static string NormalizeForMatch(string value)
+        {
+            var normalized = (value ?? string.Empty).Normalize(NormalizationForm.FormD);
+            var builder = new StringBuilder(normalized.Length);
+
+            foreach (var character in normalized)
+            {
+                if (CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
+                {
+                    builder.Append(character switch
+                    {
+                        'đ' or 'Đ' => 'd',
+                        _ => char.ToLowerInvariant(character)
+                    });
+                }
+            }
+
+            return builder.ToString().Normalize(NormalizationForm.FormC);
+        }
+
         private static string BuildGeminiFailureMessage(InvalidOperationException exception)
         {
             var message = exception.Message;
@@ -330,7 +437,7 @@ namespace RetradeBE.Services.AssistantChat
 
             if (normalized.Contains("api key is not configured"))
             {
-                return "Gemini API key is not configured. Please add Gemini:ApiKey or GEMINI_API_KEY environment variable and restart the backend.";
+                return "i18n:chat.assistant_error_key_missing";
             }
 
             if (normalized.Contains("api key not valid") ||
@@ -340,25 +447,25 @@ namespace RetradeBE.Services.AssistantChat
                 normalized.Contains("access_token_type_unsupported") ||
                 normalized.Contains("401"))
             {
-                return "Invalid Gemini API key. Please generate a new key in Google AI Studio and update appsettings.";
+                return "i18n:chat.assistant_error_key_invalid";
             }
 
             if (normalized.Contains("permission") || normalized.Contains("forbidden") || normalized.Contains("403"))
             {
-                return "Gemini API request refused. Please verify that your API key has permission for Gemini API.";
+                return "i18n:chat.assistant_error_permission";
             }
 
             if (normalized.Contains("quota") || normalized.Contains("429"))
             {
-                return "Gemini API rate limit or quota exceeded. Please try again later or switch API project.";
+                return "i18n:chat.assistant_error_quota";
             }
 
             if (normalized.Contains("models/") && (normalized.Contains("not found") || normalized.Contains("404")))
             {
-                return "The configured Gemini model was not found or is unavailable. Please check Gemini:Model in appsettings.";
+                return "i18n:chat.assistant_error_model";
             }
 
-            return $"AI Assistant returned an error: {message}";
+            return "i18n:chat.assistant_error_unavailable";
         }
 
         private async Task<List<AssistantProductSuggestionDto>> InjectUserOrderContextAsync(

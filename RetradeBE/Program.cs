@@ -20,7 +20,7 @@ namespace RetradeBE
 {
     public class Program
     {
-        public static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
             AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
@@ -43,6 +43,7 @@ namespace RetradeBE
 
             builder.Services.AddHttpClient();
             builder.Services.AddSignalR();
+            builder.Services.AddHealthChecks();
 
             // Add services to the container.
             builder.Services.AddControllers()
@@ -62,8 +63,10 @@ namespace RetradeBE
                         return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(errors);
                     };
                 });
+            var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+                ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured.");
             builder.Services.AddDbContext<AppDbContext>(options =>
-                options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+                options.UseNpgsql(connectionString));
 
             // Tự động đăng ký tất cả các Repositories và Services bằng Reflection
             var assembly = typeof(Program).Assembly;
@@ -169,15 +172,7 @@ namespace RetradeBE
             });
 
             // Lấy đường dẫn Frontend từ appsettings.json
-            var frontendUrl = builder.Configuration.GetValue<string>("FrontendUrl") ?? "http://localhost:5173";
-            var frontendOrigins = new[]
-            {
-                frontendUrl,
-                "http://localhost:5173",
-                "http://127.0.0.1:5173",
-                "http://localhost:5174",
-                "http://127.0.0.1:5174"
-            }.Distinct().ToArray();
+            var frontendOrigins = GetFrontendOrigins(builder.Configuration, builder.Environment);
 
             // Thêm CORS để Frontend có thể gọi API (ví dụ: React, Vue, Angular chạy ở port khác)
             builder.Services.AddCors(options =>
@@ -202,18 +197,21 @@ namespace RetradeBE
                 try
                 {
                     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                    dbContext.Database.Migrate();
+                    await dbContext.Database.MigrateAsync();
                     Console.WriteLine("Database migrated successfully.");
                     SeedData(dbContext);
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error applying migrations: {ex.Message}");
+                    throw;
                 }
             }
 
             // Configure the HTTP request pipeline.
-            if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Docker"))
+            if (app.Environment.IsDevelopment() ||
+                app.Environment.IsEnvironment("Docker") ||
+                app.Configuration.GetValue<bool>("Swagger:Enabled"))
             {
                 app.UseSwagger();
                 app.UseSwaggerUI();
@@ -232,6 +230,7 @@ namespace RetradeBE
 
 
             app.MapControllers();
+            app.MapHealthChecks("/health");
             app.MapHub<RetradeBE.Hubs.AccountHub>("/hubs/accounts");
             app.MapHub<SellerHub>("/hubs/sellers");
             app.MapHub<OrderHub>("/hubs/orders");
@@ -239,7 +238,45 @@ namespace RetradeBE
             app.MapHub<ChatHub>("/hubs/chat");
             app.MapHub<NotificationHub>("/hubs/notifications");
 
-            app.Run();
+            await app.RunAsync();
+        }
+
+        private static string[] GetFrontendOrigins(IConfiguration configuration, IWebHostEnvironment environment)
+        {
+            var origins = new List<string>();
+
+            AddOrigins(origins, configuration.GetValue<string>("FrontendUrl"));
+            AddOrigins(origins, configuration.GetValue<string>("FrontendUrls"));
+            AddOrigins(origins, configuration.GetValue<string>("Cors:AllowedOrigins"));
+            var configuredOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+            if (configuredOrigins is not null)
+            {
+                AddOrigins(origins, configuredOrigins);
+            }
+
+            if (environment.IsDevelopment() || environment.IsEnvironment("Docker"))
+            {
+                AddOrigins(origins,
+                    "http://localhost:5173",
+                    "http://127.0.0.1:5173",
+                    "http://localhost:5174",
+                    "http://127.0.0.1:5174");
+            }
+
+            return origins
+                .Where(origin => Uri.TryCreate(origin, UriKind.Absolute, out _))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private static void AddOrigins(List<string> origins, params string?[] values)
+        {
+            foreach (var value in values.Where(v => !string.IsNullOrWhiteSpace(v)))
+            {
+                origins.AddRange(value!
+                    .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(origin => origin.TrimEnd('/')));
+            }
         }
 
         private static void SeedData(AppDbContext dbContext)

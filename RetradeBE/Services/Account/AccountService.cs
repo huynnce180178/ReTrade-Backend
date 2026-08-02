@@ -434,6 +434,34 @@ namespace RetradeBE.Services
             return Task.FromResult(RetradeBE.Utils.IdGenerator.GenerateId("acc"));
         }
 
+        private static string BuildAvatarName(string? firstName, string? lastName, string email)
+        {
+            var composedName = $"{firstName} {lastName}".Trim();
+            if (!string.IsNullOrWhiteSpace(composedName))
+            {
+                return composedName;
+            }
+
+            var emailLocalPart = email.Split('@')[0].Replace('.', ' ').Replace('+', ' ').Trim();
+            return string.IsNullOrWhiteSpace(emailLocalPart) ? "User" : emailLocalPart;
+        }
+
+        private static string BuildInitialsAvatarUrl(string displayName)
+        {
+            var encodedName = Uri.EscapeDataString(displayName);
+            return $"https://ui-avatars.com/api/?name={encodedName}&background=1f2937&color=ffffff&bold=true";
+        }
+
+        private static bool IsDefaultPlaceholderAvatar(string? avatarUrl)
+        {
+            if (string.IsNullOrWhiteSpace(avatarUrl))
+            {
+                return true;
+            }
+
+            return avatarUrl.Contains("avt-emty", StringComparison.OrdinalIgnoreCase);
+        }
+
         public async Task<object?> LoginWithGoogleAsync(string accessToken)
         {
             using var httpClient = _httpClientFactory.CreateClient();
@@ -446,13 +474,32 @@ namespace RetradeBE.Services
             string? providerUserId = json.TryGetProperty("sub", out var subProp) ? subProp.GetString() : null;
             string? firstName = json.TryGetProperty("given_name", out var fnProp) ? fnProp.GetString() : null;
             string? lastName = json.TryGetProperty("family_name", out var lnProp) ? lnProp.GetString() : null;
+            string? fullName = json.TryGetProperty("name", out var nameProp) ? nameProp.GetString() : null;
             string? picture = json.TryGetProperty("picture", out var picProp) ? picProp.GetString() : null;
+
+            if (string.IsNullOrWhiteSpace(firstName) && string.IsNullOrWhiteSpace(lastName) && !string.IsNullOrWhiteSpace(fullName))
+            {
+                var nameParts = fullName
+                    .Trim()
+                    .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+                if (nameParts.Length == 1)
+                {
+                    firstName = nameParts[0];
+                }
+                else if (nameParts.Length > 1)
+                {
+                    firstName = nameParts[0];
+                    lastName = string.Join(" ", nameParts, 1, nameParts.Length - 1);
+                }
+            }
 
             if (string.IsNullOrEmpty(email)) return null;
             const string googleProvider = "Google";
 
             var user = await _userRepository.GetByEmailAsync(email);
             Account? account = null;
+            var fallbackAvatar = BuildInitialsAvatarUrl(BuildAvatarName(firstName, lastName, email));
 
             if (user == null)
             {
@@ -473,7 +520,7 @@ namespace RetradeBE.Services
                     Email = email,
                     FirstName = firstName ?? "",
                     LastName = lastName ?? "",
-                    AvatarUrl = picture ?? "https://res.cloudinary.com/dx0hrokek/image/upload/v1780673207/avt-emty_wwnzba.jpg",
+                    AvatarUrl = !string.IsNullOrWhiteSpace(picture) ? picture : fallbackAvatar,
                     CreatedAt = DateTime.UtcNow
                 };
                 await _userRepository.AddAsync(user);
@@ -513,6 +560,36 @@ namespace RetradeBE.Services
                 account.ProviderUserId = providerUserId ?? email;
                 account.UpdatedAt = DateTime.UtcNow;
                 await _repository.UpdateAsync(account);
+
+                bool profileUpdated = false;
+                if (string.IsNullOrWhiteSpace(user.FirstName) && !string.IsNullOrWhiteSpace(firstName))
+                {
+                    user.FirstName = firstName;
+                    profileUpdated = true;
+                }
+
+                if (string.IsNullOrWhiteSpace(user.LastName) && !string.IsNullOrWhiteSpace(lastName))
+                {
+                    user.LastName = lastName;
+                    profileUpdated = true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(picture) && IsDefaultPlaceholderAvatar(user.AvatarUrl))
+                {
+                    user.AvatarUrl = picture;
+                    profileUpdated = true;
+                }
+                else if (string.IsNullOrWhiteSpace(picture) && string.IsNullOrWhiteSpace(user.AvatarUrl))
+                {
+                    user.AvatarUrl = fallbackAvatar;
+                    profileUpdated = true;
+                }
+
+                if (profileUpdated)
+                {
+                    user.UpdatedAt = DateTime.UtcNow;
+                    await _userRepository.UpdateAsync(user);
+                }
             }
 
             var roles = await _repository.GetRolesAsync(account.AccountId);
