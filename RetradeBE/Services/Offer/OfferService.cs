@@ -118,7 +118,7 @@ namespace RetradeBE.Services.Offer
                         .ThenInclude(pi => pi.Image)
                 .Where(o => o.BuyerId == buyerUserId);
 
-            if (!string.IsNullOrEmpty(productId))
+            if (!string.IsNullOrWhiteSpace(productId))
                 query = query.Where(o => o.ProductId == productId);
 
             var offers = await query.OrderByDescending(o => o.CreatedAt).ToListAsync();
@@ -307,7 +307,7 @@ namespace RetradeBE.Services.Offer
                     var mainImage = o.Product?
                         .ProductImage
                         .OrderBy(pi => pi.SortOrder)
-                        .Select(pi => pi.Image!.ImageUrl)
+                        .Select(pi => pi.Image?.ImageUrl)
                         .FirstOrDefault();
 
                     return MapToDto(
