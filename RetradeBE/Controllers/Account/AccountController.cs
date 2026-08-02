@@ -41,7 +41,13 @@ namespace RetradeBE.Controllers.Account
         [HttpPost("verify")]
         public async Task<IActionResult> Verify([FromBody] VerifyDto dto)
         {
-            return Ok(await _service.VerifyAsync(dto));
+            var verified = await _service.VerifyAsync(dto);
+            if (!verified)
+            {
+                return BadRequest(new { message = "Invalid or expired OTP." });
+            }
+
+            return Ok(new { verified = true, message = "Account verified successfully." });
         }
 
         [HttpPost("resend-otp")]

@@ -308,12 +308,15 @@ namespace RetradeBE.Services
 
         public async Task<bool> VerifyAsync(VerifyDto dto)
         {
-            if (!_cache.TryGetValue(dto.Email, out string? savedOtp) || savedOtp != dto.Otp)
+            var email = dto.Email?.Trim() ?? string.Empty;
+            var otp = dto.Otp?.Trim() ?? string.Empty;
+
+            if (!_cache.TryGetValue(email, out string? savedOtp) || savedOtp != otp)
             {
                 return false;
             }
 
-            var user = await _userRepository.GetByEmailAsync(dto.Email);
+            var user = await _userRepository.GetByEmailAsync(email);
             if (user == null) return false;
 
             var allAccounts = await _repository.GetAllAsync();
@@ -322,9 +325,10 @@ namespace RetradeBE.Services
             if (account == null) return false;
 
             account.Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString();
+            account.UpdatedAt = DateTime.UtcNow;
             await _repository.UpdateAsync(account);
 
-            _cache.Remove(dto.Email);
+            _cache.Remove(email);
 
             return true;
         }
