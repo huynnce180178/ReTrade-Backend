@@ -87,7 +87,7 @@ namespace RetradeBE.Services.GeminiAssistant
 
             foreach (var currentModel in candidateModels)
             {
-                var url = $"{baseUrl}/{Uri.EscapeDataString(currentModel)}:generateContent?key={Uri.EscapeDataString(apiKey)}";
+                var url = $"{baseUrl}/{Uri.EscapeDataString(currentModel)}:generateContent";
 
                 for (var attempt = 0; attempt <= maxRetryAttempts; attempt++)
                 {
