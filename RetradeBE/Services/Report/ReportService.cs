@@ -532,7 +532,18 @@ namespace RetradeBE.Services
 
         public async Task<ReportHistoryDto> GetHistoryAsync(string accountId)
         {
-            var reporterId = await ResolveUserIdAsync(accountId);
+            if (string.IsNullOrWhiteSpace(accountId))
+            {
+                throw new KeyNotFoundException("Account does not exist.");
+            }
+
+            var account = await _accountService.GetByIdAsync(accountId);
+            if (account == null)
+            {
+                throw new KeyNotFoundException("Account does not exist.");
+            }
+
+            var reporterId = account.UserId;
             if (string.IsNullOrWhiteSpace(reporterId))
             {
                 return new ReportHistoryDto();

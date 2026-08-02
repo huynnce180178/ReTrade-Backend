@@ -52,24 +52,7 @@ namespace Test.ReportTests
             );
         }
 
-        [Fact]
-        public async Task GetHistoryAsync_ShouldReturnEmptyHistory_WhenAccountOrReporterNotFound()
-        {
-            // Arrange
-            string accountId = "invalid_acc";
-            _accountService.Setup(x => x.GetByIdAsync(accountId)).ReturnsAsync((Account?)null);
-
-            // Act
-            var result = await _service.GetHistoryAsync(accountId);
-
-            // Assert
-            result.Should().NotBeNull();
-            result.ReportsSubmitted.Should().BeNullOrEmpty();
-            result.ReportsReceived.Should().BeNullOrEmpty();
-
-            _accountService.Verify(x => x.GetByIdAsync(accountId), Times.Once);
-            _reportRepository.Verify(x => x.GetReportsByReporterAsync(It.IsAny<string>()), Times.Never);
-        }
+        #region Normal Tests (N)
 
         [Fact]
         public async Task GetHistoryAsync_ShouldReturnSubmittedAndReceivedReports_WhenAccountIsValid()
@@ -107,5 +90,57 @@ namespace Test.ReportTests
             _reportRepository.Verify(x => x.GetReportsByReporterAsync(userId), Times.Once);
             _reportRepository.Verify(x => x.GetReportsReceivedByUserAsync(userId), Times.Once);
         }
+
+        #endregion
+
+        #region Abnormal Tests (A)
+
+        [Fact]
+        public async Task GetHistoryAsync_ShouldThrowKeyNotFoundException_WhenAccountDoesNotExist()
+        {
+            // Arrange
+            string accountId = "invalid_acc";
+            _accountService.Setup(x => x.GetByIdAsync(accountId)).ReturnsAsync((Account?)null);
+
+            // Act
+            var act = async () => await _service.GetHistoryAsync(accountId);
+
+            // Assert
+            await act.Should().ThrowAsync<KeyNotFoundException>().WithMessage("Account does not exist.");
+
+            _accountService.Verify(x => x.GetByIdAsync(accountId), Times.Once);
+            _reportRepository.Verify(x => x.GetReportsByReporterAsync(It.IsAny<string>()), Times.Never);
+        }
+
+        #endregion
+
+        #region Boundary Tests (B)
+
+        [Fact]
+        public async Task GetHistoryAsync_ShouldReturnEmptyHistory_WhenReporterHasNoSubmittedOrReceivedReports()
+        {
+            // Arrange
+            string accountId = "acc_id";
+            string userId = "user_id";
+            var account = new Account { AccountId = accountId, UserId = userId };
+
+            _accountService.Setup(x => x.GetByIdAsync(accountId)).ReturnsAsync(account);
+            _reportRepository.Setup(x => x.GetReportsByReporterAsync(userId)).ReturnsAsync(new List<Report>());
+            _reportRepository.Setup(x => x.GetReportsReceivedByUserAsync(userId)).ReturnsAsync(new List<Report>());
+
+            // Act
+            var result = await _service.GetHistoryAsync(accountId);
+
+            // Assert
+            result.Should().NotBeNull();
+            result.ReportsSubmitted.Should().BeEmpty();
+            result.ReportsReceived.Should().BeEmpty();
+
+            _accountService.Verify(x => x.GetByIdAsync(accountId), Times.Once);
+            _reportRepository.Verify(x => x.GetReportsByReporterAsync(userId), Times.Once);
+            _reportRepository.Verify(x => x.GetReportsReceivedByUserAsync(userId), Times.Once);
+        }
+
+        #endregion
     }
 }

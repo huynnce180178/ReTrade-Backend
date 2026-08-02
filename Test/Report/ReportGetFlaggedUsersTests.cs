@@ -103,5 +103,60 @@ namespace Test.ReportTests
             _reportRepository.Verify(x => x.GetReportsForUserAsync("U1"), Times.Once);
             _reportRepository.Verify(x => x.GetReportsForUserAsync("U2"), Times.Never);
         }
+
+        [Fact]
+        public async Task GetFlaggedUsersAsync_ShouldReturnEmptyList_WhenNoUsersAreFlagged()
+        {
+            // Arrange
+            var users = new List<User>
+            {
+                new User { UserId = "U1", FirstName = "UserOne", FlagCount = 0 },
+                new User { UserId = "U2", FirstName = "UserTwo", FlagCount = 0 }
+            };
+
+            _userService.Setup(x => x.GetAllAsync()).ReturnsAsync(users);
+
+            // Act
+            var result = await _service.GetFlaggedUsersAsync();
+
+            // Assert
+            result.Should().NotBeNull();
+            result.Should().BeEmpty();
+
+            _userService.Verify(x => x.GetAllAsync(), Times.Once);
+            _reportRepository.Verify(x => x.GetReportsForUserAsync(It.IsAny<string>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task GetFlaggedUsersAsync_ShouldTreatNullFlagCountAsZero_WhenUserHasNullFlagCount()
+        {
+            // Arrange
+            var users = new List<User>
+            {
+                new User { UserId = "U1", FirstName = "UserOne", FlagCount = null },
+                new User { UserId = "U2", FirstName = "UserTwo", FlagCount = 2 }
+            };
+
+            var reportsForU2 = new List<Report>
+            {
+                new Report { ReportId = "R1", TargetType = "review", Reason = "Spam" }
+            };
+
+            _userService.Setup(x => x.GetAllAsync()).ReturnsAsync(users);
+            _reportRepository.Setup(x => x.GetReportsForUserAsync("U2")).ReturnsAsync(reportsForU2);
+
+            // Act
+            var result = await _service.GetFlaggedUsersAsync();
+
+            // Assert
+            result.Should().NotBeNull();
+            result.Should().HaveCount(1);
+            result[0].UserId.Should().Be("U2");
+            result[0].FlagCount.Should().Be(2);
+
+            _userService.Verify(x => x.GetAllAsync(), Times.Once);
+            _reportRepository.Verify(x => x.GetReportsForUserAsync("U2"), Times.Once);
+            _reportRepository.Verify(x => x.GetReportsForUserAsync("U1"), Times.Never);
+        }
     }
 }

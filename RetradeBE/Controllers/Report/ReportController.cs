@@ -183,8 +183,15 @@ namespace RetradeBE.Controllers.Report
                 return Unauthorized();
             }
 
-            var history = await _reportService.GetHistoryAsync(accountId);
-            return Ok(history);
+            try
+            {
+                var history = await _reportService.GetHistoryAsync(accountId);
+                return Ok(history);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
         }
     }
 }
