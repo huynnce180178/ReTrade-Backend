@@ -58,13 +58,23 @@ namespace RetradeBE.Services
         {
             if (string.IsNullOrWhiteSpace(buyerId))
             {
-                return null;
+                throw new ArgumentException("Buyer ID is required.", nameof(buyerId));
+            }
+
+            if (string.IsNullOrWhiteSpace(orderId))
+            {
+                throw new ArgumentException("Order ID is required.", nameof(orderId));
             }
 
             var order = await _orderRepository.GetByIdAsync(orderId);
-            if (order == null || order.BuyerId != buyerId)
+            if (order == null)
             {
-                return null;
+                throw new KeyNotFoundException("Purchase order not found.");
+            }
+
+            if (order.BuyerId != buyerId)
+            {
+                throw new UnauthorizedAccessException("You do not have permission to view this order.");
             }
 
             return _mapper.Map<PurchaseDetailDto>(order);

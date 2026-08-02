@@ -692,6 +692,26 @@ namespace RetradeBE.Services
                 return "Old password is incorrect.";
             }
 
+            if (string.IsNullOrEmpty(dto.NewPassword) || dto.NewPassword.Length < 8)
+            {
+                return "Password must be at least 8 characters long.";
+            }
+
+            if (dto.NewPassword.Length > 50)
+            {
+                return "Password exceeds the maximum allowed length.";
+            }
+
+            if (!System.Text.RegularExpressions.Regex.IsMatch(dto.NewPassword, @"[A-Z]"))
+            {
+                return "Password must contain at least one uppercase letter.";
+            }
+
+            if (!System.Text.RegularExpressions.Regex.IsMatch(dto.NewPassword, @"[@$!%*?&._\-]"))
+            {
+                return "Password must contain at least one special character.";
+            }
+
             account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
             account.IsPasswordSet = true;
             account.MustChangePassword = false;
