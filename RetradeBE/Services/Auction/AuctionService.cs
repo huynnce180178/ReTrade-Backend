@@ -322,11 +322,10 @@ namespace RetradeBE.Services
                 .FirstOrDefaultAsync();
             if (deposit == null || deposit.PolicyAccepted != true)
                 throw new Exception("A paid deposit and accepted policy are required before bidding.");
-            var spentBidAmount = await GetSpentBidAmountAsync(auctionId, userId);
-            var maxBidAmount = Math.Max(0, (deposit.DepositAmount ?? 0) - MinimumDepositAmount - spentBidAmount);
+            var maxBidAmount = Math.Max(0, (deposit.DepositAmount ?? 0) - MinimumDepositAmount);
             var isBuyNowBid = auction.BuyNowPrice.HasValue && dto.BidAmount == auction.BuyNowPrice.Value;
             if (dto.BidAmount > maxBidAmount)
-                throw new Exception($"Bid amount cannot exceed your bidding limit (deposit - {MinimumDepositAmount:N0} VND).");
+                throw new Exception($"Bid amount cannot exceed your bidding limit ({maxBidAmount:N0} VND).");
 
             var currentPrice = GetCurrentPrice(auction);
             var minimumBid = GetMinimumNextBid(auction);
@@ -649,29 +648,32 @@ namespace RetradeBE.Services
                 return 0;
             }
 
-            return await _context.Bid
+            var highestActiveBid = await _context.Bid
                 .AsNoTracking()
-                .Where(b => b.AuctionId == auctionId && b.UserId == userId)
-                .SumAsync(b => b.BidAmount ?? 0);
+                .Where(b => b.AuctionId == auctionId && b.UserId == userId && b.Status == "Highest")
+                .Select(b => b.BidAmount)
+                .FirstOrDefaultAsync();
+
+            return highestActiveBid ?? 0;
         }
 
         private AuctionDepositDto MapDepositDto(AuctionDeposit deposit, decimal spentBidAmount = 0)
         {
             var paid = deposit.Status == "Paid" && deposit.PolicyAccepted == true;
             var totalDepositAmount = deposit.DepositAmount ?? 0;
-            var availableDepositAmount = Math.Max(0, totalDepositAmount - spentBidAmount);
+            var maxBidAmount = Math.Max(0, totalDepositAmount - MinimumDepositAmount);
             return new AuctionDepositDto
             {
                 AuctionDepositId = deposit.AuctionDepositId,
                 AuctionId = deposit.AuctionId,
                 UserId = deposit.UserId,
-                DepositAmount = availableDepositAmount,
+                DepositAmount = totalDepositAmount,
                 TotalDepositAmount = deposit.DepositAmount,
                 HeldBidAmount = spentBidAmount,
                 PolicyAccepted = deposit.PolicyAccepted == true,
                 Status = deposit.Status,
                 CreatedAt = deposit.CreatedAt,
-                MaxBidAmount = Math.Max(0, availableDepositAmount - MinimumDepositAmount),
+                MaxBidAmount = maxBidAmount,
                 CanBid = paid
             };
         }

@@ -107,11 +107,15 @@ namespace RetradeBE.Services.Checkout
 
             var userId = account.UserId;
 
-            var product = await _context.Product.FirstOrDefaultAsync(p => p.ProductId == request.ProductId);
+            var product = await _context.Product
+                .Include(p => p.Category)
+                .FirstOrDefaultAsync(p => p.ProductId == request.ProductId);
             if (product == null)
                 throw new Exception("Product not found");
 
             if (product.IsDeleted == true ||
+                product.Category == null ||
+                product.Category.Status != "Active" ||
                 product.Status != RetradeBE.Models.Enums.ProductStatusEnum.Accepted.ToString() ||
                 !product.StockQuantity.HasValue ||
                 product.StockQuantity.Value <= 0)
