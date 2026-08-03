@@ -97,42 +97,54 @@ namespace RetradeBE.Services
 
                 try
                 {
+                    User? user = null;
                     if (!string.IsNullOrWhiteSpace(account.UserId))
                     {
-                        var user = await _userRepository.GetByIdAsync(account.UserId);
-                        if (user != null && !string.IsNullOrWhiteSpace(user.Email))
+                        user = await _userRepository.GetByIdAsync(account.UserId);
+                    }
+                    if (user == null && !string.IsNullOrWhiteSpace(account.Username) && account.Username.Contains("@"))
+                    {
+                        user = await _userRepository.GetByEmailAsync(account.Username);
+                    }
+
+                    if (user != null && !string.IsNullOrWhiteSpace(user.Email))
+                    {
+                        var displayName = !string.IsNullOrWhiteSpace(user.FirstName)
+                            ? $"{user.FirstName} {user.LastName}".Trim()
+                            : (account.Username ?? "User");
+
+                        string template = await GetEmailTemplateAsync("AccountBannedNotice.html");
+                        string emailBody;
+                        var formattedReason = !string.IsNullOrWhiteSpace(reason) ? reason : "Violation of community standards / Terms of service.";
+
+                        if (!string.IsNullOrWhiteSpace(template))
                         {
-                            var displayName = !string.IsNullOrWhiteSpace(user.FirstName)
-                                ? user.FirstName
-                                : (account.Username ?? "User");
-
-                            string template = await GetEmailTemplateAsync("AccountBannedNotice.html");
-                            string emailBody;
-                            var formattedReason = !string.IsNullOrWhiteSpace(reason) ? reason : "Violation of community standards / Terms of service.";
-
-                            if (!string.IsNullOrWhiteSpace(template))
-                            {
-                                emailBody = template
-                                    .Replace("{{DISPLAY_NAME}}", displayName)
-                                    .Replace("{{ACCOUNT_ID}}", account.AccountId)
-                                    .Replace("{{BAN_REASON}}", formattedReason)
-                                    .Replace("{{BANNED_AT}}", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss 'UTC'"));
-                            }
-                            else
-                            {
-                                emailBody = $@"<p>Hello {displayName},</p>
-<p>Your ReTrade account has been <strong>banned / set to Inactive</strong> by an administrator.</p>
-<p><strong>Reason for Ban:</strong> {formattedReason}</p>
-<p>If you have any questions or believe this was a mistake, please reply directly to this email.</p>
-<p>Account ID: {account.AccountId}<br/>Time: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC</p>
-<p>Regards,<br/>ReTrade Support Team</p>";
-                            }
-
-                            await _emailService.SendEmailAsync(
-                                user.Email,
-                                "[ReTrade] Account Ban Notification",
-                                emailBody);
+                            emailBody = template
+                                .Replace("{{DISPLAY_NAME}}", displayName)
+                                .Replace("{{ACCOUNT_ID}}", account.AccountId)
+                                .Replace("{{BAN_REASON}}", formattedReason)
+                                .Replace("{{BANNED_AT}}", DateTime.UtcNow.AddHours(7).ToString("yyyy-MM-dd HH:mm:ss 'ICT'"));
                         }
+                        else
+                        {
+                            emailBody = $@"<p>Xin chào {displayName},</p>
+<p>Tài khoản ReTrade của bạn (ID: <strong>{account.AccountId}</strong>) đã bị <strong>KÍCH HOẠT TRẠNG THÁI KHÓA (BAN)</strong> bởi Quản trị viên.</p>
+<p><strong>Lý do khóa tài khoản:</strong> {formattedReason}</p>
+<p>Nếu bạn có thắc mắc hoặc cần giải trình, vui lòng phản hồi trực tiếp qua email này hoặc liên hệ Hỗ trợ ReTrade.</p>
+<p>Thời gian áp dụng: {DateTime.UtcNow.AddHours(7):yyyy-MM-dd HH:mm:ss} ICT</p>
+<p>Trân trọng,<br/>Đội ngũ Hỗ trợ ReTrade</p>";
+                        }
+
+                        await _emailService.SendEmailAsync(
+                            user.Email,
+                            "[ReTrade] Thông báo khóa tài khoản (Account Ban Notification)",
+                            emailBody);
+
+                        _logger.LogInformation("Successfully sent ban notification email to {Email} for AccountId {AccountId}", user.Email, accountId);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Could not find user/email to send ban notification for AccountId {AccountId}", accountId);
                     }
                 }
                 catch (Exception ex)

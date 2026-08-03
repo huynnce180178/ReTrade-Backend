@@ -62,21 +62,21 @@ namespace RetradeBE.Controllers.Account
             try
             {
                 var response = await _service.LoginAsync(dto);
-                if (response == null) return Unauthorized(new { message = "Tên đăng nhập/email hoặc mật khẩu không chính xác." });
+                if (response == null) return Unauthorized(new { code = "INVALID_CREDENTIALS", message = "Tên đăng nhập/email hoặc mật khẩu không chính xác." });
 
                 return Ok(response);
             }
             catch (InvalidOperationException ex) when (ex.Message == "ACCOUNT_BANNED")
             {
-                return Unauthorized(new { message = "Tài khoản của bạn đã bị KHÓA bởi Quản trị viên. Vui lòng kiểm tra email thông báo hoặc liên hệ Admin để được hỗ trợ." });
+                return Unauthorized(new { code = "ACCOUNT_BANNED", message = "Tài khoản của bạn đã bị KHÓA bởi Quản trị viên. Vui lòng kiểm tra email thông báo hoặc liên hệ Admin để được hỗ trợ." });
             }
             catch (InvalidOperationException ex) when (ex.Message == "ACCOUNT_INACTIVE")
             {
-                return Unauthorized(new { message = "Tài khoản của bạn CHƯA ĐƯỢC KÍCH HOẠT. Vui lòng kiểm tra email để nhập mã OTP xác thực." });
+                return Unauthorized(new { code = "ACCOUNT_INACTIVE", message = "Tài khoản của bạn CHƯA ĐƯỢC KÍCH HOẠT. Vui lòng kiểm tra email để nhập mã OTP xác thực." });
             }
             catch (InvalidOperationException ex) when (ex.Message == "ACCOUNT_DELETED")
             {
-                return Unauthorized(new { message = "Tài khoản này không tồn tại hoặc đã bị xóa khỏi hệ thống." });
+                return Unauthorized(new { code = "ACCOUNT_DELETED", message = "Tài khoản này không tồn tại hoặc đã bị xóa khỏi hệ thống." });
             }
         }
 
@@ -89,21 +89,21 @@ namespace RetradeBE.Controllers.Account
             try
             {
                 var response = await _service.LoginWithGoogleAsync(dto.AccessToken);
-                if (response == null) return Unauthorized(new { message = "Xác thực Google thất bại. Token không hợp lệ hoặc phiên làm việc đã hết hạn. Vui lòng thử lại." });
+                if (response == null) return Unauthorized(new { code = "INVALID_CREDENTIALS", message = "Xác thực Google thất bại. Token không hợp lệ hoặc phiên làm việc đã hết hạn. Vui lòng thử lại." });
 
                 return Ok(response);
             }
             catch (InvalidOperationException ex) when (ex.Message == "ACCOUNT_BANNED")
             {
-                return Unauthorized(new { message = "Tài khoản của bạn đã bị KHÓA bởi Quản trị viên. Vui lòng kiểm tra email thông báo hoặc liên hệ Admin để được hỗ trợ." });
+                return Unauthorized(new { code = "ACCOUNT_BANNED", message = "Tài khoản của bạn đã bị KHÓA bởi Quản trị viên. Vui lòng kiểm tra email thông báo hoặc liên hệ Admin để được hỗ trợ." });
             }
             catch (InvalidOperationException ex) when (ex.Message == "ACCOUNT_INACTIVE")
             {
-                return Unauthorized(new { message = "Tài khoản của bạn CHƯA ĐƯỢC KÍCH HOẠT. Vui lòng kiểm tra email để nhập mã OTP xác thực." });
+                return Unauthorized(new { code = "ACCOUNT_INACTIVE", message = "Tài khoản của bạn CHƯA ĐƯỢC KÍCH HOẠT. Vui lòng kiểm tra email để nhập mã OTP xác thực." });
             }
             catch (InvalidOperationException ex) when (ex.Message == "ACCOUNT_DELETED")
             {
-                return Unauthorized(new { message = "Tài khoản này không tồn tại hoặc đã bị xóa khỏi hệ thống." });
+                return Unauthorized(new { code = "ACCOUNT_DELETED", message = "Tài khoản này không tồn tại hoặc đã bị xóa khỏi hệ thống." });
             }
         }
 

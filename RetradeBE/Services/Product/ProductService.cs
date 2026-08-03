@@ -397,6 +397,7 @@ namespace RetradeBE.Services
         {
             var product = await _repository.GetByIdAsync(productId);
             if (product == null) return null;
+            if (product.Category != null && product.Category.Status != "Active") return null;
             return MapToResponseDto(product);
         }
 
