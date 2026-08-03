@@ -16,5 +16,7 @@ namespace RetradeBE.Services
         Task<int> ProcessDueAuctionsAsync(CancellationToken cancellationToken = default);
         Task<int> NotifyUpcomingAuctionsAsync(CancellationToken cancellationToken = default);
         Task<List<UserBidHistoryDto>> GetUserBidHistoryAsync(string accountId);
+        Task<AuctionDetailDto> EndAuctionAsync(string accountId, string auctionId);
+        Task<AuctionDetailDto> RelistAuctionAsync(string accountId, string auctionId, AuctionUpdateDto dto);
     }
 }
