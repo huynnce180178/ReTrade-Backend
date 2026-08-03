@@ -16,5 +16,17 @@ namespace RetradeBE.Repositories
         {
             return _context.MyService;
         }
+
+        public async Task AddAsync(MyService entity)
+        {
+            await _context.MyService.AddAsync(entity);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task UpdateAsync(MyService entity)
+        {
+            _context.MyService.Update(entity);
+            await _context.SaveChangesAsync();
+        }
     }
 }

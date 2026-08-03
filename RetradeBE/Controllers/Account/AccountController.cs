@@ -41,7 +41,13 @@ namespace RetradeBE.Controllers.Account
         [HttpPost("verify")]
         public async Task<IActionResult> Verify([FromBody] VerifyDto dto)
         {
-            return Ok(await _service.VerifyAsync(dto));
+            var verified = await _service.VerifyAsync(dto);
+            if (!verified)
+            {
+                return BadRequest(new { message = "Invalid or expired OTP." });
+            }
+
+            return Ok(new { verified = true, message = "Account verified successfully." });
         }
 
         [HttpPost("resend-otp")]
@@ -56,13 +62,21 @@ namespace RetradeBE.Controllers.Account
             try
             {
                 var response = await _service.LoginAsync(dto);
-                if (response == null) return Unauthorized("Invalid credentials or account not active.");
+                if (response == null) return Unauthorized(new { message = "Tên đăng nhập/email hoặc mật khẩu không chính xác." });
 
                 return Ok(response);
             }
+            catch (InvalidOperationException ex) when (ex.Message == "ACCOUNT_BANNED")
+            {
+                return Unauthorized(new { message = "Tài khoản của bạn đã bị KHÓA bởi Quản trị viên. Vui lòng kiểm tra email thông báo hoặc liên hệ Admin để được hỗ trợ." });
+            }
             catch (InvalidOperationException ex) when (ex.Message == "ACCOUNT_INACTIVE")
             {
-                return Unauthorized("Tài khoản đã bị vô hiệu hóa, vui lòng kiểm tra email.");
+                return Unauthorized(new { message = "Tài khoản của bạn CHƯA ĐƯỢC KÍCH HOẠT. Vui lòng kiểm tra email để nhập mã OTP xác thực." });
+            }
+            catch (InvalidOperationException ex) when (ex.Message == "ACCOUNT_DELETED")
+            {
+                return Unauthorized(new { message = "Tài khoản này không tồn tại hoặc đã bị xóa khỏi hệ thống." });
             }
         }
 
@@ -75,13 +89,21 @@ namespace RetradeBE.Controllers.Account
             try
             {
                 var response = await _service.LoginWithGoogleAsync(dto.AccessToken);
-                if (response == null) return Unauthorized("Google login failed. Invalid token or account disabled.");
+                if (response == null) return Unauthorized(new { message = "Xác thực Google thất bại. Token không hợp lệ hoặc phiên làm việc đã hết hạn. Vui lòng thử lại." });
 
                 return Ok(response);
             }
+            catch (InvalidOperationException ex) when (ex.Message == "ACCOUNT_BANNED")
+            {
+                return Unauthorized(new { message = "Tài khoản của bạn đã bị KHÓA bởi Quản trị viên. Vui lòng kiểm tra email thông báo hoặc liên hệ Admin để được hỗ trợ." });
+            }
             catch (InvalidOperationException ex) when (ex.Message == "ACCOUNT_INACTIVE")
             {
-                return Unauthorized("Tài khoản đã bị vô hiệu hóa, vui lòng kiểm tra email.");
+                return Unauthorized(new { message = "Tài khoản của bạn CHƯA ĐƯỢC KÍCH HOẠT. Vui lòng kiểm tra email để nhập mã OTP xác thực." });
+            }
+            catch (InvalidOperationException ex) when (ex.Message == "ACCOUNT_DELETED")
+            {
+                return Unauthorized(new { message = "Tài khoản này không tồn tại hoặc đã bị xóa khỏi hệ thống." });
             }
         }
 

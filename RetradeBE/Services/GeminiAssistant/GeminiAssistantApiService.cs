@@ -77,7 +77,6 @@ namespace RetradeBE.Services.GeminiAssistant
             var candidateModels = new List<string> { primaryModel };
             if (!candidateModels.Contains("gemini-2.5-flash")) candidateModels.Add("gemini-2.5-flash");
             if (!candidateModels.Contains("gemini-flash-latest")) candidateModels.Add("gemini-flash-latest");
-            if (!candidateModels.Contains("gemini-3.6-flash")) candidateModels.Add("gemini-3.6-flash");
             if (!candidateModels.Contains("gemini-2.0-flash")) candidateModels.Add("gemini-2.0-flash");
 
             var payload = JsonSerializer.Serialize(request, JsonOptions);
@@ -218,6 +217,11 @@ namespace RetradeBE.Services.GeminiAssistant
                                 {
                                     Type = "integer",
                                     Description = "Maximum number of products to return. Use 5 by default and never exceed 10."
+                                },
+                                ["minStorageGb"] = new()
+                                {
+                                    Type = "integer",
+                                    Description = "Minimum storage capacity in GB when the user asks for phone/computer storage, for example 64 for '64GB trở lên'."
                                 }
                             }
                         }

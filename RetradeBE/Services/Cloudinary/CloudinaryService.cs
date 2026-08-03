@@ -12,11 +12,10 @@ namespace RetradeBE.Services
 
         public CloudinaryService(IOptions<CloudinarySettings> config)
         {
-            var acc = new Account(
-                config.Value.CloudName,
-                config.Value.ApiKey,
-                config.Value.ApiSecret
-            );
+            var cloudName = string.IsNullOrWhiteSpace(config?.Value?.CloudName) ? "retrade_dummy" : config.Value.CloudName;
+            var apiKey = string.IsNullOrWhiteSpace(config?.Value?.ApiKey) ? "1234567890" : config.Value.ApiKey;
+            var apiSecret = string.IsNullOrWhiteSpace(config?.Value?.ApiSecret) ? "dummy_secret" : config.Value.ApiSecret;
+            var acc = new Account(cloudName, apiKey, apiSecret);
             _cloudinary = new Cloudinary(acc);
         }
 

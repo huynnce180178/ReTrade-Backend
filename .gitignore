@@ -4,6 +4,8 @@
 ## Get latest from `dotnet new gitignore`
 
 # dotenv files
+.env
+*.env
 
 
 # ASP.NET Core local data protection keys
