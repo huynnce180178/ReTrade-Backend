@@ -349,9 +349,34 @@ namespace RetradeBE.Services.AssistantChat
                     return "i18n:chat.assistant_offline_purchase_login";
                 }
 
-                return suggestedProducts.Count > 0
-                    ? "i18n:chat.assistant_offline_purchase_found"
-                    : "i18n:chat.assistant_offline_purchase_empty";
+                var recentOrders = await _purchaseService.QueryByBuyerId(userId)
+                    .Take(5)
+                    .ToListAsync(cancellationToken);
+
+                if (recentOrders.Count > 0)
+                {
+                    var sb = new StringBuilder();
+                    sb.AppendLine("Here are your recent orders on ReTrade:\n");
+                    foreach (var o in recentOrders)
+                    {
+                        var pId = o.ProductId;
+                        var pName = o.ProductName ?? "ReTrade Product";
+                        var imgUrl = pId != null && suggestedProducts.FirstOrDefault(x => x.ProductId == pId)?.MainImageUrl != null
+                            ? suggestedProducts.First(x => x.ProductId == pId).MainImageUrl
+                            : null;
+
+                        if (!string.IsNullOrWhiteSpace(imgUrl))
+                        {
+                            sb.AppendLine($"![{pName}]({imgUrl})");
+                        }
+                        sb.AppendLine($"- **{pName}** | Order Code: #{o.OrderCode ?? o.OrderId} | Total: {o.FinalAmount ?? o.TotalAmount ?? 0:N0} VND | Status: {TranslateOrderStatus(o.Status)}");
+                        sb.AppendLine($"[View Details](/purchase-history/{o.OrderId})\n");
+                    }
+                    sb.AppendLine("[View All Orders](/purchase-history)");
+                    return sb.ToString();
+                }
+
+                return "i18n:chat.assistant_offline_purchase_empty";
             }
 
             if (ContainsAny(normalized, "auction", "bid", "dau gia", "tra gia"))
@@ -652,10 +677,16 @@ namespace RetradeBE.Services.AssistantChat
                 {
                     var pId = o.ProductId;
                     var pName = o.ProductName ?? (pId != null && productsDict.TryGetValue(pId, out var prod) ? prod.Name : "ReTrade Product");
-                    var summary = $"- Order Code: #{o.OrderCode ?? o.OrderId} | Product: {pName} | Total: {o.FinalAmount ?? o.TotalAmount ?? 0:N0} VND | Status: {TranslateOrderStatus(o.Status)} | Date: {(o.CreatedAt.HasValue ? o.CreatedAt.Value.ToString("dd/MM/yyyy HH:mm") : "N/A")}";
-                    if (!string.IsNullOrWhiteSpace(pId))
+                    var imgUrl = pId != null && productsDict.TryGetValue(pId, out var prodImg) ? prodImg.MainImageUrl : null;
+
+                    var summary = $"- Order Code: #{o.OrderCode ?? o.OrderId} | Product: {pName} | Total: {o.FinalAmount ?? o.TotalAmount ?? 0:N0} VND | Status: {TranslateOrderStatus(o.Status)}";
+                    if (!string.IsNullOrWhiteSpace(imgUrl))
                     {
-                        summary += $" | Link: [View Details](/product/{pId})";
+                        summary += $" | ImageUrl: {imgUrl}";
+                    }
+                    if (!string.IsNullOrWhiteSpace(o.OrderId))
+                    {
+                        summary += $" | Link: [View Details](/purchase-history/{o.OrderId})";
                     }
                     orderSummaries.Add(summary);
 
@@ -666,7 +697,7 @@ namespace RetradeBE.Services.AssistantChat
                 }
 
                 var contextText = "[Current User's Real Order Data from ReTrade System]:\n" + string.Join("\n", orderSummaries) +
-                    "\nNote: Present each order with product name, order code, total price, and status. Always include markdown links like [View Details](/product/PRODUCT_ID) and [View All Orders](/purchase-history) so the user can click to view details.";
+                    "\nNote: Present each order with product image markdown ![Product Name](ImageUrl) (if ImageUrl is provided), product name, order code, total price, and status. Always include markdown links like [View Details](/purchase-history/ORDER_ID) and [View All Orders](/purchase-history) so the user can click to view order details.";
 
                 geminiContents.Insert(0, new GeminiContentDto
                 {
