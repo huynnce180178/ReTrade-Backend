@@ -1174,5 +1174,101 @@ namespace RetradeBE.Services
         {
             return status is "Ended" or "EndedByBuyNow" or "EndedByTime" or "EndedNoBid" or "Cancelled";
         }
+
+        public async Task<AuctionDetailDto> EndAuctionAsync(string accountId, string auctionId)
+        {
+            var account = await GetAccountAsync(accountId);
+            var roles = await _accountRepository.GetRolesAsync(account.AccountId);
+
+            var auction = await _auctionRepository.GetByIdAsync(auctionId);
+            if (auction == null)
+                throw new Exception("Auction not found.");
+
+            if (auction.SellerId != account.UserId && !HasRole(roles, nameof(RoleEnum.Admin)))
+                throw new Exception("You are not authorized to end this auction.");
+
+            var currentStatus = ResolveStatus(auction);
+            if (IsTerminalStatus(currentStatus))
+                throw new Exception("Auction has already ended.");
+
+            var now = GetAuctionNow();
+            var highestBid = auction.Bid
+                .Where(b => b.BidAmount.HasValue)
+                .OrderByDescending(b => b.BidAmount)
+                .ThenBy(b => b.CreatedAt)
+                .FirstOrDefault();
+
+            if (highestBid == null)
+            {
+                auction.Status = "EndedNoBid";
+                auction.EndTime = now;
+                auction.UpdatedAt = now;
+                await CreateRefundsForLosersAsync(auction, null);
+                await _context.SaveChangesAsync();
+                var saved = await _auctionRepository.GetByIdAsync(auction.AuctionId);
+                var detailDto = MapToDetailDto(saved ?? auction);
+                await NotifyAuctionChangedAsync(detailDto, "AuctionEndedNoBid");
+                return detailDto;
+            }
+            else
+            {
+                auction.EndTime = now;
+                await CompleteAuctionAsync(auction, highestBid, "EndedByTime");
+                var saved = await _auctionRepository.GetByIdAsync(auction.AuctionId);
+                var detailDto = MapToDetailDto(saved ?? auction);
+                await NotifyAuctionChangedAsync(detailDto, "AuctionEndedByTime");
+                return detailDto;
+            }
+        }
+
+        public async Task<AuctionDetailDto> RelistAuctionAsync(string accountId, string auctionId, AuctionUpdateDto dto)
+        {
+            var account = await GetAccountAsync(accountId);
+            var roles = await _accountRepository.GetRolesAsync(account.AccountId);
+
+            var auction = await _auctionRepository.GetByIdAsync(auctionId);
+            if (auction == null)
+                throw new Exception("Auction not found.");
+
+            if (auction.SellerId != account.UserId && !HasRole(roles, nameof(RoleEnum.Admin)))
+                throw new Exception("You are not authorized to relist this auction.");
+
+            var currentStatus = ResolveStatus(auction);
+            var hasBids = auction.Bid.Any(b => b.BidAmount.HasValue);
+            var isEndedNoBid = currentStatus == "EndedNoBid" || (IsTerminalStatus(currentStatus) && !hasBids);
+
+            if (!isEndedNoBid)
+                throw new Exception("Only auctions ended with no bids can be relisted.");
+
+            ValidateAuctionValues(dto.StartingPrice, dto.MinIncrement, dto.BuyNowPrice, dto.StartTime, dto.EndTime);
+
+            var now = GetAuctionNow();
+            if (dto.StartTime.Date < now.Date)
+                throw new Exception("Start time cannot be in past days.");
+
+            auction.StartingPrice = dto.StartingPrice;
+            auction.CurrentPrice = dto.StartingPrice;
+            auction.MinIncrement = dto.MinIncrement;
+            auction.BuyNowPrice = dto.BuyNowPrice;
+            auction.StartTime = dto.StartTime;
+            auction.EndTime = dto.EndTime;
+            auction.Status = dto.StartTime > now ? "Upcoming" : "Ongoing";
+            auction.WinnerId = null;
+            auction.UpdatedAt = now;
+
+            // Clear old bids if any
+            var oldBids = await _context.Bid.Where(b => b.AuctionId == auction.AuctionId).ToListAsync();
+            if (oldBids.Any())
+            {
+                _context.Bid.RemoveRange(oldBids);
+            }
+
+            await _context.SaveChangesAsync();
+
+            var updated = await _auctionRepository.GetByIdAsync(auction.AuctionId);
+            var detailDto = MapToDetailDto(updated ?? auction);
+            await NotifyAuctionChangedAsync(detailDto, "AuctionRelisted");
+            return detailDto;
+        }
     }
 }

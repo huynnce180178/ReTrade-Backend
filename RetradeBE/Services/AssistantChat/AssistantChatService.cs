@@ -84,15 +84,29 @@ namespace RetradeBE.Services.AssistantChat
             session.LastMessageAt = now;
             await _chatSessionRepository.UpdateAsync(session);
 
+            var lang = string.Equals(request.Language, "vi", StringComparison.OrdinalIgnoreCase) ? "vi" : "en";
+            var isEnglish = lang == "en";
+
             var history = await _chatMessageRepository.GetBySessionIdAsync(session.SessionId);
             var geminiContents = BuildGeminiContents(history);
-            var orderProducts = await InjectUserOrderContextAsync(userId, geminiContents, cancellationToken);
+            var orderProducts = await InjectUserOrderContextAsync(userId, geminiContents, lang, cancellationToken);
             var suggestedProducts = new List<AssistantProductSuggestionDto>();
             if (orderProducts != null && orderProducts.Count > 0)
             {
                 suggestedProducts.AddRange(orderProducts);
             }
-            await InjectProductSearchContextAsync(message, geminiContents, suggestedProducts, cancellationToken);
+            await InjectProductSearchContextAsync(message, geminiContents, suggestedProducts, lang, cancellationToken);
+
+            var langDirective = isEnglish
+                ? "[SYSTEM LANGUAGE DIRECTIVE]: The user interface language is currently set to ENGLISH. You MUST respond completely in English. Translate all labels, status names, and titles into English."
+                : "[SYSTEM LANGUAGE DIRECTIVE]: The user interface language is currently set to VIETNAMESE. You MUST respond completely in Vietnamese.";
+
+            geminiContents.Insert(0, new GeminiContentDto
+            {
+                Role = UserRole,
+                Parts = new List<GeminiPartDto> { new() { Text = langDirective } }
+            });
+
             string finalText;
 
             try
@@ -430,6 +444,7 @@ namespace RetradeBE.Services.AssistantChat
             string message,
             List<GeminiContentDto> geminiContents,
             List<AssistantProductSuggestionDto> suggestedProducts,
+            string lang,
             CancellationToken cancellationToken)
         {
             var args = BuildHeuristicProductSearchArgs(message);
@@ -447,7 +462,9 @@ namespace RetradeBE.Services.AssistantChat
                       $"- {index + 1}. {p.Name} | Price: {p.Price ?? 0:N0} VND | Category: {p.CategoryName ?? "N/A"} | Condition: {p.Condition ?? "N/A"} | Stock: {p.StockQuantity ?? 0} | ProductId: {p.ProductId}"))
                 : "[Relevant ReTrade Product Search Results from Database]: No matching products were found.";
 
-            contextText += "\nInstruction: This is a ReTrade product-shopping request. Answer in the user's language and only mention products listed above.";
+            contextText += lang == "en"
+                ? "\nInstruction: Respond strictly in ENGLISH. Only mention products listed above."
+                : "\nInstruction: Respond strictly in VIETNAMESE. Only mention products listed above.";
 
             geminiContents.Insert(0, new GeminiContentDto
             {
@@ -614,6 +631,7 @@ namespace RetradeBE.Services.AssistantChat
         private async Task<List<AssistantProductSuggestionDto>> InjectUserOrderContextAsync(
             string? userId,
             List<GeminiContentDto> geminiContents,
+            string lang,
             CancellationToken cancellationToken)
         {
             var resultProducts = new List<AssistantProductSuggestionDto>();
@@ -649,6 +667,8 @@ namespace RetradeBE.Services.AssistantChat
 
                 var productsDict = await _productRepository.Query()
                     .AsNoTracking()
+                    .Include(p => p.ProductImage)
+                        .ThenInclude(pi => pi.Image)
                     .Where(p => productIds.Contains(p.ProductId))
                     .Select(p => new AssistantProductSuggestionDto
                     {
@@ -672,6 +692,7 @@ namespace RetradeBE.Services.AssistantChat
                     })
                     .ToDictionaryAsync(p => p.ProductId, cancellationToken);
 
+                var isEnglish = lang == "en";
                 var orderSummaries = new List<string>();
                 foreach (var o in recentOrders)
                 {
@@ -679,14 +700,19 @@ namespace RetradeBE.Services.AssistantChat
                     var pName = o.ProductName ?? (pId != null && productsDict.TryGetValue(pId, out var prod) ? prod.Name : "ReTrade Product");
                     var imgUrl = pId != null && productsDict.TryGetValue(pId, out var prodImg) ? prodImg.MainImageUrl : null;
 
-                    var summary = $"- Order Code: #{o.OrderCode ?? o.OrderId} | Product: {pName} | Total: {o.FinalAmount ?? o.TotalAmount ?? 0:N0} VND | Status: {TranslateOrderStatus(o.Status)}";
+                    var summary = isEnglish
+                        ? $"- Order Code: #{o.OrderCode ?? o.OrderId} | Product: {pName} | Total: {o.FinalAmount ?? o.TotalAmount ?? 0:N0} VND | Status: {TranslateOrderStatus(o.Status)}"
+                        : $"- Mã đơn hàng: #{o.OrderCode ?? o.OrderId} | Sản phẩm: {pName} | Tổng cộng: {o.FinalAmount ?? o.TotalAmount ?? 0:N0} VND | Trạng thái: {TranslateOrderStatus(o.Status)}";
+
                     if (!string.IsNullOrWhiteSpace(imgUrl))
                     {
                         summary += $" | ImageUrl: {imgUrl}";
                     }
                     if (!string.IsNullOrWhiteSpace(o.OrderId))
                     {
-                        summary += $" | Link: [View Details](/purchase-history/{o.OrderId})";
+                        summary += isEnglish
+                            ? $" | Link: [View Details](/purchase-history/{o.OrderId})"
+                            : $" | Link: [Xem chi tiết](/purchase-history/{o.OrderId})";
                     }
                     orderSummaries.Add(summary);
 
@@ -697,7 +723,9 @@ namespace RetradeBE.Services.AssistantChat
                 }
 
                 var contextText = "[Current User's Real Order Data from ReTrade System]:\n" + string.Join("\n", orderSummaries) +
-                    "\nNote: Present each order with product image markdown ![Product Name](ImageUrl) (if ImageUrl is provided), product name, order code, total price, and status. Always include markdown links like [View Details](/purchase-history/ORDER_ID) and [View All Orders](/purchase-history) so the user can click to view order details.";
+                    (isEnglish
+                        ? "\nNote: For each order with an ImageUrl, YOU MUST include the image using markdown `![Product Name](ImageUrl)` before the order details. Format: Product Image markdown, Order Code, Product Name, Total Amount, Order Status. Always include markdown links like [View Details](/purchase-history/ORDER_ID) and [View All Orders](/purchase-history)."
+                        : "\nNote: Với mỗi đơn hàng có ImageUrl, BẮT BUỘC chèn hình ảnh bằng markdown `![Tên sản phẩm](ImageUrl)` phía trước thông tin đơn hàng. Định dạng: Ảnh sản phẩm markdown, Mã đơn hàng, Tên sản phẩm, Tổng cộng, Trạng thái. Always include markdown links like [Xem chi tiết](/purchase-history/ORDER_ID) and [Xem tất cả đơn hàng](/purchase-history).");
 
                 geminiContents.Insert(0, new GeminiContentDto
                 {
