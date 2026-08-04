@@ -496,4 +496,10 @@ RetradeBE/appsettings.local.json
 RetradeBE/appsettings.Development.local.json
 *.local.md
 
+# Environment variables
+.env
+.env.*
+*.env
+
+
 

@@ -203,7 +203,10 @@ namespace RetradeBE
                     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                     await dbContext.Database.MigrateAsync();
                     Console.WriteLine("Database migrated successfully.");
-                    SeedData(dbContext);
+                    if (app.Environment.IsDevelopment())
+                    {
+                        SeedData(dbContext);
+                    }
                 }
                 catch (Exception ex)
                 {
