@@ -26,6 +26,8 @@ RetradeBE/DataProtectionKeys/
 mono_crash.*
 
 # Build results
+.build-check/
+**/.build-check/
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/

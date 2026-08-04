@@ -494,6 +494,24 @@ namespace RetradeBE.Services
             return avatarUrl.Contains("avt-emty", StringComparison.OrdinalIgnoreCase);
         }
 
+        private async Task<string> GenerateUniqueGoogleUsernameAsync(string email)
+        {
+            string baseUsername = email.Split('@')[0].Replace(".", "").Replace("+", "");
+            if (string.IsNullOrWhiteSpace(baseUsername))
+            {
+                baseUsername = "googleuser";
+            }
+
+            string username = baseUsername;
+            int suffix = 1;
+            while (await _repository.GetByUsernameAsync(username) != null)
+            {
+                username = $"{baseUsername}{suffix++}";
+            }
+
+            return username;
+        }
+
         public async Task<object?> LoginWithGoogleAsync(string accessToken)
         {
             using var httpClient = _httpClientFactory.CreateClient();
@@ -543,13 +561,7 @@ namespace RetradeBE.Services
                 string userId = await GenerateUserIdAsync();
                 string accountId = await GenerateAccountIdAsync();
 
-                string baseUsername = email.Split('@')[0].Replace(".", "").Replace("+", "");
-                string username = baseUsername;
-                int suffix = 1;
-                while (await _repository.GetByUsernameAsync(username) != null)
-                {
-                    username = $"{baseUsername}{suffix++}";
-                }
+                string username = await GenerateUniqueGoogleUsernameAsync(email);
 
                 user = new User
                 {
@@ -581,7 +593,24 @@ namespace RetradeBE.Services
             {
                 var allAccounts = await _repository.GetAllAsync();
                 account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
-                if (account == null) return null;
+                if (account == null)
+                {
+                    string accountId = await GenerateAccountIdAsync();
+                    account = new Account
+                    {
+                        AccountId = accountId,
+                        UserId = user.UserId,
+                        Provider = googleProvider,
+                        Username = await GenerateUniqueGoogleUsernameAsync(email),
+                        ProviderUserId = providerUserId ?? email,
+                        PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()),
+                        Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString(),
+                        IsPasswordSet = false,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _repository.AddAsync(account);
+                    await _repository.AssignRoleAsync(accountId, RetradeBE.Models.Enums.RoleEnum.Buyer.ToString());
+                }
                 if (account.IsDeleted == true)
                 {
                     throw new InvalidOperationException("ACCOUNT_DELETED");
@@ -592,8 +621,7 @@ namespace RetradeBE.Services
                     throw new InvalidOperationException("ACCOUNT_BANNED");
                 }
 
-                if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString() ||
-                    account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Pending.ToString())
+                if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString())
                 {
                     throw new InvalidOperationException("ACCOUNT_INACTIVE");
                 }
@@ -677,6 +705,7 @@ namespace RetradeBE.Services
                 PasswordHash = "",
                 Token = tokenHandler.WriteToken(token),
                 Roles = roles,
+                MustChangePassword = account.MustChangePassword ?? false,
                 IsPasswordSet = account.IsPasswordSet ?? true,
             };
         }
@@ -785,6 +814,9 @@ namespace RetradeBE.Services
             if (account == null) return "Account not found.";
 
             account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+            account.IsPasswordSet = true;
+            account.MustChangePassword = false;
+            account.UpdatedAt = DateTime.UtcNow;
             await _repository.UpdateAsync(account);
 
             _cache.Remove($"forgot_pwd_{dto.Email}");
