@@ -68,7 +68,7 @@ namespace RetradeBE.Models.DTOs
         [EmailAddress]
         public string? Email { get; set; }
 
-        [RegularExpression(@"^\d{9,12}$", ErrorMessage = "Phone must be 9 to 12 digits.")]
+        [RegularExpression(@"^$|^\d{9,12}$", ErrorMessage = "Phone must be 9 to 12 digits.")]
         public string? Phone { get; set; }
         public UpsertAddressDto? Address { get; set; }
 

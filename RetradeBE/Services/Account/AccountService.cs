@@ -367,10 +367,13 @@ namespace RetradeBE.Services
 
         public async Task<object?> LoginAsync(LoginDto dto)
         {
+            var cleanUsername = dto.Username?.Trim() ?? string.Empty;
+            var cleanPassword = dto.Password?.Trim() ?? string.Empty;
+
             Account? account = null;
-            if (dto.Username.Contains("@"))
+            if (cleanUsername.Contains("@"))
             {
-                var user = await _userRepository.GetByEmailAsync(dto.Username);
+                var user = await _userRepository.GetByEmailAsync(cleanUsername);
                 if (user != null)
                 {
                     var allAccounts = await _repository.GetAllAsync();
@@ -379,7 +382,7 @@ namespace RetradeBE.Services
             }
             else
             {
-                account = await _repository.GetByUsernameAsync(dto.Username);
+                account = await _repository.GetByUsernameAsync(cleanUsername);
             }
 
             if (account == null) return null;
@@ -398,7 +401,7 @@ namespace RetradeBE.Services
             }
             if (account.Status != RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString()) return null;
 
-            bool isPasswordValid = BCrypt.Net.BCrypt.Verify(dto.Password, account.PasswordHash);
+            bool isPasswordValid = BCrypt.Net.BCrypt.Verify(cleanPassword, account.PasswordHash);
             if (!isPasswordValid) return null;
 
             var roles = await _repository.GetRolesAsync(account.AccountId);
@@ -742,7 +745,8 @@ namespace RetradeBE.Services
 
         public async Task<string> PasswordRecoveryAsync(string email)
         {
-            var user = await _userRepository.GetByEmailAsync(email);
+            var cleanEmail = email?.Trim() ?? string.Empty;
+            var user = await _userRepository.GetByEmailAsync(cleanEmail);
             if (user == null) return "Email not found.";
 
             var allAccounts = await _repository.GetAllAsync();
@@ -758,7 +762,7 @@ namespace RetradeBE.Services
 
             string template = await GetEmailTemplateAsync("ResetPasswordAuto.html");
             string emailBody = template.Replace("{{NEW_PASSWORD}}", newPassword);
-            await _emailService.SendEmailAsync(email, "ReTrade Password Generated", emailBody);
+            await _emailService.SendEmailAsync(cleanEmail, "ReTrade Password Generated", emailBody);
 
             return "Password reset successful. Please check your email for your new password.";
         }
