@@ -32,3 +32,4 @@ jobs:
           push: true
           tags: |
             huynn1006/retrade-backend:latest
+            huynn1006/retrade-backend:${{ github.sha }}
