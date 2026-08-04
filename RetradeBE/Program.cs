@@ -494,7 +494,7 @@ namespace RetradeBE
             SeedUserAccount(dbContext, "usr_20260701_100001", "Admin", "System", "admin@retrade.com", "acc_20260701_100001", "admin", "Admin123@", 1, "0769331645");
             SeedAddress(dbContext, "adr_20260701_100001", "usr_20260701_100001", "Admin", "0769331645", "Hẻm 226/16, Phường An Bình, Quận Ninh Kiều, Cần Thơ", 215, 2034, "570604");
 
-            // 3. Essential Service Subscription Packages
+            // 3. Essential System Service Subscriptions
             SeedServiceSubscription(
                 dbContext,
                 "sub_20260701_100001",
@@ -521,41 +521,6 @@ namespace RetradeBE
                 69000m,
                 30,
                 "Activate priority display rights. Bring products to the top of search results. Reach tens of thousands of potential buyers.");
-
-            // 4. System Categories
-            SeedCategory(dbContext, "cat_furniture", "Furniture", "Table, chairs, beds, sofa, and other home furniture.");
-            SeedCategory(dbContext, "cat_computers", "Computers", "Laptops, desktops, monitors, components, and computing accessories.");
-            SeedCategory(dbContext, "cat_mobile_phones", "Mobile Phones", "Smartphones, basic phones, tablets, and mobile accessories.");
-            SeedCategory(dbContext, "cat_clothing", "Clothing", "Menswear, womenswear, shoes, bags, and fashion accessories.");
-
-            // 5. System Category Attributes
-            // Mobile Phones (cat_mobile_phones)
-            SeedCategoryAttribute(dbContext, "att_mobl_color", "cat_mobile_phones", "Color", "String", true, null, 1);
-            SeedCategoryAttribute(dbContext, "att_mobl_storage", "cat_mobile_phones", "Storage Capacity", "String", true, "GB", 2);
-            SeedCategoryAttribute(dbContext, "att_mobl_os", "cat_mobile_phones", "Operating System", "String", true, null, 3);
-            SeedCategoryAttribute(dbContext, "att_mobl_screen", "cat_mobile_phones", "Screen Size", "String", false, "inches", 4);
-            SeedCategoryAttribute(dbContext, "att_mobl_battery", "cat_mobile_phones", "Battery Capacity", "String", false, "mAh", 5);
-
-            // Furniture (cat_furniture)
-            SeedCategoryAttribute(dbContext, "att_furn_material", "cat_furniture", "Material", "String", true, null, 1);
-            SeedCategoryAttribute(dbContext, "att_furn_color", "cat_furniture", "Color", "String", true, null, 2);
-            SeedCategoryAttribute(dbContext, "att_furn_dimensions", "cat_furniture", "Dimensions", "String", false, "cm", 3);
-            SeedCategoryAttribute(dbContext, "att_furn_brand", "cat_furniture", "Brand", "String", false, null, 4);
-            SeedCategoryAttribute(dbContext, "att_furn_assembly", "cat_furniture", "Assembly Required", "String", false, null, 5);
-
-            // Computers (cat_computers)
-            SeedCategoryAttribute(dbContext, "att_comp_cpu", "cat_computers", "CPU", "String", true, null, 1);
-            SeedCategoryAttribute(dbContext, "att_comp_ram", "cat_computers", "RAM", "String", true, "GB", 2);
-            SeedCategoryAttribute(dbContext, "att_comp_storage", "cat_computers", "Storage", "String", true, null, 3);
-            SeedCategoryAttribute(dbContext, "att_comp_gpu", "cat_computers", "GPU", "String", false, null, 4);
-            SeedCategoryAttribute(dbContext, "att_comp_os", "cat_computers", "Operating System", "String", false, null, 5);
-
-            // Clothing (cat_clothing)
-            SeedCategoryAttribute(dbContext, "att_clot_size", "cat_clothing", "Size", "String", true, null, 1);
-            SeedCategoryAttribute(dbContext, "att_clot_color", "cat_clothing", "Color", "String", true, null, 2);
-            SeedCategoryAttribute(dbContext, "att_clot_gender", "cat_clothing", "Gender", "String", false, null, 3);
-            SeedCategoryAttribute(dbContext, "att_clot_material", "cat_clothing", "Material", "String", false, null, 4);
-            SeedCategoryAttribute(dbContext, "att_clot_brand", "cat_clothing", "Brand", "String", false, null, 5);
         }
 
         private static void SeedDemoData(AppDbContext dbContext)
