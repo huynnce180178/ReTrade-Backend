@@ -12,11 +12,16 @@ public class PaymentController : ControllerBase
 {
     private readonly IPaymentService _paymentService;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<PaymentController> _logger;
 
-    public PaymentController(IPaymentService paymentService, IConfiguration configuration)
+    public PaymentController(
+        IPaymentService paymentService,
+        IConfiguration configuration,
+        ILogger<PaymentController> logger)
     {
         _paymentService = paymentService;
         _configuration = configuration;
+        _logger = logger;
     }
 
     [Authorize]
@@ -48,11 +53,17 @@ public class PaymentController : ControllerBase
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to process VNPAY return callback.");
             result = new VnPayReturnResponseDto
             {
                 IsSuccess = false,
+                PaymentId = Request.Query.TryGetValue("vnp_TxnRef", out var txnRef) ? txnRef.ToString() : string.Empty,
                 Status = "Failed",
-                Message = ex.Message
+                Message = ex.Message,
+                TransactionNo = Request.Query.TryGetValue("vnp_TransactionNo", out var transactionNo) ? transactionNo.ToString() : null,
+                TransactionStatus = Request.Query.TryGetValue("vnp_TransactionStatus", out var transactionStatus) ? transactionStatus.ToString() : null,
+                ResponseCode = Request.Query.TryGetValue("vnp_ResponseCode", out var responseCode) ? responseCode.ToString() : null,
+                Amount = TryParseVnPayAmount(Request.Query.TryGetValue("vnp_Amount", out var amount) ? amount.ToString() : null)
             };
         }
 
@@ -63,29 +74,29 @@ public class PaymentController : ControllerBase
 
         var redirectUrl =
             $"{frontendUrl}?success={result.IsSuccess.ToString().ToLowerInvariant()}" +
-            $"&paymentId={Uri.EscapeDataString(result.PaymentId)}" +
-            $"&status={Uri.EscapeDataString(result.Status)}" +
-            $"&message={Uri.EscapeDataString(result.Message)}" +
+            $"&paymentId={Escape(result.PaymentId)}" +
+            $"&status={Escape(result.Status)}" +
+            $"&message={Escape(result.Message)}" +
             $"&amount={result.Amount.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
 
         if (!string.IsNullOrWhiteSpace(result.OrderId))
         {
-            redirectUrl += $"&orderId={Uri.EscapeDataString(result.OrderId)}";
+            redirectUrl += $"&orderId={Escape(result.OrderId)}";
         }
 
         if (!string.IsNullOrWhiteSpace(result.AuctionId))
         {
-            redirectUrl += $"&auctionId={Uri.EscapeDataString(result.AuctionId)}";
+            redirectUrl += $"&auctionId={Escape(result.AuctionId)}";
         }
 
         if (!string.IsNullOrWhiteSpace(result.TransactionNo))
         {
-            redirectUrl += $"&transactionNo={Uri.EscapeDataString(result.TransactionNo)}";
+            redirectUrl += $"&transactionNo={Escape(result.TransactionNo)}";
         }
 
         if (!string.IsNullOrWhiteSpace(result.ResponseCode))
         {
-            redirectUrl += $"&responseCode={Uri.EscapeDataString(result.ResponseCode)}";
+            redirectUrl += $"&responseCode={Escape(result.ResponseCode)}";
         }
 
         return Redirect(redirectUrl);
@@ -113,5 +124,15 @@ public class PaymentController : ControllerBase
                 Message = "Invalid Signature"
             });
         }
+    }
+
+    private static string Escape(string? value)
+    {
+        return Uri.EscapeDataString(value ?? string.Empty);
+    }
+
+    private static decimal TryParseVnPayAmount(string? amount)
+    {
+        return decimal.TryParse(amount, out var parsedAmount) ? parsedAmount / 100m : 0m;
     }
 }

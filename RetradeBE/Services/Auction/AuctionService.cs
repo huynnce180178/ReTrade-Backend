@@ -245,7 +245,8 @@ namespace RetradeBE.Services
             string accountId,
             string auctionId,
             AuctionDepositPaymentRequestDto dto,
-            string ipAddress)
+            string ipAddress,
+            string? overrideCallbackUrl = null)
         {
             var account = await GetAccountAsync(accountId);
             var userId = account.UserId ?? throw new Exception("Account is not linked to a user.");
@@ -297,7 +298,7 @@ namespace RetradeBE.Services
                 OrderDescription = $"Auction deposit for {auction.Product?.Name ?? auction.AuctionId}",
                 BankCode = dto.BankCode,
                 Locale = dto.Locale
-            }, ipAddress);
+            }, ipAddress, overrideCallbackUrl);
         }
 
         public async Task<AuctionBidResultDto> PlaceBidAsync(string accountId, string auctionId, AuctionBidCreateDto dto)
@@ -321,11 +322,10 @@ namespace RetradeBE.Services
                 .FirstOrDefaultAsync();
             if (deposit == null || deposit.PolicyAccepted != true)
                 throw new Exception("A paid deposit and accepted policy are required before bidding.");
-            var spentBidAmount = await GetSpentBidAmountAsync(auctionId, userId);
-            var maxBidAmount = Math.Max(0, (deposit.DepositAmount ?? 0) - MinimumDepositAmount - spentBidAmount);
+            var maxBidAmount = Math.Max(0, (deposit.DepositAmount ?? 0) - MinimumDepositAmount);
             var isBuyNowBid = auction.BuyNowPrice.HasValue && dto.BidAmount == auction.BuyNowPrice.Value;
             if (dto.BidAmount > maxBidAmount)
-                throw new Exception($"Bid amount cannot exceed your bidding limit (deposit - {MinimumDepositAmount:N0} VND).");
+                throw new Exception($"Bid amount cannot exceed your bidding limit ({maxBidAmount:N0} VND).");
 
             var currentPrice = GetCurrentPrice(auction);
             var minimumBid = GetMinimumNextBid(auction);
@@ -648,29 +648,32 @@ namespace RetradeBE.Services
                 return 0;
             }
 
-            return await _context.Bid
+            var highestActiveBid = await _context.Bid
                 .AsNoTracking()
-                .Where(b => b.AuctionId == auctionId && b.UserId == userId)
-                .SumAsync(b => b.BidAmount ?? 0);
+                .Where(b => b.AuctionId == auctionId && b.UserId == userId && b.Status == "Highest")
+                .Select(b => b.BidAmount)
+                .FirstOrDefaultAsync();
+
+            return highestActiveBid ?? 0;
         }
 
         private AuctionDepositDto MapDepositDto(AuctionDeposit deposit, decimal spentBidAmount = 0)
         {
             var paid = deposit.Status == "Paid" && deposit.PolicyAccepted == true;
             var totalDepositAmount = deposit.DepositAmount ?? 0;
-            var availableDepositAmount = Math.Max(0, totalDepositAmount - spentBidAmount);
+            var maxBidAmount = Math.Max(0, totalDepositAmount - MinimumDepositAmount);
             return new AuctionDepositDto
             {
                 AuctionDepositId = deposit.AuctionDepositId,
                 AuctionId = deposit.AuctionId,
                 UserId = deposit.UserId,
-                DepositAmount = availableDepositAmount,
+                DepositAmount = totalDepositAmount,
                 TotalDepositAmount = deposit.DepositAmount,
                 HeldBidAmount = spentBidAmount,
                 PolicyAccepted = deposit.PolicyAccepted == true,
                 Status = deposit.Status,
                 CreatedAt = deposit.CreatedAt,
-                MaxBidAmount = Math.Max(0, availableDepositAmount - MinimumDepositAmount),
+                MaxBidAmount = maxBidAmount,
                 CanBid = paid
             };
         }
@@ -732,7 +735,7 @@ namespace RetradeBE.Services
                 ShippingFee = 0,
                 FinalAmount = finalAmount,
                 AddressSnapshot = await GetDefaultAddressSnapshotAsync(winnerBid.UserId),
-                Status = OrderStatusEnum.Pending.ToString(),
+                Status = OrderStatusEnum.Confirmed.ToString(),
                 CreatedAt = now,
                 UpdatedAt = now,
                 ShippingProvider = "Seller Arrangement",
@@ -765,7 +768,7 @@ namespace RetradeBE.Services
                 {
                     UserId = winnerBid.UserId,
                     Title = "Congratulations! You won the auction",
-                    Message = $"You have won the auction for '{productName}'. Please complete the payment!",
+                    Message = $"You have won the auction for '{productName}'. Your order is confirmed!",
                     Type = nameof(NotificationTypeEnum.Auction),
                     ReferenceId = auction.AuctionId
                 });
@@ -1170,6 +1173,102 @@ namespace RetradeBE.Services
         private static bool IsTerminalStatus(string? status)
         {
             return status is "Ended" or "EndedByBuyNow" or "EndedByTime" or "EndedNoBid" or "Cancelled";
+        }
+
+        public async Task<AuctionDetailDto> EndAuctionAsync(string accountId, string auctionId)
+        {
+            var account = await GetAccountAsync(accountId);
+            var roles = await _accountRepository.GetRolesAsync(account.AccountId);
+
+            var auction = await _auctionRepository.GetByIdAsync(auctionId);
+            if (auction == null)
+                throw new Exception("Auction not found.");
+
+            if (auction.SellerId != account.UserId && !HasRole(roles, nameof(RoleEnum.Admin)))
+                throw new Exception("You are not authorized to end this auction.");
+
+            var currentStatus = ResolveStatus(auction);
+            if (IsTerminalStatus(currentStatus))
+                throw new Exception("Auction has already ended.");
+
+            var now = GetAuctionNow();
+            var highestBid = auction.Bid
+                .Where(b => b.BidAmount.HasValue)
+                .OrderByDescending(b => b.BidAmount)
+                .ThenBy(b => b.CreatedAt)
+                .FirstOrDefault();
+
+            if (highestBid == null)
+            {
+                auction.Status = "EndedNoBid";
+                auction.EndTime = now;
+                auction.UpdatedAt = now;
+                await CreateRefundsForLosersAsync(auction, null);
+                await _context.SaveChangesAsync();
+                var saved = await _auctionRepository.GetByIdAsync(auction.AuctionId);
+                var detailDto = MapToDetailDto(saved ?? auction);
+                await NotifyAuctionChangedAsync(detailDto, "AuctionEndedNoBid");
+                return detailDto;
+            }
+            else
+            {
+                auction.EndTime = now;
+                await CompleteAuctionAsync(auction, highestBid, "EndedByTime");
+                var saved = await _auctionRepository.GetByIdAsync(auction.AuctionId);
+                var detailDto = MapToDetailDto(saved ?? auction);
+                await NotifyAuctionChangedAsync(detailDto, "AuctionEndedByTime");
+                return detailDto;
+            }
+        }
+
+        public async Task<AuctionDetailDto> RelistAuctionAsync(string accountId, string auctionId, AuctionUpdateDto dto)
+        {
+            var account = await GetAccountAsync(accountId);
+            var roles = await _accountRepository.GetRolesAsync(account.AccountId);
+
+            var auction = await _auctionRepository.GetByIdAsync(auctionId);
+            if (auction == null)
+                throw new Exception("Auction not found.");
+
+            if (auction.SellerId != account.UserId && !HasRole(roles, nameof(RoleEnum.Admin)))
+                throw new Exception("You are not authorized to relist this auction.");
+
+            var currentStatus = ResolveStatus(auction);
+            var hasBids = auction.Bid.Any(b => b.BidAmount.HasValue);
+            var isEndedNoBid = currentStatus == "EndedNoBid" || (IsTerminalStatus(currentStatus) && !hasBids);
+
+            if (!isEndedNoBid)
+                throw new Exception("Only auctions ended with no bids can be relisted.");
+
+            ValidateAuctionValues(dto.StartingPrice, dto.MinIncrement, dto.BuyNowPrice, dto.StartTime, dto.EndTime);
+
+            var now = GetAuctionNow();
+            if (dto.StartTime.Date < now.Date)
+                throw new Exception("Start time cannot be in past days.");
+
+            auction.StartingPrice = dto.StartingPrice;
+            auction.CurrentPrice = dto.StartingPrice;
+            auction.MinIncrement = dto.MinIncrement;
+            auction.BuyNowPrice = dto.BuyNowPrice;
+            auction.StartTime = dto.StartTime;
+            auction.EndTime = dto.EndTime;
+            auction.Status = dto.StartTime > now ? "Upcoming" : "Ongoing";
+            auction.WinnerId = null;
+            auction.UpdatedAt = now;
+
+            // Clear old bids if any
+            var oldBids = await _context.Bid.Where(b => b.AuctionId == auction.AuctionId).ToListAsync();
+            if (oldBids.Any())
+            {
+                _context.Bid.RemoveRange(oldBids);
+            }
+
+            await _context.SaveChangesAsync();
+
+            var updated = await _auctionRepository.GetByIdAsync(auction.AuctionId);
+            var detailDto = MapToDetailDto(updated ?? auction);
+            await NotifyAuctionChangedAsync(detailDto, "AuctionRelisted");
+            return detailDto;
         }
     }
 }

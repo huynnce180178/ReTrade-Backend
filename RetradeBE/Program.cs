@@ -20,13 +20,17 @@ namespace RetradeBE
 {
     public class Program
     {
-        public static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
             AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
             var builder = WebApplication.CreateBuilder(args);
             builder.Configuration.AddJsonFile("appsettings.Development.local.json", optional: true, reloadOnChange: true);
             builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
+            LoadLocalDotEnvConfiguration(
+                builder.Configuration,
+                builder.Environment.ContentRootPath,
+                builder.Environment.IsEnvironment("Docker"));
             builder.Configuration.AddEnvironmentVariables();
 
             builder.Logging.ClearProviders();
@@ -43,6 +47,7 @@ namespace RetradeBE
 
             builder.Services.AddHttpClient();
             builder.Services.AddSignalR();
+            builder.Services.AddHealthChecks();
 
             // Add services to the container.
             builder.Services.AddControllers()
@@ -62,8 +67,10 @@ namespace RetradeBE
                         return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(errors);
                     };
                 });
+            var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+                ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured.");
             builder.Services.AddDbContext<AppDbContext>(options =>
-                options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+                options.UseNpgsql(connectionString));
 
             // Tự động đăng ký tất cả các Repositories và Services bằng Reflection
             var assembly = typeof(Program).Assembly;
@@ -169,15 +176,7 @@ namespace RetradeBE
             });
 
             // Lấy đường dẫn Frontend từ appsettings.json
-            var frontendUrl = builder.Configuration.GetValue<string>("FrontendUrl") ?? "http://localhost:5173";
-            var frontendOrigins = new[]
-            {
-                frontendUrl,
-                "http://localhost:5173",
-                "http://127.0.0.1:5173",
-                "http://localhost:5174",
-                "http://127.0.0.1:5174"
-            }.Distinct().ToArray();
+            var frontendOrigins = GetFrontendOrigins(builder.Configuration, builder.Environment);
 
             // Thêm CORS để Frontend có thể gọi API (ví dụ: React, Vue, Angular chạy ở port khác)
             builder.Services.AddCors(options =>
@@ -202,18 +201,21 @@ namespace RetradeBE
                 try
                 {
                     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                    dbContext.Database.Migrate();
+                    await dbContext.Database.MigrateAsync();
                     Console.WriteLine("Database migrated successfully.");
                     SeedData(dbContext);
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error applying migrations: {ex.Message}");
+                    throw;
                 }
             }
 
             // Configure the HTTP request pipeline.
-            if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Docker"))
+            if (app.Environment.IsDevelopment() ||
+                app.Environment.IsEnvironment("Docker") ||
+                app.Configuration.GetValue<bool>("Swagger:Enabled"))
             {
                 app.UseSwagger();
                 app.UseSwaggerUI();
@@ -232,6 +234,7 @@ namespace RetradeBE
 
 
             app.MapControllers();
+            app.MapHealthChecks("/health");
             app.MapHub<RetradeBE.Hubs.AccountHub>("/hubs/accounts");
             app.MapHub<SellerHub>("/hubs/sellers");
             app.MapHub<OrderHub>("/hubs/orders");
@@ -239,7 +242,200 @@ namespace RetradeBE
             app.MapHub<ChatHub>("/hubs/chat");
             app.MapHub<NotificationHub>("/hubs/notifications");
 
-            app.Run();
+            await app.RunAsync();
+        }
+
+        private static string[] GetFrontendOrigins(IConfiguration configuration, IWebHostEnvironment environment)
+        {
+            var origins = new List<string>();
+
+            AddOrigins(origins, configuration.GetValue<string>("FrontendUrl"));
+            AddOrigins(origins, configuration.GetValue<string>("FrontendUrls"));
+            AddOrigins(origins, configuration.GetValue<string>("Cors:AllowedOrigins"));
+            var configuredOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+            if (configuredOrigins is not null)
+            {
+                AddOrigins(origins, configuredOrigins);
+            }
+
+            if (environment.IsDevelopment() || environment.IsEnvironment("Docker"))
+            {
+                AddOrigins(origins,
+                    "http://localhost:5173",
+                    "http://127.0.0.1:5173",
+                    "http://localhost:5174",
+                    "http://127.0.0.1:5174");
+            }
+
+            return origins
+                .Where(origin => Uri.TryCreate(origin, UriKind.Absolute, out _))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private static void LoadLocalDotEnvConfiguration(
+            ConfigurationManager configuration,
+            string contentRootPath,
+            bool isDockerEnvironment)
+        {
+            var envPath = FindDotEnvPath(contentRootPath);
+            if (envPath == null)
+            {
+                return;
+            }
+
+            var values = ParseDotEnvFile(envPath, isDockerEnvironment);
+            if (values.Count > 0)
+            {
+                configuration.AddInMemoryCollection(values);
+            }
+        }
+
+        private static string? FindDotEnvPath(string contentRootPath)
+        {
+            var directory = new DirectoryInfo(contentRootPath);
+
+            for (var depth = 0; directory != null && depth < 8; depth++, directory = directory.Parent)
+            {
+                var candidate = Path.Combine(directory.FullName, ".env");
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
+            }
+
+            return null;
+        }
+
+        private static Dictionary<string, string?> ParseDotEnvFile(string envPath, bool isDockerEnvironment)
+        {
+            var values = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var rawLine in File.ReadAllLines(envPath))
+            {
+                var line = rawLine.Trim();
+                if (line.Length == 0 || line.StartsWith('#'))
+                {
+                    continue;
+                }
+
+                if (line.StartsWith("export ", StringComparison.OrdinalIgnoreCase))
+                {
+                    line = line["export ".Length..].TrimStart();
+                }
+
+                var separatorIndex = line.IndexOf('=');
+                if (separatorIndex <= 0)
+                {
+                    continue;
+                }
+
+                var key = line[..separatorIndex].Trim();
+                var value = NormalizeDotEnvValue(line[(separatorIndex + 1)..].Trim());
+                AddDotEnvValue(values, key, value, isDockerEnvironment);
+            }
+
+            return values;
+        }
+
+        private static void AddDotEnvValue(
+            Dictionary<string, string?> values,
+            string key,
+            string value,
+            bool isDockerEnvironment)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                return;
+            }
+
+            if (!isDockerEnvironment &&
+                IsDefaultConnectionStringKey(key) &&
+                UsesDockerPostgresHost(value))
+            {
+                return;
+            }
+
+            values[key] = value;
+
+            if (key.Contains("__", StringComparison.Ordinal))
+            {
+                values[key.Replace("__", ":")] = value;
+            }
+
+            switch (key.ToUpperInvariant())
+            {
+                case "GEMINI_API_KEY":
+                    values["Gemini:ApiKey"] = value;
+                    break;
+                case "GEMINI_MODEL":
+                    values["Gemini:Model"] = value;
+                    break;
+                case "JWT_SECRET":
+                    values["JwtSettings:SecretKey"] = value;
+                    break;
+                case "FRONTEND_URL":
+                    values["FrontendUrl"] = value;
+                    break;
+                case "VNPAY_CALLBACK_URL":
+                    values["VNPAY:CallbackUrl"] = value;
+                    break;
+                case "VNPAY_IPN_URL":
+                    values["VNPAY:IpnUrl"] = value;
+                    break;
+            }
+        }
+
+        private static bool IsDefaultConnectionStringKey(string key)
+        {
+            return string.Equals(key, "ConnectionStrings__DefaultConnection", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(key, "ConnectionStrings:DefaultConnection", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool UsesDockerPostgresHost(string connectionString)
+        {
+            return connectionString
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(part => part.Split('=', 2, StringSplitOptions.TrimEntries))
+                .Any(pair =>
+                    pair.Length == 2 &&
+                    (string.Equals(pair[0], "Host", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(pair[0], "Server", StringComparison.OrdinalIgnoreCase)) &&
+                    string.Equals(pair[1], "db", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static string NormalizeDotEnvValue(string value)
+        {
+            if (value.Length >= 2 &&
+                ((value[0] == '"' && value[^1] == '"') || (value[0] == '\'' && value[^1] == '\'')))
+            {
+                value = value[1..^1];
+
+                if (value.Contains('\\', StringComparison.Ordinal))
+                {
+                    value = value
+                        .Replace("\\n", "\n")
+                        .Replace("\\r", "\r")
+                        .Replace("\\t", "\t")
+                        .Replace("\\\"", "\"")
+                        .Replace("\\\\", "\\");
+                }
+
+                return value;
+            }
+
+            var commentIndex = value.IndexOf(" #", StringComparison.Ordinal);
+            return commentIndex >= 0 ? value[..commentIndex].TrimEnd() : value;
+        }
+
+        private static void AddOrigins(List<string> origins, params string?[] values)
+        {
+            foreach (var value in values.Where(v => !string.IsNullOrWhiteSpace(v)))
+            {
+                origins.AddRange(value!
+                    .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(origin => origin.TrimEnd('/')));
+            }
         }
 
         private static void SeedData(AppDbContext dbContext)

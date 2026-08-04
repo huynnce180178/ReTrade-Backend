@@ -47,6 +47,7 @@ namespace RetradeBE.Models.DTOs
         public DateTime? UpdatedAt { get; set; }
         public int ReportCount { get; set; }
         public bool ReportedByCurrentUser { get; set; }
+        public bool IsReportApproved { get; set; }
         public string? LatestReportStatus { get; set; }
         public string? LatestReportReason { get; set; }
         public DateTime? LatestReportCreatedAt { get; set; }

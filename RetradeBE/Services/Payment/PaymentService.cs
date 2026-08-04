@@ -286,16 +286,23 @@ public class PaymentService : IPaymentService
         }
 
         await _context.SaveChangesAsync();
-        if (updatedOrder != null)
+        try
         {
-            await NotifySellerOrderChangedAsync(updatedOrder, "PaymentConfirmed");
+            if (updatedOrder != null)
+            {
+                await NotifySellerOrderChangedAsync(updatedOrder, "PaymentConfirmed");
+            }
+            if (updatedDeposit != null)
+            {
+                var eventType = isSuccess
+                    ? (wasAuctionDepositAlreadyPaid ? "DepositToppedUp" : "DepositPaid")
+                    : (wasAuctionDepositAlreadyPaid ? "DepositTopUpFailed" : "DepositFailed");
+                await NotifyAuctionDepositChangedAsync(updatedDeposit, eventType);
+            }
         }
-        if (updatedDeposit != null)
+        catch (Exception ex)
         {
-            var eventType = isSuccess
-                ? (wasAuctionDepositAlreadyPaid ? "DepositToppedUp" : "DepositPaid")
-                : (wasAuctionDepositAlreadyPaid ? "DepositTopUpFailed" : "DepositFailed");
-            await NotifyAuctionDepositChangedAsync(updatedDeposit, eventType);
+            _logger.LogWarning(ex, "Payment callback was processed, but realtime notification failed for PaymentId {PaymentId}.", payment.PaymentId);
         }
 
         return new VnPayReturnResponseDto
@@ -367,10 +374,11 @@ public class PaymentService : IPaymentService
 
         var spentBidAmount = await _context.Bid
             .AsNoTracking()
-            .Where(b => b.AuctionId == deposit.AuctionId && b.UserId == deposit.UserId)
-            .SumAsync(b => b.BidAmount ?? 0);
+            .Where(b => b.AuctionId == deposit.AuctionId && b.UserId == deposit.UserId && b.Status == "Highest")
+            .Select(b => b.BidAmount)
+            .FirstOrDefaultAsync() ?? 0;
         var totalDepositAmount = deposit.DepositAmount ?? 0;
-        var availableDepositAmount = Math.Max(0, totalDepositAmount - spentBidAmount);
+        var maxBidAmount = Math.Max(0, totalDepositAmount - AuctionMinimumDepositAmount);
 
         await _auctionHub.Clients
             .Group(AuctionHub.GetAuctionUserGroupName(deposit.AuctionId, deposit.UserId))
@@ -382,13 +390,13 @@ public class PaymentService : IPaymentService
                     deposit.AuctionDepositId,
                     deposit.AuctionId,
                     deposit.UserId,
-                    DepositAmount = availableDepositAmount,
+                    DepositAmount = totalDepositAmount,
                     TotalDepositAmount = deposit.DepositAmount,
                     HeldBidAmount = spentBidAmount,
                     PolicyAccepted = deposit.PolicyAccepted == true,
                     deposit.Status,
                     deposit.CreatedAt,
-                    MaxBidAmount = Math.Max(0, availableDepositAmount - AuctionMinimumDepositAmount),
+                    MaxBidAmount = maxBidAmount,
                     CanBid = deposit.Status == "Paid" && deposit.PolicyAccepted == true
                 }
             });

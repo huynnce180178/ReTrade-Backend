@@ -397,6 +397,7 @@ namespace RetradeBE.Services
         {
             var product = await _repository.GetByIdAsync(productId);
             if (product == null) return null;
+            if (product.Category != null && product.Category.Status != "Active") return null;
             return MapToResponseDto(product);
         }
 
@@ -404,10 +405,22 @@ namespace RetradeBE.Services
         {
             var queryable = _repository.Query();
 
-            // Filter out products from inactive categories for buyers
+            // Filter buyer-facing product lists to only purchasable products.
+            // Seller profile/admin flows pass SellerId/Status and should still be able to see sold/out-of-stock items.
             if (string.IsNullOrEmpty(query.SellerId))
             {
-                queryable = queryable.Where(p => p.Category != null && p.Category.Status == "Active");
+                queryable = queryable.Where(p =>
+                    p.Category != null &&
+                    p.Category.Status == "Active" &&
+                    p.StockQuantity.HasValue &&
+                    p.StockQuantity.Value > 0 &&
+                    p.Status != ProductStatusEnum.Sold.ToString() &&
+                    p.Status != ProductStatusEnum.Inactive.ToString());
+
+                if (string.IsNullOrWhiteSpace(query.Status))
+                {
+                    queryable = queryable.Where(p => p.Status == ProductStatusEnum.Accepted.ToString());
+                }
             }
 
             // Filter Category and Subcategories
@@ -441,10 +454,18 @@ namespace RetradeBE.Services
                 queryable = queryable.Where(p => p.Condition == query.Condition);
             }
 
-            // Status
-            if (!string.IsNullOrEmpty(query.Status))
+            // Status & IsDeleted filter
+            if (!string.IsNullOrEmpty(query.Status) && query.Status.Equals("Deleted", StringComparison.OrdinalIgnoreCase))
             {
-                queryable = queryable.Where(p => p.Status == query.Status);
+                queryable = queryable.Where(p => p.IsDeleted == true);
+            }
+            else
+            {
+                queryable = queryable.Where(p => p.IsDeleted != true);
+                if (!string.IsNullOrEmpty(query.Status))
+                {
+                    queryable = queryable.Where(p => p.Status == query.Status);
+                }
             }
 
             // SellerId
@@ -482,13 +503,14 @@ namespace RetradeBE.Services
                     CategoryName = p.Category != null ? p.Category.Name : null,
                     Price = p.Price,
                     StockQuantity = p.StockQuantity,
-                    Status = p.Status,
+                    Status = p.IsDeleted == true ? "Deleted" : p.Status,
                     Condition = p.Condition,
                     CreatedAt = p.CreatedAt,
                     SellerId = p.SellerId,
                     SellerName = p.Seller != null ? $"{p.Seller.FirstName} {p.Seller.LastName}".Trim() : null,
                     MainImageUrl = p.ProductImage.Where(pi => pi.IsMain == true).Select(pi => pi.Image.ImageUrl).FirstOrDefault()
-                                   ?? p.ProductImage.OrderBy(pi => pi.SortOrder).Select(pi => pi.Image.ImageUrl).FirstOrDefault()
+                                   ?? p.ProductImage.OrderBy(pi => pi.SortOrder).Select(pi => pi.Image.ImageUrl).FirstOrDefault(),
+                    IsDeleted = p.IsDeleted
                 })
                 .ToListAsync();
 

@@ -4,6 +4,8 @@
 ## Get latest from `dotnet new gitignore`
 
 # dotenv files
+.env
+*.env
 
 
 # ASP.NET Core local data protection keys
@@ -492,5 +494,6 @@ RetradeBE/appsettings.Development.json
 RetradeBE/appsettings.Local.json
 RetradeBE/appsettings.local.json
 RetradeBE/appsettings.Development.local.json
+*.local.md
 
 

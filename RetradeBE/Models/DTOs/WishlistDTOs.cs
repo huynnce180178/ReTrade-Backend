@@ -17,6 +17,7 @@ namespace RetradeBE.Models.DTOs
         public string? ProductId { get; set; }
         public string? ProductName { get; set; }
         public decimal? Price { get; set; }
+        public int? StockQuantity { get; set; }
         public string? Condition { get; set; }
         public string? Status { get; set; }
         public string? MainImageUrl { get; set; }

@@ -9,4 +9,7 @@ public interface IServiceSubscriptionService
     Task<IEnumerable<MyServiceDto>> GetMyActiveSubscriptionsAsync(string accountId);
 
     Task<CreateVnPayPaymentResponseDto> CreatePurchasePaymentUrlAsync(string accountId, string serviceId, string ipAddress, string? overrideCallbackUrl = null);
+
+    Task<bool> GrantAdminSellerSubscriptionAsync(string accountId);
+    Task<bool> RevokeSellerSubscriptionAsync(string accountId);
 }

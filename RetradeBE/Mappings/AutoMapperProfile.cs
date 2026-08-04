@@ -137,6 +137,7 @@ namespace RetradeBE.Mappings
 
             // Profile Mappings
             CreateMap<Address, AddressDto>()
+                .ForMember(dest => dest.Street, opt => opt.MapFrom(src => src.Street))
                 .ForMember(dest => dest.StreetAddress, opt => opt.MapFrom(src => src.Street));
 
             CreateMap<Account, ProfileDetailDto>()
@@ -177,6 +178,7 @@ namespace RetradeBE.Mappings
             CreateMap<WishlistItem, WishlistItemDto>()
                 .ForMember(dest => dest.ProductName, opt => opt.MapFrom(src => src.Product.Name))
                 .ForMember(dest => dest.Price, opt => opt.MapFrom(src => src.Product.Price))
+                .ForMember(dest => dest.StockQuantity, opt => opt.MapFrom(src => src.Product.StockQuantity))
                 .ForMember(dest => dest.Condition, opt => opt.MapFrom(src => src.Product.Condition))
                 .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.Product.Status))
                 .ForMember(dest => dest.SellerId, opt => opt.MapFrom(src => src.Product.SellerId))

@@ -62,7 +62,7 @@ namespace RetradeBE.Services
                 .ProjectTo<UserListDto>(_mapper.ConfigurationProvider);
         }
 
-        public async Task<bool> BanUserAsync(string accountId)
+        public async Task<bool> BanUserAsync(string accountId, string? reason = null)
         {
             var account = await _repository.GetByIdAsync(accountId);
             if (account == null) return false;
@@ -71,8 +71,6 @@ namespace RetradeBE.Services
             account.Status = isCurrentlyInactive
                 ? RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString()
                 : RetradeBE.Models.Enums.AccountStatusEnum.Ban.ToString();
-            
-            account.IsDeleted = !isCurrentlyInactive;
 
             account.UpdatedAt = DateTime.UtcNow;
             await _repository.UpdateAsync(account);
@@ -82,7 +80,6 @@ namespace RetradeBE.Services
                 var user = await _userRepository.GetByIdAsync(account.UserId);
                 if (user != null)
                 {
-                    user.IsDeleted = !isCurrentlyInactive;
                     user.UpdatedAt = DateTime.UtcNow;
                     await _userRepository.UpdateAsync(user);
                 }
@@ -90,45 +87,64 @@ namespace RetradeBE.Services
 
             if (!isCurrentlyInactive)
             {
+                var banMessage = !string.IsNullOrWhiteSpace(reason)
+                    ? $"Your account has been banned. Reason: {reason}"
+                    : "Your account has been banned by an administrator.";
+
                 await _accountHub.Clients
                     .Group(AccountHub.GetAccountGroupName(accountId))
-                    .SendAsync("ForceLogout", "Your account has been banned by an administrator.");
+                    .SendAsync("ForceLogout", banMessage);
 
                 try
                 {
+                    User? user = null;
                     if (!string.IsNullOrWhiteSpace(account.UserId))
                     {
-                        var user = await _userRepository.GetByIdAsync(account.UserId);
-                        if (user != null && !string.IsNullOrWhiteSpace(user.Email))
+                        user = await _userRepository.GetByIdAsync(account.UserId);
+                    }
+                    if (user == null && !string.IsNullOrWhiteSpace(account.Username) && account.Username.Contains("@"))
+                    {
+                        user = await _userRepository.GetByEmailAsync(account.Username);
+                    }
+
+                    if (user != null && !string.IsNullOrWhiteSpace(user.Email))
+                    {
+                        var displayName = !string.IsNullOrWhiteSpace(user.FirstName)
+                            ? $"{user.FirstName} {user.LastName}".Trim()
+                            : (account.Username ?? "User");
+
+                        string template = await GetEmailTemplateAsync("AccountBannedNotice.html");
+                        string emailBody;
+                        var formattedReason = !string.IsNullOrWhiteSpace(reason) ? reason : "Violation of community standards / Terms of service.";
+
+                        if (!string.IsNullOrWhiteSpace(template))
                         {
-                            var displayName = !string.IsNullOrWhiteSpace(user.FirstName)
-                                ? user.FirstName
-                                : (account.Username ?? "User");
-
-                            string template = await GetEmailTemplateAsync("AccountBannedNotice.html");
-                            string emailBody;
-
-                            if (!string.IsNullOrWhiteSpace(template))
-                            {
-                                emailBody = template
-                                    .Replace("{{DISPLAY_NAME}}", displayName)
-                                    .Replace("{{ACCOUNT_ID}}", account.AccountId)
-                                    .Replace("{{BANNED_AT}}", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss 'UTC'"));
-                            }
-                            else
-                            {
-                                emailBody = $@"<p>Hello {displayName},</p>
-<p>Your ReTrade account has been set to <strong>Inactive</strong> by an administrator.</p>
-<p>If you have any questions or believe this was a mistake, please reply directly to this email.</p>
-<p>Account ID: {account.AccountId}<br/>Time: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC</p>
-<p>Regards,<br/>ReTrade Support Team</p>";
-                            }
-
-                            await _emailService.SendEmailAsync(
-                                user.Email,
-                                "[ReTrade] Account Ban Notification",
-                                emailBody);
+                            emailBody = template
+                                .Replace("{{DISPLAY_NAME}}", displayName)
+                                .Replace("{{ACCOUNT_ID}}", account.AccountId)
+                                .Replace("{{BAN_REASON}}", formattedReason)
+                                .Replace("{{BANNED_AT}}", DateTime.UtcNow.AddHours(7).ToString("yyyy-MM-dd HH:mm:ss 'ICT'"));
                         }
+                        else
+                        {
+                            emailBody = $@"<p>Xin chào {displayName},</p>
+<p>Tài khoản ReTrade của bạn (ID: <strong>{account.AccountId}</strong>) đã bị <strong>KÍCH HOẠT TRẠNG THÁI KHÓA (BAN)</strong> bởi Quản trị viên.</p>
+<p><strong>Lý do khóa tài khoản:</strong> {formattedReason}</p>
+<p>Nếu bạn có thắc mắc hoặc cần giải trình, vui lòng phản hồi trực tiếp qua email này hoặc liên hệ Hỗ trợ ReTrade.</p>
+<p>Thời gian áp dụng: {DateTime.UtcNow.AddHours(7):yyyy-MM-dd HH:mm:ss} ICT</p>
+<p>Trân trọng,<br/>Đội ngũ Hỗ trợ ReTrade</p>";
+                        }
+
+                        await _emailService.SendEmailAsync(
+                            user.Email,
+                            "[ReTrade] Thông báo khóa tài khoản (Account Ban Notification)",
+                            emailBody);
+
+                        _logger.LogInformation("Successfully sent ban notification email to {Email} for AccountId {AccountId}", user.Email, accountId);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Could not find user/email to send ban notification for AccountId {AccountId}", accountId);
                     }
                 }
                 catch (Exception ex)
@@ -269,6 +285,9 @@ namespace RetradeBE.Services
 
         public async Task<string> RegisterAsync(RegisterDto dto)
         {
+            var pwdValidation = ValidatePasswordStrength(dto.Password);
+            if (pwdValidation != null) return pwdValidation;
+
             var existingUser = await _userRepository.GetByEmailAsync(dto.Email);
             if (existingUser != null) return "Email already exists.";
 
@@ -305,12 +324,15 @@ namespace RetradeBE.Services
 
         public async Task<bool> VerifyAsync(VerifyDto dto)
         {
-            if (!_cache.TryGetValue(dto.Email, out string? savedOtp) || savedOtp != dto.Otp)
+            var email = dto.Email?.Trim() ?? string.Empty;
+            var otp = dto.Otp?.Trim() ?? string.Empty;
+
+            if (!_cache.TryGetValue(email, out string? savedOtp) || savedOtp != otp)
             {
                 return false;
             }
 
-            var user = await _userRepository.GetByEmailAsync(dto.Email);
+            var user = await _userRepository.GetByEmailAsync(email);
             if (user == null) return false;
 
             var allAccounts = await _repository.GetAllAsync();
@@ -319,9 +341,10 @@ namespace RetradeBE.Services
             if (account == null) return false;
 
             account.Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString();
+            account.UpdatedAt = DateTime.UtcNow;
             await _repository.UpdateAsync(account);
 
-            _cache.Remove(dto.Email);
+            _cache.Remove(email);
 
             return true;
         }
@@ -344,10 +367,13 @@ namespace RetradeBE.Services
 
         public async Task<object?> LoginAsync(LoginDto dto)
         {
+            var cleanUsername = dto.Username?.Trim() ?? string.Empty;
+            var cleanPassword = dto.Password?.Trim() ?? string.Empty;
+
             Account? account = null;
-            if (dto.Username.Contains("@"))
+            if (cleanUsername.Contains("@"))
             {
-                var user = await _userRepository.GetByEmailAsync(dto.Username);
+                var user = await _userRepository.GetByEmailAsync(cleanUsername);
                 if (user != null)
                 {
                     var allAccounts = await _repository.GetAllAsync();
@@ -356,17 +382,26 @@ namespace RetradeBE.Services
             }
             else
             {
-                account = await _repository.GetByUsernameAsync(dto.Username);
+                account = await _repository.GetByUsernameAsync(cleanUsername);
             }
 
-            if (account == null || account.IsDeleted == true) return null;
-            if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString())
+            if (account == null) return null;
+            if (account.IsDeleted == true)
+            {
+                throw new InvalidOperationException("ACCOUNT_DELETED");
+            }
+            if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Ban.ToString())
+            {
+                throw new InvalidOperationException("ACCOUNT_BANNED");
+            }
+            if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString() ||
+                account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Pending.ToString())
             {
                 throw new InvalidOperationException("ACCOUNT_INACTIVE");
             }
             if (account.Status != RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString()) return null;
 
-            bool isPasswordValid = BCrypt.Net.BCrypt.Verify(dto.Password, account.PasswordHash);
+            bool isPasswordValid = BCrypt.Net.BCrypt.Verify(cleanPassword, account.PasswordHash);
             if (!isPasswordValid) return null;
 
             var roles = await _repository.GetRolesAsync(account.AccountId);
@@ -431,25 +466,77 @@ namespace RetradeBE.Services
             return Task.FromResult(RetradeBE.Utils.IdGenerator.GenerateId("acc"));
         }
 
+        private static string BuildAvatarName(string? firstName, string? lastName, string email)
+        {
+            var composedName = $"{firstName} {lastName}".Trim();
+            if (!string.IsNullOrWhiteSpace(composedName))
+            {
+                return composedName;
+            }
+
+            var emailLocalPart = email.Split('@')[0].Replace('.', ' ').Replace('+', ' ').Trim();
+            return string.IsNullOrWhiteSpace(emailLocalPart) ? "User" : emailLocalPart;
+        }
+
+        private static string BuildInitialsAvatarUrl(string displayName)
+        {
+            var encodedName = Uri.EscapeDataString(displayName);
+            return $"https://ui-avatars.com/api/?name={encodedName}&background=1f2937&color=ffffff&bold=true";
+        }
+
+        private static bool IsDefaultPlaceholderAvatar(string? avatarUrl)
+        {
+            if (string.IsNullOrWhiteSpace(avatarUrl))
+            {
+                return true;
+            }
+
+            return avatarUrl.Contains("avt-emty", StringComparison.OrdinalIgnoreCase);
+        }
+
         public async Task<object?> LoginWithGoogleAsync(string accessToken)
         {
             using var httpClient = _httpClientFactory.CreateClient();
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
             var response = await httpClient.GetAsync("https://www.googleapis.com/oauth2/v3/userinfo");
-            if (!response.IsSuccessStatusCode) return null;
+            if (!response.IsSuccessStatusCode)
+            {
+                var errContent = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("Google OAuth UserInfo failed with status {StatusCode}: {Error}", response.StatusCode, errContent);
+                return null;
+            }
 
             var json = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
             string? email = json.TryGetProperty("email", out var emailProp) ? emailProp.GetString() : null;
             string? providerUserId = json.TryGetProperty("sub", out var subProp) ? subProp.GetString() : null;
             string? firstName = json.TryGetProperty("given_name", out var fnProp) ? fnProp.GetString() : null;
             string? lastName = json.TryGetProperty("family_name", out var lnProp) ? lnProp.GetString() : null;
+            string? fullName = json.TryGetProperty("name", out var nameProp) ? nameProp.GetString() : null;
             string? picture = json.TryGetProperty("picture", out var picProp) ? picProp.GetString() : null;
+
+            if (string.IsNullOrWhiteSpace(firstName) && string.IsNullOrWhiteSpace(lastName) && !string.IsNullOrWhiteSpace(fullName))
+            {
+                var nameParts = fullName
+                    .Trim()
+                    .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+                if (nameParts.Length == 1)
+                {
+                    firstName = nameParts[0];
+                }
+                else if (nameParts.Length > 1)
+                {
+                    firstName = nameParts[0];
+                    lastName = string.Join(" ", nameParts, 1, nameParts.Length - 1);
+                }
+            }
 
             if (string.IsNullOrEmpty(email)) return null;
             const string googleProvider = "Google";
 
             var user = await _userRepository.GetByEmailAsync(email);
             Account? account = null;
+            var fallbackAvatar = BuildInitialsAvatarUrl(BuildAvatarName(firstName, lastName, email));
 
             if (user == null)
             {
@@ -470,7 +557,7 @@ namespace RetradeBE.Services
                     Email = email,
                     FirstName = firstName ?? "",
                     LastName = lastName ?? "",
-                    AvatarUrl = picture ?? "https://res.cloudinary.com/dx0hrokek/image/upload/v1780673207/avt-emty_wwnzba.jpg",
+                    AvatarUrl = !string.IsNullOrWhiteSpace(picture) ? picture : fallbackAvatar,
                     CreatedAt = DateTime.UtcNow
                 };
                 await _userRepository.AddAsync(user);
@@ -494,9 +581,19 @@ namespace RetradeBE.Services
             {
                 var allAccounts = await _repository.GetAllAsync();
                 account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
-                if (account == null || account.IsDeleted == true) return null;
+                if (account == null) return null;
+                if (account.IsDeleted == true)
+                {
+                    throw new InvalidOperationException("ACCOUNT_DELETED");
+                }
 
-                if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString())
+                if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Ban.ToString())
+                {
+                    throw new InvalidOperationException("ACCOUNT_BANNED");
+                }
+
+                if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString() ||
+                    account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Pending.ToString())
                 {
                     throw new InvalidOperationException("ACCOUNT_INACTIVE");
                 }
@@ -510,6 +607,36 @@ namespace RetradeBE.Services
                 account.ProviderUserId = providerUserId ?? email;
                 account.UpdatedAt = DateTime.UtcNow;
                 await _repository.UpdateAsync(account);
+
+                bool profileUpdated = false;
+                if (string.IsNullOrWhiteSpace(user.FirstName) && !string.IsNullOrWhiteSpace(firstName))
+                {
+                    user.FirstName = firstName;
+                    profileUpdated = true;
+                }
+
+                if (string.IsNullOrWhiteSpace(user.LastName) && !string.IsNullOrWhiteSpace(lastName))
+                {
+                    user.LastName = lastName;
+                    profileUpdated = true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(picture) && IsDefaultPlaceholderAvatar(user.AvatarUrl))
+                {
+                    user.AvatarUrl = picture;
+                    profileUpdated = true;
+                }
+                else if (string.IsNullOrWhiteSpace(picture) && string.IsNullOrWhiteSpace(user.AvatarUrl))
+                {
+                    user.AvatarUrl = fallbackAvatar;
+                    profileUpdated = true;
+                }
+
+                if (profileUpdated)
+                {
+                    user.UpdatedAt = DateTime.UtcNow;
+                    await _userRepository.UpdateAsync(user);
+                }
             }
 
             var roles = await _repository.GetRolesAsync(account.AccountId);
@@ -618,7 +745,8 @@ namespace RetradeBE.Services
 
         public async Task<string> PasswordRecoveryAsync(string email)
         {
-            var user = await _userRepository.GetByEmailAsync(email);
+            var cleanEmail = email?.Trim() ?? string.Empty;
+            var user = await _userRepository.GetByEmailAsync(cleanEmail);
             if (user == null) return "Email not found.";
 
             var allAccounts = await _repository.GetAllAsync();
@@ -634,7 +762,7 @@ namespace RetradeBE.Services
 
             string template = await GetEmailTemplateAsync("ResetPasswordAuto.html");
             string emailBody = template.Replace("{{NEW_PASSWORD}}", newPassword);
-            await _emailService.SendEmailAsync(email, "ReTrade Password Generated", emailBody);
+            await _emailService.SendEmailAsync(cleanEmail, "ReTrade Password Generated", emailBody);
 
             return "Password reset successful. Please check your email for your new password.";
         }

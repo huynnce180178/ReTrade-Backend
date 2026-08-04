@@ -59,7 +59,7 @@ namespace RetradeBE.Models.DTOs
         public string? Status { get; set; }
     }
 
-    public class ProfileUpdateDto
+    public class ProfileUpdateDto : IValidatableObject
     {
         public string? Username { get; set; }
         public string? FirstName { get; set; }
@@ -68,8 +68,22 @@ namespace RetradeBE.Models.DTOs
         [EmailAddress]
         public string? Email { get; set; }
 
+        [RegularExpression(@"^$|^\d{9,12}$", ErrorMessage = "Phone must be 9 to 12 digits.")]
         public string? Phone { get; set; }
         public UpsertAddressDto? Address { get; set; }
+
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            if (FirstName != null && string.IsNullOrWhiteSpace(FirstName))
+            {
+                yield return new ValidationResult("First name cannot be empty or whitespace.", new[] { nameof(FirstName) });
+            }
+
+            if (LastName != null && string.IsNullOrWhiteSpace(LastName))
+            {
+                yield return new ValidationResult("Last name cannot be empty or whitespace.", new[] { nameof(LastName) });
+            }
+        }
     }
 
     public class ProfileDetailDto

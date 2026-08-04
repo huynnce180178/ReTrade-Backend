@@ -99,9 +99,9 @@ namespace RetradeBE.Services
                 account.User.Email = email;
             }
 
-            if (dto.FirstName != null) account.User.FirstName = dto.FirstName;
-            if (dto.LastName != null) account.User.LastName = dto.LastName;
-            if (dto.Phone != null) account.User.Phone = dto.Phone;
+            if (dto.FirstName != null) account.User.FirstName = NormalizeRequiredName(dto.FirstName, "First name");
+            if (dto.LastName != null) account.User.LastName = NormalizeRequiredName(dto.LastName, "Last name");
+            if (dto.Phone != null) account.User.Phone = dto.Phone.Trim();
             account.User.UpdatedAt = DateTime.UtcNow;
             await _repository.UpdateUserAsync(account.User);
 
@@ -318,13 +318,18 @@ namespace RetradeBE.Services
                 IsDeleted = false
             };
 
-            if (dto.ReceiverName != null) address.ReceiverName = dto.ReceiverName;
-            if (dto.ReceiverPhone != null) address.ReceiverPhone = dto.ReceiverPhone;
-            if (dto.Street != null || dto.StreetAddress != null) address.Street = dto.Street ?? dto.StreetAddress;
+            if (dto.ReceiverName != null) address.ReceiverName = dto.ReceiverName.Trim();
+            if (dto.ReceiverPhone != null) address.ReceiverPhone = dto.ReceiverPhone.Trim();
+            if (dto.Street != null || dto.StreetAddress != null) address.Street = (dto.Street ?? dto.StreetAddress)?.Trim();
             if (dto.ProvinceId.HasValue) address.ProvinceId = dto.ProvinceId;
             if (dto.DistrictId.HasValue) address.DistrictId = dto.DistrictId;
-            if (dto.WardCode != null) address.WardCode = dto.WardCode;
-            address.IsDefault = dto.IsDefault ?? address.IsDefault ?? true;
+            if (dto.WardCode != null) address.WardCode = dto.WardCode.Trim();
+            var shouldBeDefault = dto.IsDefault ?? address.IsDefault ?? true;
+            if (shouldBeDefault == true)
+            {
+                await ClearDefaultAddressesAsync(userId, address.AddressId);
+            }
+            address.IsDefault = shouldBeDefault;
             address.Status = dto.Status ?? address.Status ?? "Active";
             address.UpdatedAt = DateTime.UtcNow;
 
@@ -341,6 +346,33 @@ namespace RetradeBE.Services
         private Task<string> GenerateAddressIdAsync()
         {
             return Task.FromResult(RetradeBE.Utils.IdGenerator.GenerateId("adr"));
+        }
+
+        private static string NormalizeRequiredName(string value, string fieldName)
+        {
+            var normalized = value.Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                throw new InvalidOperationException($"{fieldName} cannot be empty or whitespace.");
+            }
+
+            return normalized;
+        }
+
+        private async Task ClearDefaultAddressesAsync(string userId, string exceptAddressId)
+        {
+            var defaultAddresses = await _context.Address
+                .Where(a => a.UserId == userId
+                    && a.IsDeleted != true
+                    && a.IsDefault == true
+                    && a.AddressId != exceptAddressId)
+                .ToListAsync();
+
+            foreach (var defaultAddress in defaultAddresses)
+            {
+                defaultAddress.IsDefault = false;
+                defaultAddress.UpdatedAt = DateTime.UtcNow;
+            }
         }
 
         private static string GenerateFollowId() => $"UF{Guid.NewGuid():N}";

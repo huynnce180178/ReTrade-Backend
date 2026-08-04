@@ -4,6 +4,7 @@ namespace RetradeBE.Models.DTOs.AssistantChat
     {
         public string? SessionId { get; set; }
         public string Message { get; set; } = null!;
+        public string? Language { get; set; }
     }
 
     public class AssistantChatResponseDto

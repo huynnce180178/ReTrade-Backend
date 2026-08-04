@@ -1,4 +1,7 @@
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using RetradeBE.Models;
@@ -81,33 +84,55 @@ namespace RetradeBE.Services.AssistantChat
             session.LastMessageAt = now;
             await _chatSessionRepository.UpdateAsync(session);
 
+            var lang = string.Equals(request.Language, "vi", StringComparison.OrdinalIgnoreCase) ? "vi" : "en";
+            var isEnglish = lang == "en";
+
             var history = await _chatMessageRepository.GetBySessionIdAsync(session.SessionId);
             var geminiContents = BuildGeminiContents(history);
-            var orderProducts = await InjectUserOrderContextAsync(userId, geminiContents, cancellationToken);
+            var orderProducts = await InjectUserOrderContextAsync(userId, geminiContents, lang, cancellationToken);
             var suggestedProducts = new List<AssistantProductSuggestionDto>();
             if (orderProducts != null && orderProducts.Count > 0)
             {
                 suggestedProducts.AddRange(orderProducts);
             }
+            await InjectProductSearchContextAsync(message, geminiContents, suggestedProducts, lang, cancellationToken);
+
+            var langDirective = isEnglish
+                ? "[SYSTEM LANGUAGE DIRECTIVE]: The user interface language is currently set to ENGLISH. You MUST respond completely in English. Translate all labels, status names, and titles into English."
+                : "[SYSTEM LANGUAGE DIRECTIVE]: The user interface language is currently set to VIETNAMESE. You MUST respond completely in Vietnamese.";
+
+            geminiContents.Insert(0, new GeminiContentDto
+            {
+                Role = UserRole,
+                Parts = new List<GeminiPartDto> { new() { Text = langDirective } }
+            });
+
             string finalText;
 
             try
             {
                 finalText = await GenerateGeminiResponseAsync(geminiContents, suggestedProducts, session.SessionId, cancellationToken);
+                if (IsDomainBoundaryDecline(finalText) && suggestedProducts.Count > 0)
+                {
+                    finalText = BuildProductSuggestionResponse(message, suggestedProducts);
+                }
             }
             catch (InvalidOperationException ex) when (!cancellationToken.IsCancellationRequested)
             {
                 _logger.LogWarning(ex, "Gemini assistant chat request failed.");
-                finalText = BuildGeminiFailureMessage(ex);
+                var failureMessage = BuildGeminiFailureMessage(ex);
+                finalText = failureMessage == "i18n:chat.assistant_error_unavailable"
+                    ? await BuildOfflineAssistantResponseAsync(message, userId, suggestedProducts, cancellationToken)
+                    : failureMessage;
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
             {
                 _logger.LogError(ex, "Assistant chat request failed.");
-                finalText = "Xin lỗi, hiện trợ lý AI đang gặp lỗi khi xử lý yêu cầu. Bạn thử lại sau ít phút nhé.";
+                finalText = "i18n:chat.assistant_error_unavailable";
             }
             if (string.IsNullOrWhiteSpace(finalText))
             {
-                finalText = "Xin lỗi, hiện mình chưa thể tạo câu trả lời phù hợp. Bạn thử diễn đạt lại nhu cầu tìm sản phẩm giúp mình nhé.";
+                finalText = "i18n:chat.assistant_offline_general";
             }
 
             var assistantMessage = new ChatMessage
@@ -323,6 +348,248 @@ namespace RetradeBE.Services.AssistantChat
                 .Trim();
         }
 
+        private async Task<string> BuildOfflineAssistantResponseAsync(
+            string message,
+            string? userId,
+            List<AssistantProductSuggestionDto> suggestedProducts,
+            CancellationToken cancellationToken)
+        {
+            var normalized = NormalizeForMatch(message);
+
+            if (ContainsAny(normalized, "purchase history", "order history", "my orders", "lich su mua", "don hang", "mua hang"))
+            {
+                if (string.IsNullOrWhiteSpace(userId))
+                {
+                    return "i18n:chat.assistant_offline_purchase_login";
+                }
+
+                var recentOrders = await _purchaseService.QueryByBuyerId(userId)
+                    .Take(5)
+                    .ToListAsync(cancellationToken);
+
+                if (recentOrders.Count > 0)
+                {
+                    var sb = new StringBuilder();
+                    sb.AppendLine("Here are your recent orders on ReTrade:\n");
+                    foreach (var o in recentOrders)
+                    {
+                        var pId = o.ProductId;
+                        var pName = o.ProductName ?? "ReTrade Product";
+                        var imgUrl = pId != null && suggestedProducts.FirstOrDefault(x => x.ProductId == pId)?.MainImageUrl != null
+                            ? suggestedProducts.First(x => x.ProductId == pId).MainImageUrl
+                            : null;
+
+                        if (!string.IsNullOrWhiteSpace(imgUrl))
+                        {
+                            sb.AppendLine($"![{pName}]({imgUrl})");
+                        }
+                        sb.AppendLine($"- **{pName}** | Order Code: #{o.OrderCode ?? o.OrderId} | Total: {o.FinalAmount ?? o.TotalAmount ?? 0:N0} VND | Status: {TranslateOrderStatus(o.Status)}");
+                        sb.AppendLine($"[View Details](/purchase-history/{o.OrderId})\n");
+                    }
+                    sb.AppendLine("[View All Orders](/purchase-history)");
+                    return sb.ToString();
+                }
+
+                return "i18n:chat.assistant_offline_purchase_empty";
+            }
+
+            if (ContainsAny(normalized, "auction", "bid", "dau gia", "tra gia"))
+            {
+                return "i18n:chat.assistant_offline_auction_help";
+            }
+
+            if (ContainsAny(normalized, "sell", "selling", "post product", "list product", "dang ban", "ban san pham", "rao ban"))
+            {
+                return "i18n:chat.assistant_offline_selling_help";
+            }
+
+            if (ContainsAny(normalized, "wishlist", "favorite", "favourite", "yeu thich"))
+            {
+                return "i18n:chat.assistant_offline_wishlist_help";
+            }
+
+            if (ContainsAny(
+                normalized,
+                "product",
+                "products",
+                "featured",
+                "latest",
+                "search",
+                "find",
+                "san pham",
+                "noi bat",
+                "moi nhat",
+                "tim",
+                "iphone",
+                "phone",
+                "laptop",
+                "macbook",
+                "camera",
+                "computer",
+                "clothing",
+                "sneaker",
+                "vespa"))
+            {
+                var products = await SearchProductsAsync(new ProductSearchToolArgs { Limit = 5 }, cancellationToken);
+                AddDistinctProducts(suggestedProducts, products);
+                return products.Count > 0
+                    ? "i18n:chat.assistant_offline_products"
+                    : "i18n:chat.assistant_offline_no_products";
+            }
+
+            return "i18n:chat.assistant_offline_general";
+        }
+
+        private async Task InjectProductSearchContextAsync(
+            string message,
+            List<GeminiContentDto> geminiContents,
+            List<AssistantProductSuggestionDto> suggestedProducts,
+            string lang,
+            CancellationToken cancellationToken)
+        {
+            var args = BuildHeuristicProductSearchArgs(message);
+            if (args == null)
+            {
+                return;
+            }
+
+            var products = await SearchProductsAsync(args, cancellationToken);
+            AddDistinctProducts(suggestedProducts, products);
+
+            var contextText = products.Count > 0
+                ? "[Relevant ReTrade Product Search Results from Database]:\n" +
+                  string.Join("\n", products.Select((p, index) =>
+                      $"- {index + 1}. {p.Name} | Price: {p.Price ?? 0:N0} VND | Category: {p.CategoryName ?? "N/A"} | Condition: {p.Condition ?? "N/A"} | Stock: {p.StockQuantity ?? 0} | ProductId: {p.ProductId}"))
+                : "[Relevant ReTrade Product Search Results from Database]: No matching products were found.";
+
+            contextText += lang == "en"
+                ? "\nInstruction: Respond strictly in ENGLISH. Only mention products listed above."
+                : "\nInstruction: Respond strictly in VIETNAMESE. Only mention products listed above.";
+
+            geminiContents.Insert(0, new GeminiContentDto
+            {
+                Role = UserRole,
+                Parts = new List<GeminiPartDto>
+                {
+                    new() { Text = contextText }
+                }
+            });
+        }
+
+        private static ProductSearchToolArgs? BuildHeuristicProductSearchArgs(string message)
+        {
+            var normalized = NormalizeForMatch(message);
+            var isProductQuery = ContainsAny(
+                normalized,
+                "product",
+                "san pham",
+                "search",
+                "find",
+                "tim",
+                "mua",
+                "phone",
+                "dien thoai",
+                "smartphone",
+                "iphone",
+                "samsung",
+                "laptop",
+                "may tinh",
+                "macbook");
+
+            if (!isProductQuery)
+            {
+                return null;
+            }
+
+            var isPhoneQuery = ContainsAny(normalized, "phone", "dien thoai", "smartphone", "iphone", "samsung");
+            var isComputerQuery = ContainsAny(normalized, "laptop", "computer", "may tinh", "macbook");
+
+            return new ProductSearchToolArgs
+            {
+                Keyword = isPhoneQuery || isComputerQuery ? null : message,
+                Category = isPhoneQuery ? "Mobile Phones" : isComputerQuery ? "Computers" : null,
+                MinStorageGb = ExtractMinStorageGb(normalized),
+                Limit = 5
+            };
+        }
+
+        private static int? ExtractMinStorageGb(string normalizedMessage)
+        {
+            var match = Regex.Match(normalizedMessage, @"(?<value>\d{2,4})\s*(gb|g)\b", RegexOptions.IgnoreCase);
+            if (!match.Success || !int.TryParse(match.Groups["value"].Value, out var value))
+            {
+                return null;
+            }
+
+            return value;
+        }
+
+        private static bool IsDomainBoundaryDecline(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return false;
+            }
+
+            return text.Contains("specialized strictly", StringComparison.OrdinalIgnoreCase) ||
+                   text.Contains("Please ask me questions related to ReTrade", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string BuildProductSuggestionResponse(string message, List<AssistantProductSuggestionDto> products)
+        {
+            var normalized = NormalizeForMatch(message);
+            var isVietnamese = ContainsAny(normalized, "toi", "muon", "mua", "dien thoai", "san pham", "dung luong", "tro len", "tim");
+
+            if (isVietnamese)
+            {
+                return products.Count == 0
+                    ? "Mình chưa tìm thấy sản phẩm phù hợp trong dữ liệu ReTrade hiện tại."
+                    : "Mình tìm thấy một số sản phẩm ReTrade phù hợp với yêu cầu của bạn:";
+            }
+
+            return products.Count == 0
+                ? "I couldn't find matching products in the current ReTrade database."
+                : "I found some ReTrade products that match your request:";
+        }
+
+        private static void AddDistinctProducts(
+            List<AssistantProductSuggestionDto> target,
+            IEnumerable<AssistantProductSuggestionDto> products)
+        {
+            foreach (var product in products)
+            {
+                if (!target.Any(current => current.ProductId == product.ProductId))
+                {
+                    target.Add(product);
+                }
+            }
+        }
+
+        private static bool ContainsAny(string value, params string[] patterns)
+        {
+            return patterns.Any(pattern => value.Contains(pattern, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static string NormalizeForMatch(string value)
+        {
+            var normalized = (value ?? string.Empty).Normalize(NormalizationForm.FormD);
+            var builder = new StringBuilder(normalized.Length);
+
+            foreach (var character in normalized)
+            {
+                if (CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
+                {
+                    builder.Append(character switch
+                    {
+                        'đ' or 'Đ' => 'd',
+                        _ => char.ToLowerInvariant(character)
+                    });
+                }
+            }
+
+            return builder.ToString().Normalize(NormalizationForm.FormC);
+        }
+
         private static string BuildGeminiFailureMessage(InvalidOperationException exception)
         {
             var message = exception.Message;
@@ -330,7 +597,7 @@ namespace RetradeBE.Services.AssistantChat
 
             if (normalized.Contains("api key is not configured"))
             {
-                return "Gemini API key is not configured. Please add Gemini:ApiKey or GEMINI_API_KEY environment variable and restart the backend.";
+                return "i18n:chat.assistant_error_key_missing";
             }
 
             if (normalized.Contains("api key not valid") ||
@@ -340,30 +607,31 @@ namespace RetradeBE.Services.AssistantChat
                 normalized.Contains("access_token_type_unsupported") ||
                 normalized.Contains("401"))
             {
-                return "Invalid Gemini API key. Please generate a new key in Google AI Studio and update appsettings.";
+                return "i18n:chat.assistant_error_key_invalid";
             }
 
             if (normalized.Contains("permission") || normalized.Contains("forbidden") || normalized.Contains("403"))
             {
-                return "Gemini API request refused. Please verify that your API key has permission for Gemini API.";
+                return "i18n:chat.assistant_error_permission";
             }
 
             if (normalized.Contains("quota") || normalized.Contains("429"))
             {
-                return "Gemini API rate limit or quota exceeded. Please try again later or switch API project.";
+                return "i18n:chat.assistant_error_quota";
             }
 
             if (normalized.Contains("models/") && (normalized.Contains("not found") || normalized.Contains("404")))
             {
-                return "The configured Gemini model was not found or is unavailable. Please check Gemini:Model in appsettings.";
+                return "i18n:chat.assistant_error_model";
             }
 
-            return $"AI Assistant returned an error: {message}";
+            return "i18n:chat.assistant_error_unavailable";
         }
 
         private async Task<List<AssistantProductSuggestionDto>> InjectUserOrderContextAsync(
             string? userId,
             List<GeminiContentDto> geminiContents,
+            string lang,
             CancellationToken cancellationToken)
         {
             var resultProducts = new List<AssistantProductSuggestionDto>();
@@ -399,6 +667,8 @@ namespace RetradeBE.Services.AssistantChat
 
                 var productsDict = await _productRepository.Query()
                     .AsNoTracking()
+                    .Include(p => p.ProductImage)
+                        .ThenInclude(pi => pi.Image)
                     .Where(p => productIds.Contains(p.ProductId))
                     .Select(p => new AssistantProductSuggestionDto
                     {
@@ -422,15 +692,27 @@ namespace RetradeBE.Services.AssistantChat
                     })
                     .ToDictionaryAsync(p => p.ProductId, cancellationToken);
 
+                var isEnglish = lang == "en";
                 var orderSummaries = new List<string>();
                 foreach (var o in recentOrders)
                 {
                     var pId = o.ProductId;
                     var pName = o.ProductName ?? (pId != null && productsDict.TryGetValue(pId, out var prod) ? prod.Name : "ReTrade Product");
-                    var summary = $"- Order Code: #{o.OrderCode ?? o.OrderId} | Product: {pName} | Total: {o.FinalAmount ?? o.TotalAmount ?? 0:N0} VND | Status: {TranslateOrderStatus(o.Status)} | Date: {(o.CreatedAt.HasValue ? o.CreatedAt.Value.ToString("dd/MM/yyyy HH:mm") : "N/A")}";
-                    if (!string.IsNullOrWhiteSpace(pId))
+                    var imgUrl = pId != null && productsDict.TryGetValue(pId, out var prodImg) ? prodImg.MainImageUrl : null;
+
+                    var summary = isEnglish
+                        ? $"- Order Code: #{o.OrderCode ?? o.OrderId} | Product: {pName} | Total: {o.FinalAmount ?? o.TotalAmount ?? 0:N0} VND | Status: {TranslateOrderStatus(o.Status)}"
+                        : $"- Mã đơn hàng: #{o.OrderCode ?? o.OrderId} | Sản phẩm: {pName} | Tổng cộng: {o.FinalAmount ?? o.TotalAmount ?? 0:N0} VND | Trạng thái: {TranslateOrderStatus(o.Status)}";
+
+                    if (!string.IsNullOrWhiteSpace(imgUrl))
                     {
-                        summary += $" | Link: [View Details](/product/{pId})";
+                        summary += $" | ImageUrl: {imgUrl}";
+                    }
+                    if (!string.IsNullOrWhiteSpace(o.OrderId))
+                    {
+                        summary += isEnglish
+                            ? $" | Link: [View Details](/purchase-history/{o.OrderId})"
+                            : $" | Link: [Xem chi tiết](/purchase-history/{o.OrderId})";
                     }
                     orderSummaries.Add(summary);
 
@@ -441,7 +723,9 @@ namespace RetradeBE.Services.AssistantChat
                 }
 
                 var contextText = "[Current User's Real Order Data from ReTrade System]:\n" + string.Join("\n", orderSummaries) +
-                    "\nNote: Present each order with product name, order code, total price, and status. Always include markdown links like [View Details](/product/PRODUCT_ID) and [View All Orders](/purchase-history) so the user can click to view details.";
+                    (isEnglish
+                        ? "\nNote: For each order with an ImageUrl, YOU MUST include the image using markdown `![Product Name](ImageUrl)` before the order details. Format: Product Image markdown, Order Code, Product Name, Total Amount, Order Status. Always include markdown links like [View Details](/purchase-history/ORDER_ID) and [View All Orders](/purchase-history)."
+                        : "\nNote: Với mỗi đơn hàng có ImageUrl, BẮT BUỘC chèn hình ảnh bằng markdown `![Tên sản phẩm](ImageUrl)` phía trước thông tin đơn hàng. Định dạng: Ảnh sản phẩm markdown, Mã đơn hàng, Tên sản phẩm, Tổng cộng, Trạng thái. Always include markdown links like [Xem chi tiết](/purchase-history/ORDER_ID) and [Xem tất cả đơn hàng](/purchase-history).");
 
                 geminiContents.Insert(0, new GeminiContentDto
                 {
@@ -517,6 +801,19 @@ namespace RetradeBE.Services.AssistantChat
                 query = query.Where(p => p.Condition != null && p.Condition.ToLower() == condition);
             }
 
+            if (args.MinStorageGb.HasValue)
+            {
+                var allowedStorageValues = BuildAllowedStorageValues(args.MinStorageGb.Value);
+                query = query.Where(p => p.ProductAttribute.Any(pa =>
+                    pa.IsDeleted != true &&
+                    pa.Value != null &&
+                    allowedStorageValues.Contains(pa.Value.ToLower()) &&
+                    (pa.AttributeId == "att_mobl_storage" ||
+                     (pa.Attribute != null &&
+                      pa.Attribute.Name != null &&
+                      pa.Attribute.Name.ToLower().Contains("storage")))));
+            }
+
             if (args.MinPrice.HasValue)
             {
                 query = query.Where(p => p.Price.HasValue && p.Price >= args.MinPrice.Value);
@@ -562,6 +859,7 @@ namespace RetradeBE.Services.AssistantChat
             public decimal? MaxPrice { get; init; }
             public string? Condition { get; init; }
             public int? Limit { get; init; }
+            public int? MinStorageGb { get; init; }
 
             public static ProductSearchToolArgs FromGeminiArgs(Dictionary<string, JsonElement>? args)
             {
@@ -600,7 +898,8 @@ namespace RetradeBE.Services.AssistantChat
                     MinPrice = GetDecimal(args, "minPrice"),
                     MaxPrice = GetDecimal(args, "maxPrice"),
                     Condition = GetString(args, "condition"),
-                    Limit = GetInt(args, "limit")
+                    Limit = GetInt(args, "limit"),
+                    MinStorageGb = GetInt(args, "minStorageGb")
                 };
             }
 
@@ -662,6 +961,21 @@ namespace RetradeBE.Services.AssistantChat
                 value = match.Value;
                 return !string.IsNullOrEmpty(match.Key);
             }
+        }
+
+        private static List<string> BuildAllowedStorageValues(int minStorageGb)
+        {
+            var knownStorageValues = new[] { 32, 64, 128, 256, 512, 1024, 2048 };
+
+            return knownStorageValues
+                .Where(value => value >= minStorageGb)
+                .SelectMany(value => new[]
+                {
+                    value.ToString(CultureInfo.InvariantCulture),
+                    $"{value.ToString(CultureInfo.InvariantCulture)}gb",
+                    $"{value.ToString(CultureInfo.InvariantCulture)} gb"
+                })
+                .ToList();
         }
     }
 }

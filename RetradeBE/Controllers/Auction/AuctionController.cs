@@ -137,7 +137,8 @@ namespace RetradeBE.Controllers
             try
             {
                 var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
-                var result = await _auctionService.CreateDepositPaymentUrlAsync(accountId, id, dto, ipAddress);
+                var callbackUrl = $"{Request.Scheme}://{Request.Host}/api/Payment/vnpay-return";
+                var result = await _auctionService.CreateDepositPaymentUrlAsync(accountId, id, dto, ipAddress, callbackUrl);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -155,6 +156,42 @@ namespace RetradeBE.Controllers
             try
             {
                 var result = await _auctionService.PlaceBidAsync(accountId, id, dto);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [Authorize(Roles = $"{nameof(RoleEnum.Seller)},{nameof(RoleEnum.Admin)}")]
+        [HttpPost("{id}/end")]
+        public async Task<IActionResult> EndAuction(string id)
+        {
+            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(accountId)) return Unauthorized();
+
+            try
+            {
+                var result = await _auctionService.EndAuctionAsync(accountId, id);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [Authorize(Roles = $"{nameof(RoleEnum.Seller)},{nameof(RoleEnum.Admin)}")]
+        [HttpPost("{id}/relist")]
+        public async Task<IActionResult> RelistAuction(string id, [FromBody] AuctionUpdateDto dto)
+        {
+            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(accountId)) return Unauthorized();
+
+            try
+            {
+                var result = await _auctionService.RelistAuctionAsync(accountId, id, dto);
                 return Ok(result);
             }
             catch (Exception ex)

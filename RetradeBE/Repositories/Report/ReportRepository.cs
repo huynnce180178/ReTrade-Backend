@@ -26,7 +26,7 @@ namespace RetradeBE.Repositories
             return await _context.Report
                 .AsNoTracking()
                 .FirstOrDefaultAsync(report =>
-                    report.TargetType == "Review" &&
+                    report.TargetType.ToLower() == "review" &&
                     report.TargetId == reviewId &&
                     report.ReporterId == reporterId);
         }
@@ -46,7 +46,7 @@ namespace RetradeBE.Repositories
                 .FirstOrDefaultAsync(report =>
                     report.TargetId == targetId &&
                     report.ReporterId == reporterId &&
-                    report.TargetType == targetType);
+                    report.TargetType.ToLower() == targetType.ToLower());
         }
         public async Task<List<Report>> GetReportsByReporterAsync(string reporterId)
         {
@@ -98,7 +98,7 @@ namespace RetradeBE.Repositories
             return await _context.Report
                 .AsNoTracking()
                 .Include(report => report.Reporter)
-                .Where(report => report.TargetType == "buyer" || report.TargetType == "seller")
+                .Where(report => report.TargetType.ToLower() == "buyer" || report.TargetType.ToLower() == "seller")
                 .Join(_context.Order.AsNoTracking(),
                     report => report.TargetId,
                     order => order.OrderId,
@@ -116,7 +116,7 @@ namespace RetradeBE.Repositories
                 .AnyAsync(report =>
                     report.TargetId == targetId &&
                     report.ReporterId == reporterId &&
-                    report.TargetType == targetType);
+                    report.TargetType.ToLower() == targetType.ToLower());
         }
 
         public async Task AddAsync(Report report)
