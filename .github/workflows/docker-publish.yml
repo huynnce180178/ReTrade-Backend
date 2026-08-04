@@ -1,4 +1,4 @@
-name: Build and Push Backend Docker Image
+name: Build and Deploy Backend
 
 on:
   push:
@@ -6,15 +6,23 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+env:
+  DOCKER_IMAGE: huynn1006/retrade-backend
+  AZURE_RESOURCE_GROUP: rg-retrade-dev
+  AZURE_CONTAINER_APP: retrade-api
+
 jobs:
-  docker:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout source code
         uses: actions/checkout@v4
 
-      - name: Login to Docker Hub
+      - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -23,7 +31,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and Push
+      - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -31,5 +39,105 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            huynn1006/retrade-backend:latest
-            huynn1006/retrade-backend:${{ github.sha }}
+            ${{ env.DOCKER_IMAGE }}:latest
+            ${{ env.DOCKER_IMAGE }}:${{ github.sha }}
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy image to Azure Container Apps
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            SHORT_SHA="$(echo '${{ github.sha }}' | cut -c1-7)"
+            REVISION_SUFFIX="d${SHORT_SHA}-${{ github.run_number }}"
+
+            az containerapp update \
+              --name "${{ env.AZURE_CONTAINER_APP }}" \
+              --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+              --image "docker.io/${{ env.DOCKER_IMAGE }}:${{ github.sha }}" \
+              --revision-suffix "${REVISION_SUFFIX}" \
+              --output none
+
+      - name: Wait for the new revision
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            SHORT_SHA="$(echo '${{ github.sha }}' | cut -c1-7)"
+            REVISION_NAME="${{ env.AZURE_CONTAINER_APP }}--d${SHORT_SHA}-${{ github.run_number }}"
+
+            echo "Waiting for revision: ${REVISION_NAME}"
+
+            for i in {1..30}; do
+              STATUS="$(az containerapp revision show \
+                --name "${{ env.AZURE_CONTAINER_APP }}" \
+                --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+                --revision "${REVISION_NAME}" \
+                --query "properties.healthState" \
+                --output tsv 2>/dev/null || true)"
+
+              echo "Attempt ${i}: health=${STATUS}"
+
+              if [ "${STATUS}" = "Healthy" ]; then
+                echo "Revision is healthy."
+                exit 0
+              fi
+
+              if [ "${STATUS}" = "Unhealthy" ]; then
+                echo "Revision became unhealthy."
+                az containerapp logs show \
+                  --name "${{ env.AZURE_CONTAINER_APP }}" \
+                  --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+                  --tail 100 || true
+                exit 1
+              fi
+
+              sleep 10
+            done
+
+            echo "Timed out waiting for the revision to become healthy."
+            az containerapp logs show \
+              --name "${{ env.AZURE_CONTAINER_APP }}" \
+              --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+              --tail 100 || true
+            exit 1
+
+      - name: Verify production health endpoint
+        shell: bash
+        run: |
+          HEALTH_URL="https://retrade-api.bluesky-352d5cc4.eastasia.azurecontainerapps.io/health"
+
+          for i in {1..12}; do
+            HTTP_CODE="$(curl --silent --show-error --output health-response.txt \
+              --write-out "%{http_code}" \
+              --max-time 30 \
+              "${HEALTH_URL}" || true)"
+
+            echo "Attempt ${i}: HTTP ${HTTP_CODE}"
+
+            if [ "${HTTP_CODE}" = "200" ]; then
+              cat health-response.txt
+              echo
+              echo "Backend deployment completed successfully."
+              exit 0
+            fi
+
+            sleep 10
+          done
+
+          echo "Production health check failed."
+          cat health-response.txt 2>/dev/null || true
+          exit 1
+
+      - name: Show active revision
+        if: always()
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az containerapp revision list \
+              --name "${{ env.AZURE_CONTAINER_APP }}" \
+              --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+              --query "[?properties.trafficWeight > \`0\`].{Name:name,Traffic:properties.trafficWeight,Health:properties.healthState,Running:properties.runningState}" \
+              --output table
