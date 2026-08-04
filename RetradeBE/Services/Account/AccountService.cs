@@ -2,7 +2,6 @@ using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.SignalR;
@@ -135,11 +134,7 @@ namespace RetradeBE.Services
 <p>Trân trọng,<br/>Đội ngũ Hỗ trợ ReTrade</p>";
                         }
 
-                        await _emailService.SendEmailAsync(
-                            user.Email,
-                            "[ReTrade] Thông báo khóa tài khoản (Account Ban Notification)",
-                            emailBody);
-
+                        await _emailService.SendEmailAsync(user.Email, "[ReTrade] Thông báo khóa tài khoản (Account Ban Notification)", emailBody);
                         _logger.LogInformation("Successfully sent ban notification email to {Email} for AccountId {AccountId}", user.Email, accountId);
                     }
                     else
@@ -184,10 +179,7 @@ namespace RetradeBE.Services
 <p>Regards,<br/>ReTrade Support Team</p>";
                             }
 
-                            await _emailService.SendEmailAsync(
-                                user.Email,
-                                "[ReTrade] Account Reactivated",
-                                emailBody);
+                            await _emailService.SendEmailAsync(user.Email, "[ReTrade] Account Reactivated", emailBody);
                         }
                     }
                 }
@@ -248,10 +240,7 @@ namespace RetradeBE.Services
 <p>Regards,<br/>ReTrade Support Team</p>";
                         }
 
-                        await _emailService.SendEmailAsync(
-                            user.Email,
-                            "[ReTrade] Account Deactivated",
-                            emailBody);
+                        await _emailService.SendEmailAsync(user.Email, "[ReTrade] Account Deactivated", emailBody);
                     }
                 }
             }
@@ -273,6 +262,7 @@ namespace RetradeBE.Services
         public async Task<Account> GetByIdAsync(object id) => await _repository.GetByIdAsync(id);
         public async Task AddAsync(Account item) => await _repository.AddAsync(item);
         public async Task UpdateAsync(Account item) => await _repository.UpdateAsync(item);
+
         public async Task DeleteAsync(object id)
         {
             await _repository.DeleteAsync(id);
@@ -302,7 +292,6 @@ namespace RetradeBE.Services
             await _userRepository.AddAsync(user);
 
             string otp = new Random().Next(100000, 999999).ToString();
-
             _cache.Set(dto.Email, otp, TimeSpan.FromMinutes(3));
 
             var account = _mapper.Map<Account>(dto);
@@ -337,7 +326,6 @@ namespace RetradeBE.Services
 
             var allAccounts = await _repository.GetAllAsync();
             var account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
-
             if (account == null) return false;
 
             account.Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString();
@@ -345,7 +333,6 @@ namespace RetradeBE.Services
             await _repository.UpdateAsync(account);
 
             _cache.Remove(email);
-
             return true;
         }
 
@@ -353,9 +340,8 @@ namespace RetradeBE.Services
         {
             var user = await _userRepository.GetByEmailAsync(email);
             if (user == null) return "User not found.";
-            
-            string otp = new Random().Next(100000, 999999).ToString();
 
+            string otp = new Random().Next(100000, 999999).ToString();
             _cache.Set(email, otp, TimeSpan.FromMinutes(3));
 
             string template = await GetEmailTemplateAsync("VerificationOtp.html");
@@ -386,19 +372,15 @@ namespace RetradeBE.Services
             }
 
             if (account == null) return null;
-            if (account.IsDeleted == true)
-            {
-                throw new InvalidOperationException("ACCOUNT_DELETED");
-            }
-            if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Ban.ToString())
-            {
-                throw new InvalidOperationException("ACCOUNT_BANNED");
-            }
+            if (account.IsDeleted == true) throw new InvalidOperationException("ACCOUNT_DELETED");
+            if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Ban.ToString()) throw new InvalidOperationException("ACCOUNT_BANNED");
+
             if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString() ||
                 account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Pending.ToString())
             {
                 throw new InvalidOperationException("ACCOUNT_INACTIVE");
             }
+
             if (account.Status != RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString()) return null;
 
             bool isPasswordValid = BCrypt.Net.BCrypt.Verify(cleanPassword, account.PasswordHash);
@@ -417,6 +399,7 @@ namespace RetradeBE.Services
                 new Claim(ClaimTypes.NameIdentifier, account.AccountId),
                 new Claim(ClaimTypes.Name, account.Username!)
             };
+
             foreach (var r in roles)
             {
                 claims.Add(new Claim(ClaimTypes.Role, r));
@@ -432,7 +415,7 @@ namespace RetradeBE.Services
             };
 
             var token = tokenHandler.CreateToken(tokenDescriptor);
-            
+
             account.LastLoginAt = DateTime.UtcNow;
             await _repository.UpdateAsync(account);
 
@@ -494,6 +477,24 @@ namespace RetradeBE.Services
             return avatarUrl.Contains("avt-emty", StringComparison.OrdinalIgnoreCase);
         }
 
+        private async Task<string> GenerateUniqueGoogleUsernameAsync(string email)
+        {
+            string baseUsername = email.Split('@')[0].Replace(".", "").Replace("+", "");
+            if (string.IsNullOrWhiteSpace(baseUsername))
+            {
+                baseUsername = "googleuser";
+            }
+
+            string username = baseUsername;
+            int suffix = 1;
+            while (await _repository.GetByUsernameAsync(username) != null)
+            {
+                username = $"{baseUsername}{suffix++}";
+            }
+
+            return username;
+        }
+
         public async Task<object?> LoginWithGoogleAsync(string accessToken)
         {
             using var httpClient = _httpClientFactory.CreateClient();
@@ -516,9 +517,7 @@ namespace RetradeBE.Services
 
             if (string.IsNullOrWhiteSpace(firstName) && string.IsNullOrWhiteSpace(lastName) && !string.IsNullOrWhiteSpace(fullName))
             {
-                var nameParts = fullName
-                    .Trim()
-                    .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                var nameParts = fullName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
                 if (nameParts.Length == 1)
                 {
@@ -532,6 +531,7 @@ namespace RetradeBE.Services
             }
 
             if (string.IsNullOrEmpty(email)) return null;
+
             const string googleProvider = "Google";
 
             var user = await _userRepository.GetByEmailAsync(email);
@@ -542,14 +542,7 @@ namespace RetradeBE.Services
             {
                 string userId = await GenerateUserIdAsync();
                 string accountId = await GenerateAccountIdAsync();
-
-                string baseUsername = email.Split('@')[0].Replace(".", "").Replace("+", "");
-                string username = baseUsername;
-                int suffix = 1;
-                while (await _repository.GetByUsernameAsync(username) != null)
-                {
-                    username = $"{baseUsername}{suffix++}";
-                }
+                string username = await GenerateUniqueGoogleUsernameAsync(email);
 
                 user = new User
                 {
@@ -572,7 +565,9 @@ namespace RetradeBE.Services
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()),
                     Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString(),
                     IsPasswordSet = false,
-                    CreatedAt = DateTime.UtcNow
+                    MustChangePassword = false,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
                 };
                 await _repository.AddAsync(account);
                 await _repository.AssignRoleAsync(accountId, RetradeBE.Models.Enums.RoleEnum.Buyer.ToString());
@@ -581,7 +576,28 @@ namespace RetradeBE.Services
             {
                 var allAccounts = await _repository.GetAllAsync();
                 account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
-                if (account == null) return null;
+
+                if (account == null)
+                {
+                    string accountId = await GenerateAccountIdAsync();
+                    account = new Account
+                    {
+                        AccountId = accountId,
+                        UserId = user.UserId,
+                        Provider = googleProvider,
+                        Username = await GenerateUniqueGoogleUsernameAsync(email),
+                        ProviderUserId = providerUserId ?? email,
+                        PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()),
+                        Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString(),
+                        IsPasswordSet = false,
+                        MustChangePassword = false,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    await _repository.AddAsync(account);
+                    await _repository.AssignRoleAsync(accountId, RetradeBE.Models.Enums.RoleEnum.Buyer.ToString());
+                }
+
                 if (account.IsDeleted == true)
                 {
                     throw new InvalidOperationException("ACCOUNT_DELETED");
@@ -592,8 +608,7 @@ namespace RetradeBE.Services
                     throw new InvalidOperationException("ACCOUNT_BANNED");
                 }
 
-                if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString() ||
-                    account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Pending.ToString())
+                if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString())
                 {
                     throw new InvalidOperationException("ACCOUNT_INACTIVE");
                 }
@@ -641,7 +656,9 @@ namespace RetradeBE.Services
 
             var roles = await _repository.GetRolesAsync(account.AccountId);
             if (roles == null || !roles.Any())
+            {
                 roles = new List<string> { RetradeBE.Models.Enums.RoleEnum.Buyer.ToString() };
+            }
 
             var tokenHandler = new JwtSecurityTokenHandler();
             var key = Encoding.ASCII.GetBytes(_jwtSettings.SecretKey);
@@ -650,8 +667,11 @@ namespace RetradeBE.Services
                 new Claim(ClaimTypes.NameIdentifier, account.AccountId),
                 new Claim(ClaimTypes.Name, account.Username!)
             };
+
             foreach (var r in roles)
+            {
                 claims.Add(new Claim(ClaimTypes.Role, r));
+            }
 
             var tokenDescriptor = new SecurityTokenDescriptor
             {
@@ -663,6 +683,9 @@ namespace RetradeBE.Services
             };
 
             var token = tokenHandler.CreateToken(tokenDescriptor);
+
+            account.LastLoginAt = DateTime.UtcNow;
+            await _repository.UpdateAsync(account);
 
             return new AuthResponseDto
             {
@@ -677,6 +700,7 @@ namespace RetradeBE.Services
                 PasswordHash = "",
                 Token = tokenHandler.WriteToken(token),
                 Roles = roles,
+                MustChangePassword = account.MustChangePassword ?? false,
                 IsPasswordSet = account.IsPasswordSet ?? true,
             };
         }
@@ -709,7 +733,6 @@ namespace RetradeBE.Services
             if (account == null) return "No account associated with this email.";
 
             string otp = new Random().Next(100000, 999999).ToString();
-
             _cache.Set($"forgot_pwd_{email}", otp, TimeSpan.FromMinutes(3));
 
             string template = await GetEmailTemplateAsync("ForgotPasswordOtp.html");
@@ -726,20 +749,20 @@ namespace RetradeBE.Services
             const string digits = "0123456789";
             const string specialChars = "@$!%*?&";
             var random = new Random();
-            
+
             var passwordChars = new List<char>
             {
                 uppercase[random.Next(uppercase.Length)],
                 digits[random.Next(digits.Length)],
                 specialChars[random.Next(specialChars.Length)]
             };
-            
+
             string allChars = uppercase + lowercase + digits + specialChars;
             for (int i = passwordChars.Count; i < 8; i++)
             {
                 passwordChars.Add(allChars[random.Next(allChars.Length)]);
             }
-            
+
             return new string(passwordChars.OrderBy(x => random.Next()).ToArray());
         }
 
@@ -785,6 +808,9 @@ namespace RetradeBE.Services
             if (account == null) return "Account not found.";
 
             account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+            account.IsPasswordSet = true;
+            account.MustChangePassword = false;
+            account.UpdatedAt = DateTime.UtcNow;
             await _repository.UpdateAsync(account);
 
             _cache.Remove($"forgot_pwd_{dto.Email}");
@@ -834,7 +860,5 @@ namespace RetradeBE.Services
 
             return "Password set successfully.";
         }
-
-
     }
 }
