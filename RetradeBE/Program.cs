@@ -237,10 +237,13 @@ namespace RetradeBE
                         logger.LogInformation("Database schema is up to date. No pending migrations to apply.");
                     }
 
+                    logger.LogInformation("Seeding essential system master data (Roles, Admin account, Service Subscriptions)...");
+                    SeedEssentialMasterData(dbContext);
+
                     if (app.Environment.IsDevelopment())
                     {
-                        logger.LogInformation("Development environment detected. Seeding demo data...");
-                        SeedData(dbContext);
+                        logger.LogInformation("Development environment detected. Seeding demo products and orders...");
+                        SeedDemoData(dbContext);
                     }
                     else
                     {
@@ -480,22 +483,18 @@ namespace RetradeBE
             }
         }
 
-        private static void SeedData(AppDbContext dbContext)
+        private static void SeedEssentialMasterData(AppDbContext dbContext)
         {
+            // 1. System Roles (Required for system permissions)
             SeedRole(dbContext, 1, "Admin");
             SeedRole(dbContext, 2, "Buyer");
             SeedRole(dbContext, 3, "Seller");
 
-            SeedUserAccount(dbContext, "usr_20260701_100001", "Admin", "System", "admin@retrade.com", "acc_20260701_100001", "admin", "Admin123@", 1);
-            SeedUserAccount(dbContext, "usr_20260701_100002", "Demo", "Buyer", "buyer@retrade.com", "acc_20260701_100002", "buyer", "Buyer123@", 2);
-            SeedUserAccount(dbContext, "usr_20260701_100003", "Demo", "Seller", "seller@retrade.com", "acc_20260701_100003", "seller", "Seller123@", 3);
+            // 2. System Admin Account (Required for Admin portal access)
+            SeedUserAccount(dbContext, "usr_20260701_100001", "Admin", "System", "admin@retrade.com", "acc_20260701_100001", "admin", "Admin123@", 1, "0769331645");
+            SeedAddress(dbContext, "adr_20260701_100001", "usr_20260701_100001", "Admin", "0769331645", "Hẻm 226/16, Phường An Bình, Quận Ninh Kiều, Cần Thơ", 215, 2034, "570604");
 
-            SeedAddress(dbContext, "adr_20260701_100001", "usr_20260701_100001", "Admin", "0900000001", "Tân Thạnh", 215, 2034, "570604");
-            SeedAddress(dbContext, "adr_20260701_100003", "usr_20260701_100003", "Seller", "0900000002", "Đường số 1", 202, 3695, "90768");
-            SeedAddress(dbContext, "adr_20260701_100002", "usr_20260701_100002", "Buyer", "0900000003", "Đường số 2", 201, 3440, "13010");
-
-            SeedDemoOrders(dbContext);
-
+            // 3. Essential Service Subscription Packages
             SeedServiceSubscription(
                 dbContext,
                 "sub_20260701_100001",
@@ -523,154 +522,45 @@ namespace RetradeBE
                 30,
                 "Activate priority display rights. Bring products to the top of search results. Reach tens of thousands of potential buyers.");
 
-            SeedVoucher(dbContext, "voc_20260701_100001", "HELLORETRADE", "Fixed", 20000m, 100000m, null, 100);
-            SeedVoucher(dbContext, "voc_20260701_100002", "SALE50", "Fixed", 50000m, 200000m, null, 100);
-            SeedVoucher(dbContext, "voc_20260701_100003", "SAVE10", "Percentage", 10m, 150000m, 50000m, 100);
-            SeedVoucher(dbContext, "voc_20260701_100004", "FREESHIP", "Fixed", 30000m, 50000m, null, 100);
-            SeedVoucher(dbContext, "voc_20260701_100005", "WELCOME", "Percentage", 20m, 100000m, 100000m, 100);
-            SeedVoucher(dbContext, "voc_20260701_100006", "EXPIRED20", "Fixed", 20000m, 50000m, null, 100, -20, -5);
+            // 4. System Categories
+            SeedCategory(dbContext, "cat_furniture", "Furniture", "Table, chairs, beds, sofa, and other home furniture.");
+            SeedCategory(dbContext, "cat_computers", "Computers", "Laptops, desktops, monitors, components, and computing accessories.");
+            SeedCategory(dbContext, "cat_mobile_phones", "Mobile Phones", "Smartphones, basic phones, tablets, and mobile accessories.");
+            SeedCategory(dbContext, "cat_clothing", "Clothing", "Menswear, womenswear, shoes, bags, and fashion accessories.");
 
-            // Link vouchers to Demo Buyer (usr_20260701_100002)
-            SeedMyVoucher(dbContext, "mvo_20260701_100001", "usr_20260701_100002", "voc_20260701_100001", "Active");
-            SeedMyVoucher(dbContext, "mvo_20260701_100002", "usr_20260701_100002", "voc_20260701_100002", "Active");
-            SeedMyVoucher(dbContext, "mvo_20260701_100003", "usr_20260701_100002", "voc_20260701_100003", "Used", DateTime.UtcNow.AddDays(-2));
-            SeedMyVoucher(dbContext, "mvo_20260701_100004", "usr_20260701_100002", "voc_20260701_100006", "Active");
+            // 5. System Category Attributes
+            // Mobile Phones (cat_mobile_phones)
+            SeedCategoryAttribute(dbContext, "att_mobl_color", "cat_mobile_phones", "Color", "String", true, null, 1);
+            SeedCategoryAttribute(dbContext, "att_mobl_storage", "cat_mobile_phones", "Storage Capacity", "String", true, "GB", 2);
+            SeedCategoryAttribute(dbContext, "att_mobl_os", "cat_mobile_phones", "Operating System", "String", true, null, 3);
+            SeedCategoryAttribute(dbContext, "att_mobl_screen", "cat_mobile_phones", "Screen Size", "String", false, "inches", 4);
+            SeedCategoryAttribute(dbContext, "att_mobl_battery", "cat_mobile_phones", "Battery Capacity", "String", false, "mAh", 5);
 
-            // Update existing user vouchers in DB to reflect higher caps (min 50k max cap) and higher freeship values (30k-50k)
-            var existingUserVouchers = dbContext.Set<Voucher>().Where(v => v.SellerId == null).ToList();
-            foreach (var v in existingUserVouchers)
-            {
-                if (v.DiscountType == "Percentage" && v.MaxDiscountValue < 50000m)
-                {
-                    v.MaxDiscountValue = 50000m;
-                    v.UpdatedAt = DateTime.UtcNow;
-                }
-                else if (v.DiscountType == "Fixed" && v.DiscountValue < 30000m)
-                {
-                    v.DiscountValue = 30000m;
-                    v.MaxDiscountValue = 30000m;
-                    v.UpdatedAt = DateTime.UtcNow;
-                }
-            }
-            var ordersWithVouchers = dbContext.Order.Where(o => o.VoucherId != null).ToList();
-            foreach (var ord in ordersWithVouchers)
-            {
-                var myVoucher = dbContext.MyVoucher.FirstOrDefault(mv => mv.UserId == ord.BuyerId && mv.VoucherId == ord.VoucherId);
-                if (myVoucher != null && myVoucher.Status != "Used")
-                {
-                    myVoucher.Status = "Used";
-                    myVoucher.UsedAt = ord.CreatedAt ?? DateTime.UtcNow;
-                }
-            }
-            dbContext.SaveChanges();
-            VoucherExpirationService.CheckAndExpireVouchersStaticAsync(dbContext).GetAwaiter().GetResult();
+            // Furniture (cat_furniture)
+            SeedCategoryAttribute(dbContext, "att_furn_material", "cat_furniture", "Material", "String", true, null, 1);
+            SeedCategoryAttribute(dbContext, "att_furn_color", "cat_furniture", "Color", "String", true, null, 2);
+            SeedCategoryAttribute(dbContext, "att_furn_dimensions", "cat_furniture", "Dimensions", "String", false, "cm", 3);
+            SeedCategoryAttribute(dbContext, "att_furn_brand", "cat_furniture", "Brand", "String", false, null, 4);
+            SeedCategoryAttribute(dbContext, "att_furn_assembly", "cat_furniture", "Assembly Required", "String", false, null, 5);
 
-            // Seeding Refund Requests for Demo Buyer (usr_20260701_100002)
-            SeedRefundRequest(dbContext, "ref_20260701_200001", "usr_20260701_100002", 150000m, "NotReady", "Auction refund for AUC_20260701_990001. Fee 10,000 VND retained.");
-            SeedRefundRequest(dbContext, "ref_20260701_200002", "usr_20260701_100002", 200000m, "Pending", "Auction refund for AUC_20260701_990002. Fee 10,000 VND retained.", "Vietcombank", "0123456789", "BUYER TEST");
-            SeedRefundRequest(dbContext, "ref_20260701_200003", "usr_20260701_100002", 50000m, "Processed", "Auction refund for AUC_20260701_990003. Fee 10,000 VND retained.", "Vietcombank", "0123456789", "BUYER TEST");
-            SeedRefundRequest(dbContext, "ref_20260701_200004", "usr_20260701_100002", 300000m, "Completed", "Auction refund for AUC_20260701_990004.", "Vietcombank", "0123456789", "BUYER TEST");
+            // Computers (cat_computers)
+            SeedCategoryAttribute(dbContext, "att_comp_cpu", "cat_computers", "CPU", "String", true, null, 1);
+            SeedCategoryAttribute(dbContext, "att_comp_ram", "cat_computers", "RAM", "String", true, "GB", 2);
+            SeedCategoryAttribute(dbContext, "att_comp_storage", "cat_computers", "Storage", "String", true, null, 3);
+            SeedCategoryAttribute(dbContext, "att_comp_gpu", "cat_computers", "GPU", "String", false, null, 4);
+            SeedCategoryAttribute(dbContext, "att_comp_os", "cat_computers", "Operating System", "String", false, null, 5);
 
-            // Seeding Refund Requests for Demo Seller (usr_20260701_100003)
-            SeedRefundRequest(dbContext, "ref_20260701_300001", "usr_20260701_100003", 500000m, "NotReady", "Auction refund for AUC_20260701_990005. Fee 10,000 VND retained.");
-            SeedRefundRequest(dbContext, "ref_20260701_300002", "usr_20260701_100003", 750000m, "Pending", "Auction refund for AUC_20260701_990006. Fee 10,000 VND retained.", "Vietcombank", "0987654321", "SELLER TEST");
+            // Clothing (cat_clothing)
+            SeedCategoryAttribute(dbContext, "att_clot_size", "cat_clothing", "Size", "String", true, null, 1);
+            SeedCategoryAttribute(dbContext, "att_clot_color", "cat_clothing", "Color", "String", true, null, 2);
+            SeedCategoryAttribute(dbContext, "att_clot_gender", "cat_clothing", "Gender", "String", false, null, 3);
+            SeedCategoryAttribute(dbContext, "att_clot_material", "cat_clothing", "Material", "String", false, null, 4);
+            SeedCategoryAttribute(dbContext, "att_clot_brand", "cat_clothing", "Brand", "String", false, null, 5);
+        }
 
-            // Seeding mock products and auctions for Demo Seller (usr_20260701_100003) to test all statuses
-            SeedDemoProduct(
-                dbContext,
-                "prd_20260701_200001",
-                "img_20260701_200001",
-                "Vintage Leather Jacket",
-                "High quality retro brown leather jacket in excellent condition.",
-                null,
-                "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=600&auto=format&fit=crop&q=80",
-                "cat_clothing",
-                "Accepted",
-                1);
-
-            SeedDemoProduct(
-                dbContext,
-                "prd_20260701_200002",
-                "img_20260701_200002",
-                "Mechanical Keyboard",
-                "RGB hot-swappable custom mechanical keyboard with linear switches.",
-                null,
-                "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=600&auto=format&fit=crop&q=80",
-                "cat_computers",
-                "Accepted",
-                1);
-
-            SeedDemoProduct(
-                dbContext,
-                "prd_20260701_200003",
-                "img_20260701_200003",
-                "Solid Wood Dining Table",
-                "Rustic handmade solid wood dining table for family dinners.",
-                null,
-                "https://images.unsplash.com/photo-1577140917170-285929fb55b7?w=600&auto=format&fit=crop&q=80",
-                "cat_furniture",
-                "Accepted",
-                1);
-
-            // Attribute values for Vintage Leather Jacket (prd_20260701_200001)
-            SeedProductAttributeValue(dbContext, "pav_lj_size", "prd_20260701_200001", "att_clot_size", "L");
-            SeedProductAttributeValue(dbContext, "pav_lj_color", "prd_20260701_200001", "att_clot_color", "Brown");
-            SeedProductAttributeValue(dbContext, "pav_lj_gender", "prd_20260701_200001", "att_clot_gender", "Men");
-            SeedProductAttributeValue(dbContext, "pav_lj_material", "prd_20260701_200001", "att_clot_material", "Leather");
-            SeedProductAttributeValue(dbContext, "pav_lj_brand", "prd_20260701_200001", "att_clot_brand", "Schott NYC");
-
-            // Attribute values for Mechanical Keyboard (prd_20260701_200002)
-            SeedProductAttributeValue(dbContext, "pav_kb_cpu", "prd_20260701_200002", "att_comp_cpu", "ARM Cortex M0");
-            SeedProductAttributeValue(dbContext, "pav_kb_ram", "prd_20260701_200002", "att_comp_ram", "1");
-            SeedProductAttributeValue(dbContext, "pav_kb_storage", "prd_20260701_200002", "att_comp_storage", "Flash Memory");
-            SeedProductAttributeValue(dbContext, "pav_kb_gpu", "prd_20260701_200002", "att_comp_gpu", "None");
-            SeedProductAttributeValue(dbContext, "pav_kb_os", "prd_20260701_200002", "att_comp_os", "Windows/macOS");
-
-            // Attribute values for Solid Wood Dining Table (prd_20260701_200003)
-            SeedProductAttributeValue(dbContext, "pav_dt_material", "prd_20260701_200003", "att_furn_material", "Oak Wood");
-            SeedProductAttributeValue(dbContext, "pav_dt_color", "prd_20260701_200003", "att_furn_color", "Natural Oak");
-            SeedProductAttributeValue(dbContext, "pav_dt_dimensions", "prd_20260701_200003", "att_furn_dimensions", "180x90x75 cm");
-            SeedProductAttributeValue(dbContext, "pav_dt_brand", "prd_20260701_200003", "att_furn_brand", "Handcrafted");
-            SeedProductAttributeValue(dbContext, "pav_dt_assembly", "prd_20260701_200003", "att_furn_assembly", "Yes");
-
-            SeedAuction(
-                dbContext,
-                "auc_20260701_100001",
-                "prd_20260701_200001",
-                "usr_20260701_100003",
-                350000m,
-                350000m,
-                20000m,
-                600000m,
-                DateTime.UtcNow.AddDays(1),
-                DateTime.UtcNow.AddDays(2),
-                "Upcoming");
-
-            SeedAuction(
-                dbContext,
-                "auc_20260701_100002",
-                "prd_20260701_200002",
-                "usr_20260701_100003",
-                150000m,
-                210000m,
-                10000m,
-                400000m,
-                DateTime.UtcNow.AddDays(-1),
-                DateTime.UtcNow.AddDays(1),
-                "Ongoing");
-
-            SeedAuction(
-                dbContext,
-                "auc_20260701_100003",
-                "prd_20260701_200003",
-                "usr_20260701_100003",
-                500000m,
-                650000m,
-                50000m,
-                1000000m,
-                DateTime.UtcNow.AddDays(-3),
-                DateTime.UtcNow.AddDays(-2),
-                "Ended");
+        private static void SeedDemoData(AppDbContext dbContext)
+        {
+            // Demo data seeding is disabled to keep database clean.
         }
 
         private static void SeedRole(AppDbContext dbContext, int roleId, string name)
@@ -685,7 +575,8 @@ namespace RetradeBE
         private static void SeedUserAccount(
             AppDbContext dbContext,
             string userId, string firstName, string lastName, string email,
-            string accountId, string username, string plainPassword, int roleId)
+            string accountId, string username, string plainPassword, int roleId,
+            string? phone = null)
         {
             var user = dbContext.User.FirstOrDefault(u => u.UserId == userId);
             var account = dbContext.Account.FirstOrDefault(a => a.AccountId == accountId);
@@ -698,13 +589,18 @@ namespace RetradeBE
                     UserId = userId,
                     FirstName = firstName,
                     LastName = lastName,
-                    Email = email
+                    Email = email,
+                    Phone = phone
                 };
                 dbContext.User.Add(user);
             }
             else
             {
                 user.Email = email;
+                if (!string.IsNullOrEmpty(phone))
+                {
+                    user.Phone = phone;
+                }
             }
 
             if (account == null)
