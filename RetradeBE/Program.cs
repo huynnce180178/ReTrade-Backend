@@ -72,6 +72,9 @@ namespace RetradeBE
             builder.Services.AddDbContext<AppDbContext>(options =>
                 options.UseNpgsql(connectionString));
 
+            builder.Services.AddHealthChecks()
+                .AddDbContextCheck<AppDbContext>("Database");
+
             // Tự động đăng ký tất cả các Repositories và Services bằng Reflection
             var assembly = typeof(Program).Assembly;
             
@@ -198,19 +201,55 @@ namespace RetradeBE
             // Automatically apply migrations at startup
             using (var scope = app.Services.CreateScope())
             {
+                var services = scope.ServiceProvider;
+                var logger = services.GetRequiredService<ILogger<Program>>();
+
                 try
                 {
-                    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                    await dbContext.Database.MigrateAsync();
-                    Console.WriteLine("Database migrated successfully.");
+                    var dbContext = services.GetRequiredService<AppDbContext>();
+
+                    // Log Target Database Information safely (without password)
+                    var rawConnStr = app.Configuration.GetConnectionString("DefaultConnection");
+                    if (!string.IsNullOrEmpty(rawConnStr))
+                    {
+                        var npgsqlBuilder = new Npgsql.NpgsqlConnectionStringBuilder(rawConnStr);
+                        logger.LogInformation("Target Database Info: Host={Host}, Port={Port}, Database={Database}, User={User}",
+                            npgsqlBuilder.Host, npgsqlBuilder.Port, npgsqlBuilder.Database, npgsqlBuilder.Username);
+                    }
+
+                    var pendingMigrations = (await dbContext.Database.GetPendingMigrationsAsync()).ToList();
+                    var appliedMigrations = (await dbContext.Database.GetAppliedMigrationsAsync()).ToList();
+
+                    logger.LogInformation("Database Migration Status: Applied={AppliedCount}, Pending={PendingCount}",
+                        appliedMigrations.Count, pendingMigrations.Count);
+
+                    if (pendingMigrations.Any())
+                    {
+                        logger.LogInformation("Applying {Count} pending migration(s): [{Migrations}]",
+                            pendingMigrations.Count, string.Join(", ", pendingMigrations));
+
+                        await dbContext.Database.MigrateAsync();
+
+                        logger.LogInformation("Database migration completed successfully.");
+                    }
+                    else
+                    {
+                        logger.LogInformation("Database schema is up to date. No pending migrations to apply.");
+                    }
+
                     if (app.Environment.IsDevelopment())
                     {
+                        logger.LogInformation("Development environment detected. Seeding demo data...");
                         SeedData(dbContext);
+                    }
+                    else
+                    {
+                        logger.LogInformation("Non-Development environment ({Env}) detected. Skipping demo data seeding.", app.Environment.EnvironmentName);
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error applying migrations: {ex.Message}");
+                    logger.LogCritical(ex, "FATAL ERROR: Database migration failed. Aborting application startup.");
                     throw;
                 }
             }
