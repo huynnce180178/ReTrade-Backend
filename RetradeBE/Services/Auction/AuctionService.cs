@@ -735,7 +735,7 @@ namespace RetradeBE.Services
                 ShippingFee = 0,
                 FinalAmount = finalAmount,
                 AddressSnapshot = await GetDefaultAddressSnapshotAsync(winnerBid.UserId),
-                Status = OrderStatusEnum.Pending.ToString(),
+                Status = OrderStatusEnum.Confirmed.ToString(),
                 CreatedAt = now,
                 UpdatedAt = now,
                 ShippingProvider = "Seller Arrangement",
@@ -768,7 +768,7 @@ namespace RetradeBE.Services
                 {
                     UserId = winnerBid.UserId,
                     Title = "Congratulations! You won the auction",
-                    Message = $"You have won the auction for '{productName}'. Please complete the payment!",
+                    Message = $"You have won the auction for '{productName}'. Your order is confirmed!",
                     Type = nameof(NotificationTypeEnum.Auction),
                     ReferenceId = auction.AuctionId
                 });

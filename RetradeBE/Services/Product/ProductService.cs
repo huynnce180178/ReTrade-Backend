@@ -454,10 +454,18 @@ namespace RetradeBE.Services
                 queryable = queryable.Where(p => p.Condition == query.Condition);
             }
 
-            // Status
-            if (!string.IsNullOrEmpty(query.Status))
+            // Status & IsDeleted filter
+            if (!string.IsNullOrEmpty(query.Status) && query.Status.Equals("Deleted", StringComparison.OrdinalIgnoreCase))
             {
-                queryable = queryable.Where(p => p.Status == query.Status);
+                queryable = queryable.Where(p => p.IsDeleted == true);
+            }
+            else
+            {
+                queryable = queryable.Where(p => p.IsDeleted != true);
+                if (!string.IsNullOrEmpty(query.Status))
+                {
+                    queryable = queryable.Where(p => p.Status == query.Status);
+                }
             }
 
             // SellerId
@@ -495,13 +503,14 @@ namespace RetradeBE.Services
                     CategoryName = p.Category != null ? p.Category.Name : null,
                     Price = p.Price,
                     StockQuantity = p.StockQuantity,
-                    Status = p.Status,
+                    Status = p.IsDeleted == true ? "Deleted" : p.Status,
                     Condition = p.Condition,
                     CreatedAt = p.CreatedAt,
                     SellerId = p.SellerId,
                     SellerName = p.Seller != null ? $"{p.Seller.FirstName} {p.Seller.LastName}".Trim() : null,
                     MainImageUrl = p.ProductImage.Where(pi => pi.IsMain == true).Select(pi => pi.Image.ImageUrl).FirstOrDefault()
-                                   ?? p.ProductImage.OrderBy(pi => pi.SortOrder).Select(pi => pi.Image.ImageUrl).FirstOrDefault()
+                                   ?? p.ProductImage.OrderBy(pi => pi.SortOrder).Select(pi => pi.Image.ImageUrl).FirstOrDefault(),
+                    IsDeleted = p.IsDeleted
                 })
                 .ToListAsync();
 

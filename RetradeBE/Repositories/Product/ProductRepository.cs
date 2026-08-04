@@ -23,8 +23,7 @@ namespace RetradeBE.Repositories
                 .Include(p => p.ProductImage)
                     .ThenInclude(pi => pi.Image)
                 .Include(p => p.ProductAttribute)
-                    .ThenInclude(pa => pa.Attribute)
-                .Where(p => p.IsDeleted != true);
+                    .ThenInclude(pa => pa.Attribute);
         }
 
         public async Task<Product?> GetByIdAsync(string productId)
