@@ -36,7 +36,7 @@ namespace RetradeBE.Controllers
             return Ok(auction);
         }
 
-        [Authorize(Roles = nameof(RoleEnum.Seller))]
+        [Authorize(Roles = $"{nameof(RoleEnum.Seller)},{nameof(RoleEnum.Admin)}")]
         [HttpGet("my")]
         public async Task<IActionResult> GetMyAuctions([FromQuery] AuctionQueryDto query)
         {

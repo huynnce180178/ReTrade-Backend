@@ -52,7 +52,7 @@ namespace RetradeBE.Controllers.Order
         }
 
         [HttpGet("{orderId}")]
-        [Authorize(Roles = nameof(RoleEnum.Seller))]
+        [Authorize(Roles = $"{nameof(RoleEnum.Seller)},{nameof(RoleEnum.Admin)}")]
         public async Task<IActionResult> GetOrderDetail(string orderId, [FromQuery] string sellerId)
         {
             if (string.IsNullOrWhiteSpace(sellerId)) return BadRequest("SellerId is required.");

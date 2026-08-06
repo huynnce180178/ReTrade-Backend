@@ -23,6 +23,7 @@ public class PaymentService : IPaymentService
     private readonly ILogger<PaymentService> _logger;
     private readonly IHubContext<OrderHub> _orderHub;
     private readonly IHubContext<AuctionHub> _auctionHub;
+    private readonly IHubContext<AccountHub> _accountHub;
     private readonly ISubscriptionVoucherService _subscriptionVoucherService;
 
     public PaymentService(
@@ -31,6 +32,7 @@ public class PaymentService : IPaymentService
         ILogger<PaymentService> logger,
         IHubContext<OrderHub> orderHub,
         IHubContext<AuctionHub> auctionHub,
+        IHubContext<AccountHub> accountHub,
         ISubscriptionVoucherService subscriptionVoucherService)
     {
         _context = context;
@@ -38,6 +40,7 @@ public class PaymentService : IPaymentService
         _logger = logger;
         _orderHub = orderHub;
         _auctionHub = auctionHub;
+        _accountHub = accountHub;
         _subscriptionVoucherService = subscriptionVoucherService;
     }
 
@@ -479,6 +482,17 @@ public class PaymentService : IPaymentService
                     _logger.LogInformation(
                         "ActivateSubscription: Assigned role '{Role}' to AccountId {AccountId}.",
                         targetRole.Name, account.AccountId);
+
+                    try
+                    {
+                        await _accountHub.Clients
+                            .Group(AccountHub.GetAccountGroupName(account.AccountId))
+                            .SendAsync("ForceLogout", "Your account role has been upgraded to Seller. Please log in again.");
+                    }
+                    catch
+                    {
+                        // Non-blocking signalr error
+                    }
                 }
             }
             else

@@ -183,10 +183,15 @@ namespace RetradeBE.Services
                 throw new InvalidOperationException("Review can only be submitted after the order is completed.");
             }
 
+            if (order.UpdatedAt.HasValue && DateTime.UtcNow - order.UpdatedAt.Value > TimeSpan.FromDays(30))
+            {
+                throw new InvalidOperationException("Reviews can only be submitted within 30 days of order completion.");
+            }
+
             var existingReview = await _reviewRepository.GetByBuyerOrderAsync(authenticatedBuyerId, request.OrderId);
             if (existingReview != null)
             {
-                throw new InvalidOperationException("You have already reviewed this order.");
+                throw new InvalidOperationException("You have already reviewed this order. Review editing is not permitted.");
             }
 
             var review = new Review

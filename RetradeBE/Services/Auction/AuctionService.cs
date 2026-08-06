@@ -136,6 +136,12 @@ namespace RetradeBE.Services
 
             if (string.IsNullOrWhiteSpace(dto.ProductId))
                 throw new Exception("ProductId is required.");
+
+            if (dto.DurationMinutes.HasValue && dto.DurationMinutes.Value > 0)
+            {
+                dto.EndTime = dto.StartTime.AddMinutes(dto.DurationMinutes.Value);
+            }
+
             ValidateAuctionValues(dto.StartingPrice, dto.MinIncrement, dto.BuyNowPrice, dto.StartTime, dto.EndTime);
 
             var product = await _auctionRepository.QueryEligibleProducts()
@@ -188,6 +194,11 @@ namespace RetradeBE.Services
             var roles = await _accountRepository.GetRolesAsync(accountId);
             var isAdmin = HasRole(roles, "Admin");
             var userId = account.UserId ?? throw new Exception("Account is not linked to a user.");
+
+            if (dto.DurationMinutes.HasValue && dto.DurationMinutes.Value > 0)
+            {
+                dto.EndTime = dto.StartTime.AddMinutes(dto.DurationMinutes.Value);
+            }
 
             ValidateAuctionValues(dto.StartingPrice, dto.MinIncrement, dto.BuyNowPrice, dto.StartTime, dto.EndTime);
 
@@ -1239,6 +1250,11 @@ namespace RetradeBE.Services
 
             if (!isEndedNoBid)
                 throw new Exception("Only auctions ended with no bids can be relisted.");
+
+            if (dto.DurationMinutes.HasValue && dto.DurationMinutes.Value > 0)
+            {
+                dto.EndTime = dto.StartTime.AddMinutes(dto.DurationMinutes.Value);
+            }
 
             ValidateAuctionValues(dto.StartingPrice, dto.MinIncrement, dto.BuyNowPrice, dto.StartTime, dto.EndTime);
 

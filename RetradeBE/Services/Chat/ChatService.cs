@@ -201,14 +201,21 @@ namespace RetradeBE.Services
             }
 
             await _chatRepository.UpdateMessageAsync(message);
-            await _hubContext.Clients
-                .Group(ChatHub.GetUserGroupName(principal.UserId))
-                .SendAsync("MessageDeleted", new
-                {
-                    RoomId = roomId,
-                    ChatId = messageId,
-                    UserId = principal.UserId
-                });
+            var userGroup = ChatHub.GetUserGroupName(principal.UserId);
+            var accountGroup = ChatHub.GetUserGroupName(principal.AccountId);
+
+            var deletePayload = new
+            {
+                RoomId = roomId,
+                ChatId = messageId,
+                UserId = principal.UserId
+            };
+
+            await _hubContext.Clients.Group(userGroup).SendAsync("MessageDeleted", deletePayload);
+            if (accountGroup != userGroup)
+            {
+                await _hubContext.Clients.Group(accountGroup).SendAsync("MessageDeleted", deletePayload);
+            }
 
             return true;
         }
@@ -241,15 +248,37 @@ namespace RetradeBE.Services
 
             message.IsRecalled = true;
             message.RecalledAt = DateTime.UtcNow;
-            message.Message = "Tin nhan da bi thu hoi";
+            message.Message = "Tin nhắn đã bị thu hồi";
             message.MessageType = "Recall";
             message.UpdatedAt = DateTime.UtcNow;
 
             var saved = await _chatRepository.UpdateMessageAsync(message);
             var dto = MapMessage(saved, principal.UserId);
+
             await _hubContext.Clients
                 .Group(ChatHub.GetRoomGroupName(roomId))
                 .SendAsync("MessageRecalled", dto);
+
+            var room = await _chatRepository.GetRoomByIdAsync(roomId);
+            if (room != null)
+            {
+                var targetUserIds = new[] { room.BuyerId, room.SellerId }
+                    .Where(id => !string.IsNullOrWhiteSpace(id) && id != principal.UserId)
+                    .Distinct();
+
+                foreach (var targetUserId in targetUserIds)
+                {
+                    await _hubContext.Clients
+                        .Group(ChatHub.GetUserGroupName(targetUserId!))
+                        .SendAsync("ChatNotification", new
+                        {
+                            RoomId = room.RoomId,
+                            Message = dto,
+                            ProductId = room.ProductId,
+                            SenderId = principal.UserId
+                        });
+                }
+            }
 
             return dto;
         }
@@ -360,7 +389,7 @@ namespace RetradeBE.Services
                 SenderId = chat.SenderId,
                 SenderName = string.IsNullOrWhiteSpace(senderName) ? chat.Sender?.Email : senderName,
                 SenderAvatarUrl = chat.Sender?.AvatarUrl,
-                Message = isRecalled ? "Tin nhan da bi thu hoi" : chat.Message,
+                Message = isRecalled ? "Tin nhắn đã bị thu hồi" : chat.Message,
                 MessageType = chat.MessageType,
                 IsRead = chat.IsRead == true,
                 IsRecalled = isRecalled,
