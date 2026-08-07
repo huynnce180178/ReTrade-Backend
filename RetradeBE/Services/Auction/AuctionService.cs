@@ -209,18 +209,13 @@ namespace RetradeBE.Services
             if (!isAdmin && auction.SellerId != userId)
                 throw new Exception("You can only update your own auctions.");
 
+            var hasCompletedWinner = !string.IsNullOrEmpty(auction.WinnerId);
+            if (hasCompletedWinner)
+                throw new Exception("Auctions with a winner cannot be updated.");
+
             var now = GetAuctionNow();
-            if (auction.StartTime.HasValue && auction.StartTime.Value <= now)
-                throw new Exception("Auction can only be updated before it becomes active.");
-
-            if (auction.EndTime.HasValue && auction.EndTime.Value <= now)
-                throw new Exception("Ended auctions cannot be updated.");
-
-            if (auction.Bid.Any())
-                throw new Exception("Auction with existing bids cannot be updated.");
-
-            if (dto.StartTime <= now)
-                throw new Exception("Auction start time must remain in the future.");
+            if (dto.StartTime.Date < now.Date)
+                throw new Exception("Start time cannot be in past days.");
 
             auction.StartingPrice = dto.StartingPrice;
             auction.CurrentPrice = dto.StartingPrice;
@@ -228,10 +223,17 @@ namespace RetradeBE.Services
             auction.BuyNowPrice = dto.BuyNowPrice;
             auction.StartTime = dto.StartTime;
             auction.EndTime = dto.EndTime;
-            auction.Status = "Upcoming";
+            auction.Status = dto.StartTime > now ? "Upcoming" : "Ongoing";
+            auction.WinnerId = null;
             auction.UpdatedAt = now;
 
-            await _auctionRepository.UpdateAsync(auction);
+            var oldBids = await _context.Bid.Where(b => b.AuctionId == auction.AuctionId).ToListAsync();
+            if (oldBids.Any())
+            {
+                _context.Bid.RemoveRange(oldBids);
+            }
+
+            await _context.SaveChangesAsync();
             var saved = await _auctionRepository.GetByIdAsync(auction.AuctionId);
             var result = MapToDetailDto(saved!);
             await NotifyAuctionChangedAsync(result, "AuctionUpdated");

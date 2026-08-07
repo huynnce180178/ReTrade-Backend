@@ -495,6 +495,13 @@ namespace RetradeBE.Services.AssistantChat
                     : "Here are the products matching your request on ReTrade:";
             }
 
+            if (isColorSearch)
+            {
+                return lang == "vi"
+                    ? "Hiện tại ReTrade chưa có sản phẩm khớp màu sắc bạn tìm. Bạn có thể thử tìm kiếm từ khóa khác hoặc tham khảo các danh mục sản phẩm khác nhé!"
+                    : "Currently ReTrade does not have items in this color. Feel free to search with other keywords or browse categories!";
+            }
+
             return lang == "vi"
                 ? "Chào bạn! Tôi là Trợ lý ReTrade. Hiện chưa tìm thấy sản phẩm khớp chính xác, bạn có thể thử từ khóa khác hoặc hỏi về đấu giá, đơn hàng nhé!"
                 : "Hello! I am ReTrade Assistant. Currently no exact products matched, feel free to search with other keywords or ask about orders and auctions!";
@@ -934,6 +941,11 @@ namespace RetradeBE.Services.AssistantChat
                 .Select(x => x.Product)
                 .Take(limit)
                 .ToList();
+
+            if (topScored.Count == 0 && colorTerms.Count > 0)
+            {
+                return new List<AssistantProductSuggestionDto>();
+            }
 
             if (topScored.Count == 0)
             {
