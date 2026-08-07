@@ -472,8 +472,24 @@ namespace RetradeBE.Services.AssistantChat
             var products = await SearchProductsAsync(searchArgs, cancellationToken);
             AddDistinctProducts(suggestedProducts, products);
 
+            var colorTerms = GetColorTerms(normalized);
+            var isColorSearch = colorTerms.Count > 0;
+            var hasExactColorMatch = isColorSearch && products.Any(p =>
+            {
+                var fullText = $"{p.Name} {p.Description} {p.CategoryName}";
+                var tokens = Regex.Split(NormalizeForMatch(fullText), @"[^\w\d]+").ToHashSet(StringComparer.OrdinalIgnoreCase);
+                return colorTerms.Any(c => tokens.Contains(NormalizeForMatch(c)));
+            });
+
             if (products.Count > 0)
             {
+                if (isColorSearch && !hasExactColorMatch)
+                {
+                    return lang == "vi"
+                        ? "Hiện tại ReTrade chưa có sản phẩm khớp màu sắc bạn tìm. Bạn tham khảo các sản phẩm nổi bật dưới đây nhé:"
+                        : "Currently ReTrade does not have items in this exact color. Here are featured items you may like:";
+                }
+
                 return lang == "vi"
                     ? "Dưới đây là các sản phẩm phù hợp trên ReTrade cho bạn:"
                     : "Here are the products matching your request on ReTrade:";
