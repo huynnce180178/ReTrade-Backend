@@ -760,7 +760,7 @@ namespace RetradeBE.Services
                 "oldest" => query.OrderBy(p => p.CreatedAt),
                 "name_asc" => query.OrderBy(p => p.Name),
                 "name_desc" => query.OrderByDescending(p => p.Name),
-                "sales_desc" or "top_seller" or "popular" => query.OrderByDescending(p => p.Order.Count(o => o.OrderStatus == "Completed" || o.OrderStatus == "Delivered" || o.OrderStatus == "Confirmed" || o.OrderStatus == "Shipping")).ThenByDescending(p => p.CreatedAt),
+                "sales_desc" or "top_seller" or "popular" => query.OrderByDescending(p => p.Order.Count(o => o.Status == "Completed" || o.Status == "Delivered" || o.Status == "Confirmed" || o.Status == "Shipping")).ThenByDescending(p => p.CreatedAt),
                 _ => query.OrderByDescending(p => p.CreatedAt), // "newest" or default
             };
         }
