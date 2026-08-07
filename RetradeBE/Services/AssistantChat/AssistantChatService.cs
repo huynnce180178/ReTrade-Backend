@@ -59,9 +59,11 @@ namespace RetradeBE.Services.AssistantChat
         {
             var userId = await ResolveUserIdAsync(accountId);
             var message = (request.Message ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(message))
+            var hasImage = !string.IsNullOrWhiteSpace(request.ImageBase64);
+
+            if (string.IsNullOrWhiteSpace(message) && !hasImage)
             {
-                throw new ArgumentException("Message is required.");
+                throw new ArgumentException("Message or image is required.");
             }
 
             if (message.Length > 2000)
@@ -69,22 +71,31 @@ namespace RetradeBE.Services.AssistantChat
                 throw new ArgumentException("Message is too long.");
             }
 
+            var storedContent = hasImage
+                ? (!string.IsNullOrWhiteSpace(message)
+                    ? $"![Attached Image]({request.ImageBase64.Trim()})\n{message}"
+                    : $"![Attached Image]({request.ImageBase64.Trim()})")
+                : message;
+
             var now = DateTime.UtcNow;
-            var session = await GetOrCreateSessionAsync(userId, request.SessionId, message, now);
+            var sessionTitle = !string.IsNullOrWhiteSpace(message)
+                ? (message.Length > 80 ? message[..80] : message)
+                : "Image Query";
+            var session = await GetOrCreateSessionAsync(userId, request.SessionId, sessionTitle, now);
 
             await _chatMessageRepository.AddAsync(new ChatMessage
             {
                 MessageId = RetradeBE.Utils.IdGenerator.GenerateId("amsg"),
                 SessionId = session.SessionId,
                 Role = UserRole,
-                Content = message,
+                Content = storedContent,
                 CreatedAt = now
             });
 
             session.LastMessageAt = now;
             await _chatSessionRepository.UpdateAsync(session);
 
-            var lang = string.Equals(request.Language, "vi", StringComparison.OrdinalIgnoreCase) ? "vi" : "en";
+            var lang = DetectUserMessageLanguage(message, request.Language);
             var isEnglish = lang == "en";
 
             var history = await _chatMessageRepository.GetBySessionIdAsync(session.SessionId);
@@ -117,22 +128,24 @@ namespace RetradeBE.Services.AssistantChat
                     finalText = BuildProductSuggestionResponse(message, suggestedProducts);
                 }
             }
-            catch (InvalidOperationException ex) when (!cancellationToken.IsCancellationRequested)
-            {
-                _logger.LogWarning(ex, "Gemini assistant chat request failed.");
-                var failureMessage = BuildGeminiFailureMessage(ex);
-                finalText = failureMessage == "i18n:chat.assistant_error_unavailable"
-                    ? await BuildOfflineAssistantResponseAsync(message, userId, suggestedProducts, cancellationToken)
-                    : failureMessage;
-            }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
             {
-                _logger.LogError(ex, "Assistant chat request failed.");
-                finalText = "i18n:chat.assistant_error_unavailable";
+                _logger.LogWarning(ex, "Gemini assistant request failed. Falling back to local assistant response.");
+                finalText = await BuildOfflineAssistantResponseAsync(message, userId, suggestedProducts, cancellationToken);
             }
             if (string.IsNullOrWhiteSpace(finalText))
             {
                 finalText = "i18n:chat.assistant_offline_general";
+            }
+
+            if (suggestedProducts.Count == 0)
+            {
+                var fallbackArgs = BuildHeuristicProductSearchArgs(message);
+                if (fallbackArgs != null)
+                {
+                    var fallbackProducts = await SearchProductsAsync(fallbackArgs, cancellationToken);
+                    AddDistinctProducts(suggestedProducts, fallbackProducts);
+                }
             }
 
             var assistantMessage = new ChatMessage
@@ -305,12 +318,47 @@ namespace RetradeBE.Services.AssistantChat
                 .Select(m => new GeminiContentDto
                 {
                     Role = m.Role == ModelRole ? ModelRole : UserRole,
-                    Parts = new List<GeminiPartDto>
-                    {
-                        new() { Text = m.Content ?? string.Empty }
-                    }
+                    Parts = ParseGeminiParts(m.Content)
                 })
                 .ToList();
+        }
+
+        private static List<GeminiPartDto> ParseGeminiParts(string? content)
+        {
+            var parts = new List<GeminiPartDto>();
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                parts.Add(new GeminiPartDto { Text = string.Empty });
+                return parts;
+            }
+
+            var imgMatch = Regex.Match(content, @"!\[.*?\]\((data:(?<mime>image\/[a-zA-Z0-9+\-]+);base64,(?<data>[A-Za-z0-9+/=]+))\)");
+            if (imgMatch.Success)
+            {
+                var mimeType = imgMatch.Groups["mime"].Value;
+                var base64Data = imgMatch.Groups["data"].Value;
+
+                parts.Add(new GeminiPartDto
+                {
+                    InlineData = new GeminiInlineDataDto
+                    {
+                        MimeType = string.IsNullOrWhiteSpace(mimeType) ? "image/jpeg" : mimeType,
+                        Data = base64Data
+                    }
+                });
+
+                var textWithoutImg = content.Replace(imgMatch.Value, "").Trim();
+                if (!string.IsNullOrWhiteSpace(textWithoutImg))
+                {
+                    parts.Add(new GeminiPartDto { Text = textWithoutImg });
+                }
+            }
+            else
+            {
+                parts.Add(new GeminiPartDto { Text = content });
+            }
+
+            return parts;
         }
 
         private static IEnumerable<GeminiFunctionCallDto> ExtractSearchProductFunctionCalls(GeminiGenerateContentResponseDto response)
@@ -354,13 +402,16 @@ namespace RetradeBE.Services.AssistantChat
             List<AssistantProductSuggestionDto> suggestedProducts,
             CancellationToken cancellationToken)
         {
+            var lang = DetectUserMessageLanguage(message, null);
             var normalized = NormalizeForMatch(message);
 
             if (ContainsAny(normalized, "purchase history", "order history", "my orders", "lich su mua", "don hang", "mua hang"))
             {
                 if (string.IsNullOrWhiteSpace(userId))
                 {
-                    return "i18n:chat.assistant_offline_purchase_login";
+                    return lang == "vi"
+                        ? "Bạn vui lòng đăng nhập để xem lịch sử đơn hàng của mình nhé!"
+                        : "Please log in to view your order history.";
                 }
 
                 var recentOrders = await _purchaseService.QueryByBuyerId(userId)
@@ -370,7 +421,7 @@ namespace RetradeBE.Services.AssistantChat
                 if (recentOrders.Count > 0)
                 {
                     var sb = new StringBuilder();
-                    sb.AppendLine("Here are your recent orders on ReTrade:\n");
+                    sb.AppendLine(lang == "vi" ? "Dưới đây là các đơn hàng gần đây của bạn trên ReTrade:\n" : "Here are your recent orders on ReTrade:\n");
                     foreach (var o in recentOrders)
                     {
                         var pId = o.ProductId;
@@ -390,54 +441,47 @@ namespace RetradeBE.Services.AssistantChat
                     return sb.ToString();
                 }
 
-                return "i18n:chat.assistant_offline_purchase_empty";
+                return lang == "vi"
+                    ? "Bạn chưa có đơn hàng nào gần đây trên ReTrade."
+                    : "You don't have any recent orders on ReTrade.";
             }
 
             if (ContainsAny(normalized, "auction", "bid", "dau gia", "tra gia"))
             {
-                return "i18n:chat.assistant_offline_auction_help";
+                return lang == "vi"
+                    ? "Bạn có thể tham gia các phiên đấu giá trực tuyến hấp dẫn tại mục Đấu Giá của ReTrade. Hãy đặt giá và theo dõi thời gian nhé!"
+                    : "You can join online auctions in the ReTrade Auction Hub. Place your bids and track the timer!";
             }
 
             if (ContainsAny(normalized, "sell", "selling", "post product", "list product", "dang ban", "ban san pham", "rao ban"))
             {
-                return "i18n:chat.assistant_offline_selling_help";
+                return lang == "vi"
+                    ? "Để đăng bán sản phẩm, bạn truy cập vào Kênh Người Bán (Seller Center) -> Quản lý sản phẩm -> Thêm sản phẩm mới nhé!"
+                    : "To sell an item, go to Seller Center -> My Products -> Add New Product!";
             }
 
             if (ContainsAny(normalized, "wishlist", "favorite", "favourite", "yeu thich"))
             {
-                return "i18n:chat.assistant_offline_wishlist_help";
+                return lang == "vi"
+                    ? "Bạn có thể lưu các sản phẩm quan tâm vào Danh sách yêu thích bằng cách nhấn vào biểu tượng trái tim ở từng sản phẩm."
+                    : "You can save items of interest to your Wishlist by clicking the heart icon on any product.";
             }
 
-            if (ContainsAny(
-                normalized,
-                "product",
-                "products",
-                "featured",
-                "latest",
-                "search",
-                "find",
-                "san pham",
-                "noi bat",
-                "moi nhat",
-                "tim",
-                "iphone",
-                "phone",
-                "laptop",
-                "macbook",
-                "camera",
-                "computer",
-                "clothing",
-                "sneaker",
-                "vespa"))
+            // Default & product search intent fallback
+            var searchArgs = BuildHeuristicProductSearchArgs(message) ?? new ProductSearchToolArgs { RawMessage = message, Limit = 5 };
+            var products = await SearchProductsAsync(searchArgs, cancellationToken);
+            AddDistinctProducts(suggestedProducts, products);
+
+            if (products.Count > 0)
             {
-                var products = await SearchProductsAsync(new ProductSearchToolArgs { Limit = 5 }, cancellationToken);
-                AddDistinctProducts(suggestedProducts, products);
-                return products.Count > 0
-                    ? "i18n:chat.assistant_offline_products"
-                    : "i18n:chat.assistant_offline_no_products";
+                return lang == "vi"
+                    ? "Dưới đây là các sản phẩm phù hợp trên ReTrade cho bạn:"
+                    : "Here are the products matching your request on ReTrade:";
             }
 
-            return "i18n:chat.assistant_offline_general";
+            return lang == "vi"
+                ? "Chào bạn! Tôi là Trợ lý ReTrade. Hiện chưa tìm thấy sản phẩm khớp chính xác, bạn có thể thử từ khóa khác hoặc hỏi về đấu giá, đơn hàng nhé!"
+                : "Hello! I am ReTrade Assistant. Currently no exact products matched, feel free to search with other keywords or ask about orders and auctions!";
         }
 
         private async Task InjectProductSearchContextAsync(
@@ -459,7 +503,7 @@ namespace RetradeBE.Services.AssistantChat
             var contextText = products.Count > 0
                 ? "[Relevant ReTrade Product Search Results from Database]:\n" +
                   string.Join("\n", products.Select((p, index) =>
-                      $"- {index + 1}. {p.Name} | Price: {p.Price ?? 0:N0} VND | Category: {p.CategoryName ?? "N/A"} | Condition: {p.Condition ?? "N/A"} | Stock: {p.StockQuantity ?? 0} | ProductId: {p.ProductId}"))
+                      $"- {index + 1}. {p.Name} | Price: {p.Price ?? 0:N0} VND | Category: {p.CategoryName ?? "N/A"} | Condition: {p.Condition ?? "N/A"} | Stock: {p.StockQuantity ?? 0} | Seller: {p.SellerName ?? "N/A"} | Description: {p.Description ?? "N/A"} | ProductId: {p.ProductId}"))
                 : "[Relevant ReTrade Product Search Results from Database]: No matching products were found.";
 
             contextText += lang == "en"
@@ -478,23 +522,13 @@ namespace RetradeBE.Services.AssistantChat
 
         private static ProductSearchToolArgs? BuildHeuristicProductSearchArgs(string message)
         {
-            var normalized = NormalizeForMatch(message);
+            var raw = message ?? string.Empty;
+            var normalized = NormalizeForMatch(raw);
             var isProductQuery = ContainsAny(
                 normalized,
-                "product",
-                "san pham",
-                "search",
-                "find",
-                "tim",
-                "mua",
-                "phone",
-                "dien thoai",
-                "smartphone",
-                "iphone",
-                "samsung",
-                "laptop",
-                "may tinh",
-                "macbook");
+                "product", "san pham", "search", "find", "tim", "mua", "goi y", "tu van", "nhu cau", "can mua",
+                "ao", "quan", "ao khoac", "giay", "tui", "dien thoai", "laptop", "may tinh", "tai nghe", "ban phim",
+                "phone", "smartphone", "iphone", "samsung", "macbook", "shirt", "tee", "jacket", "shoes", "red", "blue", "black", "white", "do", "den", "trang", "xanh");
 
             if (!isProductQuery)
             {
@@ -503,13 +537,23 @@ namespace RetradeBE.Services.AssistantChat
 
             var isPhoneQuery = ContainsAny(normalized, "phone", "dien thoai", "smartphone", "iphone", "samsung");
             var isComputerQuery = ContainsAny(normalized, "laptop", "computer", "may tinh", "macbook");
+            var isApparelQuery = ContainsAny(normalized, "ao", "quan", "ao khoac", "giay", "tui", "shirt", "tee", "jacket", "shoes", "apparel", "fashion");
+
+            var stopWords = new[] { "mau", "cần", "can", "tim", "tìm", "mua", "cho", "toi", "tôi", "ban", "bạn", "giup", "giúp", "loai", "loại", "co", "có", "khong", "không", "nao", "nào", "goi y", "tu van", "nhu cau", "san pham", "sản phẩm" };
+            var cleanedMessage = raw;
+            foreach (var sw in stopWords)
+            {
+                cleanedMessage = Regex.Replace(cleanedMessage, $@"\b{Regex.Escape(sw)}\b", "", RegexOptions.IgnoreCase);
+            }
+            cleanedMessage = Regex.Replace(cleanedMessage, @"\s+", " ").Trim();
 
             return new ProductSearchToolArgs
             {
-                Keyword = isPhoneQuery || isComputerQuery ? null : message,
-                Category = isPhoneQuery ? "Mobile Phones" : isComputerQuery ? "Computers" : null,
+                RawMessage = raw,
+                Keyword = string.IsNullOrWhiteSpace(cleanedMessage) ? raw : cleanedMessage,
+                CategoryDomain = isPhoneQuery ? "Phone" : isComputerQuery ? "Computer" : isApparelQuery ? "Apparel" : null,
                 MinStorageGb = ExtractMinStorageGb(normalized),
-                Limit = 5
+                Limit = 8
             };
         }
 
@@ -769,92 +813,197 @@ namespace RetradeBE.Services.AssistantChat
         {
             var accepted = ProductStatusEnum.Accepted.ToString();
             var ready = ProductStatusEnum.Ready.ToString();
-            var limit = Math.Clamp(args.Limit ?? 5, 1, 10);
+            var limit = Math.Clamp(args.Limit ?? 8, 1, 15);
 
-            var query = _productRepository.Query()
+            var baseQuery = _productRepository.Query()
                 .AsNoTracking()
+                .Include(p => p.Category)
+                .Include(p => p.Seller)
+                .Include(p => p.ProductImage).ThenInclude(pi => pi.Image)
+                .Include(p => p.ProductAttribute).ThenInclude(pa => pa.Attribute)
                 .Where(p =>
                     (p.Status == accepted || p.Status == ready) &&
                     p.StockQuantity > 0 &&
+                    p.IsDeleted != true &&
                     (p.Category == null || p.Category.Status == "Active") &&
                     (p.Seller == null || p.Seller.IsDeleted != true));
 
-            if (!string.IsNullOrWhiteSpace(args.Keyword))
+            var domain = (args.CategoryDomain ?? args.Category ?? string.Empty).ToLower();
+            if (!string.IsNullOrWhiteSpace(domain))
             {
-                var keyword = args.Keyword.Trim().ToLower();
-                query = query.Where(p =>
-                    (p.Name != null && p.Name.ToLower().Contains(keyword)) ||
-                    (p.Description != null && p.Description.ToLower().Contains(keyword)) ||
-                    (p.Category != null && p.Category.Name != null && p.Category.Name.ToLower().Contains(keyword)) ||
-                    p.ProductAttribute.Any(pa => pa.IsDeleted != true && pa.Value != null && pa.Value.ToLower().Contains(keyword)));
-            }
-
-            if (!string.IsNullOrWhiteSpace(args.Category))
-            {
-                var category = args.Category.Trim().ToLower();
-                query = query.Where(p => p.Category != null && p.Category.Name != null && p.Category.Name.ToLower().Contains(category));
-            }
-
-            if (!string.IsNullOrWhiteSpace(args.Condition))
-            {
-                var condition = args.Condition.Trim().ToLower();
-                query = query.Where(p => p.Condition != null && p.Condition.ToLower() == condition);
-            }
-
-            if (args.MinStorageGb.HasValue)
-            {
-                var allowedStorageValues = BuildAllowedStorageValues(args.MinStorageGb.Value);
-                query = query.Where(p => p.ProductAttribute.Any(pa =>
-                    pa.IsDeleted != true &&
-                    pa.Value != null &&
-                    allowedStorageValues.Contains(pa.Value.ToLower()) &&
-                    (pa.AttributeId == "att_mobl_storage" ||
-                     (pa.Attribute != null &&
-                      pa.Attribute.Name != null &&
-                      pa.Attribute.Name.ToLower().Contains("storage")))));
-            }
-
-            if (args.MinPrice.HasValue)
-            {
-                query = query.Where(p => p.Price.HasValue && p.Price >= args.MinPrice.Value);
-            }
-
-            if (args.MaxPrice.HasValue)
-            {
-                query = query.Where(p => p.Price.HasValue && p.Price <= args.MaxPrice.Value);
-            }
-
-            return await query
-                .OrderBy(p => p.Price ?? decimal.MaxValue)
-                .ThenByDescending(p => p.CreatedAt)
-                .Take(limit)
-                .Select(p => new AssistantProductSuggestionDto
+                if (domain.Contains("phone") || domain.Contains("thoai"))
                 {
-                    ProductId = p.ProductId,
-                    Name = p.Name,
-                    CategoryName = p.Category != null ? p.Category.Name : null,
-                    Price = p.Price,
-                    StockQuantity = p.StockQuantity,
-                    Status = p.Status,
-                    Condition = p.Condition,
-                    SellerId = p.SellerId,
-                    SellerName = p.Seller != null ? $"{p.Seller.FirstName} {p.Seller.LastName}".Trim() : null,
-                    MainImageUrl = p.ProductImage
-                        .Where(pi => pi.IsMain == true)
+                    baseQuery = baseQuery.Where(p => p.Category != null &&
+                        (p.Category.Name.ToLower().Contains("điện thoại") || p.Category.Name.ToLower().Contains("phone") || p.Category.Name.ToLower().Contains("mobile")));
+                }
+                else if (domain.Contains("computer") || domain.Contains("laptop") || domain.Contains("may tinh"))
+                {
+                    baseQuery = baseQuery.Where(p => p.Category != null &&
+                        (p.Category.Name.ToLower().Contains("máy tính") || p.Category.Name.ToLower().Contains("laptop") || p.Category.Name.ToLower().Contains("computer")));
+                }
+                else if (domain.Contains("apparel") || domain.Contains("fashion") || domain.Contains("ao") || domain.Contains("quan"))
+                {
+                    baseQuery = baseQuery.Where(p => p.Category != null &&
+                        (p.Category.Name.ToLower().Contains("quần") || p.Category.Name.ToLower().Contains("áo") || p.Category.Name.ToLower().Contains("thời trang") || p.Category.Name.ToLower().Contains("thanh lý") || p.Category.Name.ToLower().Contains("apparel") || p.Category.Name.ToLower().Contains("fashion")));
+                }
+            }
+
+            var allActive = await baseQuery.ToListAsync(cancellationToken);
+            if (allActive.Count == 0)
+            {
+                allActive = await _productRepository.Query()
+                    .AsNoTracking()
+                    .Include(p => p.Category)
+                    .Include(p => p.Seller)
+                    .Include(p => p.ProductImage).ThenInclude(pi => pi.Image)
+                    .Include(p => p.ProductAttribute).ThenInclude(pa => pa.Attribute)
+                    .Where(p => (p.Status == accepted || p.Status == ready) && p.StockQuantity > 0 && p.IsDeleted != true)
+                    .ToListAsync(cancellationToken);
+            }
+
+            if (allActive.Count == 0)
+            {
+                return new List<AssistantProductSuggestionDto>();
+            }
+
+            var rawMessage = (args.RawMessage ?? args.Keyword ?? string.Empty).Trim();
+            var normMessage = NormalizeForMatch(rawMessage);
+
+            var colorTerms = GetColorTerms(normMessage);
+            var searchTokens = TokenizeAndClean(rawMessage);
+
+            var scoredProductsList = allActive.Select(p =>
+            {
+                var pName = p.Name ?? string.Empty;
+                var pDesc = p.Description ?? string.Empty;
+                var pCat = p.Category?.Name ?? string.Empty;
+                var pAttrs = string.Join(" ", p.ProductAttribute.Select(pa => pa.Value ?? string.Empty));
+                var fullText = $"{pName} {pDesc} {pCat} {pAttrs}";
+                var normFullText = NormalizeForMatch(fullText);
+                var fullTextWordTokens = Regex.Split(normFullText, @"[^\w\d]+")
+                    .Where(w => !string.IsNullOrWhiteSpace(w))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                int score = 0;
+
+                if (colorTerms.Count > 0)
+                {
+                    var hasColorMatch = colorTerms.Any(c => fullTextWordTokens.Contains(NormalizeForMatch(c)));
+                    if (hasColorMatch)
+                    {
+                        score += 200;
+                    }
+                }
+
+                foreach (var token in searchTokens)
+                {
+                    var normToken = NormalizeForMatch(token);
+                    if (!string.IsNullOrWhiteSpace(normToken) && normToken.Length > 1)
+                    {
+                        if (fullTextWordTokens.Contains(normToken) || pName.Contains(token, StringComparison.OrdinalIgnoreCase))
+                        {
+                            score += 30;
+                        }
+                    }
+                }
+
+                return new { Product = p, Score = score };
+            })
+            .ToList();
+
+            var topScored = scoredProductsList
+                .Where(x => colorTerms.Count == 0 || x.Score >= 200)
+                .OrderByDescending(x => x.Score)
+                .ThenByDescending(x => x.Product.CreatedAt)
+                .Select(x => x.Product)
+                .Take(limit)
+                .ToList();
+
+            if (topScored.Count == 0)
+            {
+                topScored = scoredProductsList
+                    .OrderByDescending(x => x.Score)
+                    .ThenByDescending(x => x.Product.CreatedAt)
+                    .Select(x => x.Product)
+                    .Take(limit)
+                    .ToList();
+            }
+
+            return topScored.Select(p => MapToAssistantProductDto(p)).ToList();
+        }
+
+        private static HashSet<string> GetColorTerms(string normMessage)
+        {
+            var colors = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (ContainsAny(normMessage, "do", "red"))
+            {
+                colors.Add("do"); colors.Add("đỏ"); colors.Add("red");
+            }
+            if (ContainsAny(normMessage, "den", "black"))
+            {
+                colors.Add("den"); colors.Add("đen"); colors.Add("black");
+            }
+            if (ContainsAny(normMessage, "trang", "white"))
+            {
+                colors.Add("trang"); colors.Add("trắng"); colors.Add("white");
+            }
+            if (ContainsAny(normMessage, "xanh", "blue", "green"))
+            {
+                colors.Add("xanh"); colors.Add("blue"); colors.Add("green");
+            }
+            if (ContainsAny(normMessage, "vang", "yellow"))
+            {
+                colors.Add("vang"); colors.Add("vàng"); colors.Add("yellow");
+            }
+            return colors;
+        }
+
+        private static List<string> TokenizeAndClean(string input)
+        {
+            var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "mau", "màu", "can", "cần", "tim", "tìm", "mua", "cho", "toi", "tôi", "ban", "bạn", "giup", "giúp",
+                "loai", "loại", "co", "có", "khong", "không", "nao", "nào", "goi y", "tu van", "nhu cau", "san pham", "sản phẩm"
+            };
+
+            var words = Regex.Split(input, @"[^\w\d\+]+")
+                .Where(w => !string.IsNullOrWhiteSpace(w) && w.Length > 1 && !stopWords.Contains(w))
+                .ToList();
+
+            return words;
+        }
+
+        private static AssistantProductSuggestionDto MapToAssistantProductDto(Product p)
+        {
+            return new AssistantProductSuggestionDto
+            {
+                ProductId = p.ProductId,
+                Name = p.Name,
+                Description = p.Description != null && p.Description.Length > 250 ? p.Description.Substring(0, 250) + "..." : p.Description,
+                CategoryName = p.Category != null ? p.Category.Name : null,
+                Price = p.Price,
+                StockQuantity = p.StockQuantity,
+                Status = p.Status,
+                Condition = p.Condition,
+                SellerId = p.SellerId,
+                SellerName = p.Seller != null ? $"{p.Seller.FirstName} {p.Seller.LastName}".Trim() : null,
+                MainImageUrl = p.ProductImage
+                    .Where(pi => pi.IsMain == true)
+                    .Select(pi => pi.Image.ImageUrl)
+                    .FirstOrDefault()
+                    ?? p.ProductImage
+                        .OrderBy(pi => pi.SortOrder)
                         .Select(pi => pi.Image.ImageUrl)
                         .FirstOrDefault()
-                        ?? p.ProductImage
-                            .OrderBy(pi => pi.SortOrder)
-                            .Select(pi => pi.Image.ImageUrl)
-                            .FirstOrDefault()
-                })
-                .ToListAsync(cancellationToken);
+            };
         }
 
         private sealed class ProductSearchToolArgs
         {
+            public string? RawMessage { get; init; }
             public string? Keyword { get; init; }
             public string? Category { get; init; }
+            public string? CategoryDomain { get; init; }
             public decimal? MinPrice { get; init; }
             public decimal? MaxPrice { get; init; }
             public string? Condition { get; init; }
@@ -976,6 +1125,62 @@ namespace RetradeBE.Services.AssistantChat
                     $"{value.ToString(CultureInfo.InvariantCulture)} gb"
                 })
                 .ToList();
+        }
+
+        private static string DetectUserMessageLanguage(string message, string? defaultLang)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return string.Equals(defaultLang, "en", StringComparison.OrdinalIgnoreCase) ? "en" : "vi";
+            }
+
+            var normalized = message.ToLowerInvariant();
+
+            var vietnameseDiacritics = new[]
+            {
+                'à','á','ạ','ả','ã','â','ầ','ấ','ậ','ẩ','ẫ','ă','ằ','ắ','ặ','ẳ','ẵ',
+                'è','é','ẹ','ẻ','ẽ','ê','ề','ế','ệ','ể','ễ',
+                'ì','í','ị','ỉ','ĩ',
+                'ò','ó','ọ','ỏ','õ','ô','ồ','ố','ộ','ổ','ỗ','ơ','ờ','ớ','ợ','ở','ỡ',
+                'ù','ú','ụ','ủ','ũ','ư','ừ','ứ','ự','ử','ữ',
+                'ỳ','ý','ỵ','ỷ','ỹ','đ'
+            };
+
+            if (normalized.Any(c => vietnameseDiacritics.Contains(c)))
+            {
+                return "vi";
+            }
+
+            var unaccentedViWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "cho", "toi", "tôi", "mua", "ban", "bán", "can", "cần", "tim", "tìm", "co", "có", "khong", "không",
+                "nao", "nào", "gia", "giá", "bao", "nhieu", "nhiều", "ao", "áo", "quan", "quần", "giay", "giày",
+                "tui", "túi", "dep", "đẹp", "re", "rẻ", "tot", "tốt", "xem", "goi", "gợi", "y", "ý", "nhu", "như",
+                "cau", "cầu", "san", "sản", "pham", "phẩm", "do", "đỏ", "den", "đen", "trang", "trắng", "xanh", "vang", "vàng"
+            };
+
+            var words = Regex.Split(normalized, @"[^\w\d]+")
+                .Where(w => !string.IsNullOrWhiteSpace(w))
+                .ToList();
+
+            if (words.Any(w => unaccentedViWords.Contains(w)))
+            {
+                return "vi";
+            }
+
+            var englishWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "the", "is", "are", "you", "have", "show", "me", "find", "buy", "sell",
+                "shirt", "shoes", "bag", "laptop", "phone", "price", "how", "much", "what",
+                "which", "red", "black", "white", "blue", "green", "yellow", "jacket", "recommend", "suggestion"
+            };
+
+            if (words.Any(w => englishWords.Contains(w)))
+            {
+                return "en";
+            }
+
+            return string.Equals(defaultLang, "en", StringComparison.OrdinalIgnoreCase) ? "en" : "vi";
         }
     }
 }

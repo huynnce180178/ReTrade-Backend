@@ -79,12 +79,14 @@ namespace RetradeBE.Services
             }
 
             var buyerId = principal.UserId;
+            var isNewRoom = false;
             var room = product != null
                 ? await _chatRepository.GetRoomByProductAndBuyerAsync(product.ProductId, buyerId)
                 : await _chatRepository.GetBusinessRoomAsync(sellerId, buyerId);
 
             if (room == null)
             {
+                isNewRoom = true;
                 room = await _chatRepository.CreateRoomAsync(new ChatRoom
                 {
                     RoomId = RetradeBE.Utils.IdGenerator.GenerateId("room"),
@@ -104,7 +106,40 @@ namespace RetradeBE.Services
             }
 
             var rooms = await _chatRepository.GetRoomsForUserAsync(principal.UserId, principal.IsAdmin);
-            return rooms.First(r => r.RoomId == room.RoomId);
+            var roomDto = rooms.First(r => r.RoomId == room.RoomId);
+
+            if (isNewRoom)
+            {
+                try
+                {
+                    var sellerRooms = await _chatRepository.GetRoomsForUserAsync(sellerId, false);
+                    var sellerRoomDto = sellerRooms.FirstOrDefault(r => r.RoomId == room.RoomId) ?? roomDto;
+
+                    var buyerRooms = await _chatRepository.GetRoomsForUserAsync(buyerId, false);
+                    var buyerRoomDto = buyerRooms.FirstOrDefault(r => r.RoomId == room.RoomId) ?? roomDto;
+
+                    await _hubContext.Clients
+                        .Group(ChatHub.GetUserGroupName(sellerId))
+                        .SendAsync("RoomCreated", sellerRoomDto);
+
+                    await _hubContext.Clients
+                        .Group(ChatHub.GetUserGroupName(buyerId))
+                        .SendAsync("RoomCreated", buyerRoomDto);
+
+                    if (!string.IsNullOrWhiteSpace(principal.AccountId) && principal.AccountId != buyerId)
+                    {
+                        await _hubContext.Clients
+                            .Group(ChatHub.GetUserGroupName(principal.AccountId))
+                            .SendAsync("RoomCreated", buyerRoomDto);
+                    }
+                }
+                catch
+                {
+                    // Ignore broadcast errors so room creation API call succeeds
+                }
+            }
+
+            return roomDto;
         }
 
         public async Task<List<ChatMessageDto>> GetMessagesAsync(string accountId, string roomId, int page, int limit)
@@ -353,7 +388,7 @@ namespace RetradeBE.Services
         private async Task AddAutoSellerGreetingAsync(ChatRoom room, Product product, string sellerId)
         {
             var now = DateTime.UtcNow;
-            await _chatRepository.AddMessageAsync(new Chat
+            var saved = await _chatRepository.AddMessageAsync(new Chat
             {
                 ChatId = RetradeBE.Utils.IdGenerator.GenerateId("chat"),
                 RoomId = room.RoomId,
@@ -368,6 +403,25 @@ namespace RetradeBE.Services
                 DeletedForSender = false,
                 DeletedForReceiver = false
             });
+
+            var dto = MapMessage(saved, null);
+
+            await _hubContext.Clients
+                .Group(ChatHub.GetRoomGroupName(room.RoomId))
+                .SendAsync("ReceiveMessage", dto);
+
+            if (!string.IsNullOrWhiteSpace(room.BuyerId))
+            {
+                await _hubContext.Clients
+                    .Group(ChatHub.GetUserGroupName(room.BuyerId))
+                    .SendAsync("ChatNotification", new
+                    {
+                        RoomId = room.RoomId,
+                        Message = dto,
+                        ProductId = room.ProductId,
+                        SenderId = sellerId
+                    });
+            }
         }
 
         private static ChatMessageDto MapMessage(Chat chat, string? currentUserId = null)

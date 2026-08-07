@@ -38,8 +38,18 @@ namespace RetradeBE.Models.DTOs.Gemini
     public class GeminiPartDto
     {
         public string? Text { get; set; }
+        public GeminiInlineDataDto? InlineData { get; set; }
         public GeminiFunctionCallDto? FunctionCall { get; set; }
         public GeminiFunctionResponseDto? FunctionResponse { get; set; }
+    }
+
+    public class GeminiInlineDataDto
+    {
+        [JsonPropertyName("mimeType")]
+        public string MimeType { get; set; } = "image/jpeg";
+
+        [JsonPropertyName("data")]
+        public string Data { get; set; } = null!;
     }
 
     public class GeminiFunctionCallDto

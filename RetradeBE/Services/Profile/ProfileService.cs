@@ -394,11 +394,11 @@ namespace RetradeBE.Services
             var userId = account.User.UserId;
             var now = DateTime.UtcNow;
 
-            var hasActiveSubscription = await _context.MyService
+            var hasVoucherSubscription = await _context.MyService
                 .AsNoTracking()
-                .AnyAsync(s => s.UserId == userId && s.Status == "Active" && s.EndDate >= now);
+                .AnyAsync(s => s.UserId == userId && s.Status == "Active" && (s.ServiceId == "sub_20260701_100002" || s.ServiceId == "SERVICE_DISCOUNT_VOUCHER") && s.EndDate >= now);
 
-            if (hasActiveSubscription)
+            if (hasVoucherSubscription)
             {
                 var currentVoucherCount = await _context.MyVoucher
                     .AsNoTracking()

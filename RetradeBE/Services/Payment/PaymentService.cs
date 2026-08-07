@@ -502,15 +502,18 @@ public class PaymentService : IPaymentService
             }
         }
 
-        // 4. Generate 30 subscription vouchers for user
-        try
+        // 4. Generate 30 subscription vouchers ONLY for Discount Voucher Package
+        if (serviceId == "sub_20260701_100002" || serviceId == "SERVICE_DISCOUNT_VOUCHER")
         {
-            await _subscriptionVoucherService.GenerateSubscriptionVouchersAsync(userId);
-            _logger.LogInformation("ActivateSubscription: Successfully generated 30 subscription vouchers for UserId {UserId}.", userId);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ActivateSubscription: Error generating 30 subscription vouchers for UserId {UserId}.", userId);
+            try
+            {
+                await _subscriptionVoucherService.GenerateSubscriptionVouchersAsync(userId);
+                _logger.LogInformation("ActivateSubscription: Successfully generated 30 subscription vouchers for UserId {UserId}.", userId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ActivateSubscription: Error generating 30 subscription vouchers for UserId {UserId}.", userId);
+            }
         }
     }
 

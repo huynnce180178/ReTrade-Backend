@@ -495,26 +495,10 @@ namespace RetradeBE.Services
                     .Include(p => p.Category)
                     .Include(p => p.Seller)
                     .Include(p => p.ProductImage).ThenInclude(pi => pi.Image)
-                    .Where(p => p.Status == "Accepted" && p.IsDeleted != true && activePriorityUserIds.Contains(p.SellerId))
+                    .Where(p => p.Status == "Accepted" && p.IsDeleted != true && p.StockQuantity.HasValue && p.StockQuantity.Value > 0 && activePriorityUserIds.Contains(p.SellerId))
                     .ToListAsync();
 
                 int targetCount = query.PageSize > 0 ? query.PageSize : 8;
-
-                // If not enough priority seller items, complement with other active products
-                if (priorityProductsList.Count < targetCount)
-                {
-                    var existingIds = priorityProductsList.Select(p => p.ProductId).ToHashSet();
-                    var fillerItems = await _context.Product
-                        .Include(p => p.Category)
-                        .Include(p => p.Seller)
-                        .Include(p => p.ProductImage).ThenInclude(pi => pi.Image)
-                        .Where(p => p.Status == "Accepted" && p.IsDeleted != true && !existingIds.Contains(p.ProductId))
-                        .OrderByDescending(p => p.CreatedAt)
-                        .Take(targetCount * 2)
-                        .ToListAsync();
-
-                    priorityProductsList.AddRange(fillerItems);
-                }
 
                 // Deterministic Hourly Seed Shuffle (changes every 1 hour automatically)
                 int hourSeed = (int)(DateTime.UtcNow.Ticks / TimeSpan.TicksPerHour);
@@ -546,7 +530,7 @@ namespace RetradeBE.Services
                     TotalItems = shuffledItems.Count,
                     Page = 1,
                     PageSize = targetCount,
-                    TotalPages = 1
+                    TotalPages = (int)Math.Ceiling((double)shuffledItems.Count / targetCount)
                 };
             }
 
