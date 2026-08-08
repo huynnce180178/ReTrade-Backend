@@ -1247,11 +1247,11 @@ namespace RetradeBE.Services
                 throw new Exception("You are not authorized to relist this auction.");
 
             var currentStatus = ResolveStatus(auction);
-            var hasBids = auction.Bid.Any(b => b.BidAmount.HasValue);
-            var isEndedNoBid = currentStatus == "EndedNoBid" || (IsTerminalStatus(currentStatus) && !hasBids);
+            var isEnded = IsTerminalStatus(currentStatus) || currentStatus == "Ended";
+            var hasWinner = !string.IsNullOrEmpty(auction.WinnerId);
 
-            if (!isEndedNoBid)
-                throw new Exception("Only auctions ended with no bids can be relisted.");
+            if (!isEnded || hasWinner)
+                throw new Exception("Only ended auctions without a winner can be relisted.");
 
             if (dto.DurationMinutes.HasValue && dto.DurationMinutes.Value > 0)
             {
