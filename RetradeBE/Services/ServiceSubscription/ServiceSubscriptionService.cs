@@ -174,6 +174,10 @@ public class ServiceSubscriptionService : IServiceSubscriptionService
             // Non-blocking notification error handling
         }
 
+        await _accountHub.Clients
+            .Group(AccountHub.GetAccountGroupName(accountId))
+            .SendAsync("ForceLogout", "Tài khoản của bạn đã được Quản trị viên nâng cấp gói Seller không giới hạn. Hệ thống tự động đăng xuất.");
+
         return true;
     }
 

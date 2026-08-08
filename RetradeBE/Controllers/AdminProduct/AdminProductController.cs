@@ -25,13 +25,14 @@ namespace RetradeBE.Controllers.AdminProduct
         public IActionResult GetAll(ODataQueryOptions<ProductListDto> options)
         {
             var query = _service.Query();
+            var settings = new ODataQuerySettings { HandleNullPropagation = HandleNullPropagationOption.False };
             
             // Apply filter only to get the total count
-            var filtered = options.Filter != null ? options.Filter.ApplyTo(query, new ODataQuerySettings()) : query;
+            var filtered = options.Filter != null ? options.Filter.ApplyTo(query, settings) : query;
             long count = (filtered as IQueryable<ProductListDto>)?.Count() ?? 0;
             
             // Apply everything (Top, Skip, Filter, OrderBy)
-            var paginated = options.ApplyTo(query);
+            var paginated = options.ApplyTo(query, settings);
 
             return Ok(new { items = paginated, totalCount = count });
         }

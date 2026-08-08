@@ -19,9 +19,14 @@ namespace RetradeBE.Hubs
         public override async Task OnConnectedAsync()
         {
             var userId = await GetCurrentUserIdAsync();
+            var accountId = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
             if (!string.IsNullOrWhiteSpace(userId))
             {
                 await Groups.AddToGroupAsync(Context.ConnectionId, GetUserGroupName(userId));
+            }
+            if (!string.IsNullOrWhiteSpace(accountId) && accountId != userId)
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, GetUserGroupName(accountId));
             }
 
             await base.OnConnectedAsync();
@@ -46,9 +51,14 @@ namespace RetradeBE.Hubs
         public async Task JoinUserNotifications()
         {
             var userId = await GetCurrentUserIdAsync();
+            var accountId = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
             if (!string.IsNullOrWhiteSpace(userId))
             {
                 await Groups.AddToGroupAsync(Context.ConnectionId, GetUserGroupName(userId));
+            }
+            if (!string.IsNullOrWhiteSpace(accountId) && accountId != userId)
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, GetUserGroupName(accountId));
             }
         }
 

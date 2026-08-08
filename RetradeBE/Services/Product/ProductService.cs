@@ -464,7 +464,14 @@ namespace RetradeBE.Services
                 queryable = queryable.Where(p => p.IsDeleted != true);
                 if (!string.IsNullOrEmpty(query.Status))
                 {
-                    queryable = queryable.Where(p => p.Status == query.Status);
+                    if (query.Status.Equals("Ready", StringComparison.OrdinalIgnoreCase) || query.Status.Equals("Auction", StringComparison.OrdinalIgnoreCase))
+                    {
+                        queryable = queryable.Where(p => p.Status == "Ready" || p.Auction.Any());
+                    }
+                    else
+                    {
+                        queryable = queryable.Where(p => p.Status == query.Status);
+                    }
                 }
             }
 
@@ -474,7 +481,7 @@ namespace RetradeBE.Services
                 queryable = queryable.Where(p => p.SellerId == query.SellerId);
             }
 
-            // Priority Only (Sellers with active priority subscription package)
+            // Priority Only (Sellers with active priority subscription package - hourly randomized)
             if (query.IsPriorityOnly == true)
             {
                 var now = DateTime.UtcNow;
@@ -484,10 +491,50 @@ namespace RetradeBE.Services
                     .Distinct()
                     .ToListAsync();
 
-                queryable = queryable.Where(p => activePriorityUserIds.Contains(p.SellerId));
+                var priorityProductsList = await _context.Product
+                    .Include(p => p.Category)
+                    .Include(p => p.Seller)
+                    .Include(p => p.ProductImage).ThenInclude(pi => pi.Image)
+                    .Where(p => p.Status == "Accepted" && p.IsDeleted != true && p.StockQuantity.HasValue && p.StockQuantity.Value > 0 && activePriorityUserIds.Contains(p.SellerId))
+                    .ToListAsync();
+
+                int targetCount = query.PageSize > 0 ? query.PageSize : 8;
+
+                // Deterministic Hourly Seed Shuffle (changes every 1 hour automatically)
+                int hourSeed = (int)(DateTime.UtcNow.Ticks / TimeSpan.TicksPerHour);
+                var rng = new Random(hourSeed);
+                var shuffledItems = priorityProductsList
+                    .OrderBy(_ => rng.Next())
+                    .Take(targetCount)
+                    .Select(p => new ProductListDto
+                    {
+                        ProductId = p.ProductId,
+                        Name = p.Name,
+                        CategoryName = p.Category != null ? p.Category.Name : null,
+                        Price = p.Price,
+                        StockQuantity = p.StockQuantity,
+                        Status = p.IsDeleted == true ? "Deleted" : p.Status,
+                        Condition = p.Condition,
+                        CreatedAt = p.CreatedAt,
+                        SellerId = p.SellerId,
+                        SellerName = p.Seller != null ? $"{p.Seller.FirstName} {p.Seller.LastName}".Trim() : null,
+                        SellerAvatarUrl = p.Seller != null ? p.Seller.AvatarUrl : null,
+                        MainImageUrl = p.ProductImage.Where(pi => pi.IsMain == true).Select(pi => pi.Image.ImageUrl).FirstOrDefault()
+                                       ?? p.ProductImage.OrderBy(pi => pi.SortOrder).Select(pi => pi.Image.ImageUrl).FirstOrDefault(),
+                        IsDeleted = p.IsDeleted
+                    })
+                    .ToList();
+
+                return new PagedResultDto<ProductListDto>
+                {
+                    Items = shuffledItems,
+                    TotalItems = shuffledItems.Count,
+                    Page = 1,
+                    PageSize = targetCount,
+                    TotalPages = (int)Math.Ceiling((double)shuffledItems.Count / targetCount)
+                };
             }
 
-            // Pagination
             int totalItems = await queryable.CountAsync();
             int totalPages = (int)Math.Ceiling((double)totalItems / query.PageSize);
             if (totalPages == 0) totalPages = 1;
@@ -508,6 +555,7 @@ namespace RetradeBE.Services
                     CreatedAt = p.CreatedAt,
                     SellerId = p.SellerId,
                     SellerName = p.Seller != null ? $"{p.Seller.FirstName} {p.Seller.LastName}".Trim() : null,
+                    SellerAvatarUrl = p.Seller != null ? p.Seller.AvatarUrl : null,
                     MainImageUrl = p.ProductImage.Where(pi => pi.IsMain == true).Select(pi => pi.Image.ImageUrl).FirstOrDefault()
                                    ?? p.ProductImage.OrderBy(pi => pi.SortOrder).Select(pi => pi.Image.ImageUrl).FirstOrDefault(),
                     IsDeleted = p.IsDeleted
@@ -604,6 +652,7 @@ namespace RetradeBE.Services
                 ProductId = product.ProductId,
                 SellerId = product.SellerId,
                 SellerName = sellerName,
+                SellerAvatarUrl = product.Seller != null ? product.Seller.AvatarUrl : null,
                 CategoryId = product.CategoryId,
                 CategoryName = product.Category != null ? product.Category.Name : null,
                 Name = product.Name,
@@ -698,6 +747,7 @@ namespace RetradeBE.Services
                 "oldest" => query.OrderBy(p => p.CreatedAt),
                 "name_asc" => query.OrderBy(p => p.Name),
                 "name_desc" => query.OrderByDescending(p => p.Name),
+                "sales_desc" or "top_seller" or "popular" => query.OrderByDescending(p => p.Order.Count(o => o.Status == "Completed" || o.Status == "Delivered" || o.Status == "Confirmed" || o.Status == "Shipping")).ThenByDescending(p => p.CreatedAt),
                 _ => query.OrderByDescending(p => p.CreatedAt), // "newest" or default
             };
         }

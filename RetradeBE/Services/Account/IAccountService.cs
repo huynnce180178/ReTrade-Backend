@@ -18,8 +18,11 @@ namespace RetradeBE.Services
         Task DeleteAsync(object id);
         Task RestoreAsync(object id);
         Task<string> RegisterAsync(RegisterDto dto);
+        Task<bool> IsUsernameAvailableAsync(string username);
+        Task<bool> IsEmailAvailableAsync(string email);
         Task<string> ResendOtpAsync(string email);
         Task<bool> VerifyAsync(VerifyDto dto);
+        Task<bool> VerifyForgotOtpAsync(VerifyDto dto);
         Task<object?> LoginAsync(LoginDto dto);
         Task<object?> LoginWithGoogleAsync(string accessToken);
         Task<string> ForgotPasswordAsync(string email);

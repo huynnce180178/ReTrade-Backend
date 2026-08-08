@@ -10,7 +10,7 @@ namespace RetradeBE.Controllers.Offer
 {
     [Route("api/seller-offers")]
     [ApiController]
-    [Authorize(Roles = nameof(RoleEnum.Seller))]
+    [Authorize(Roles = $"{nameof(RoleEnum.Seller)},{nameof(RoleEnum.Admin)}")]
     public class SellerOfferController : ControllerBase
     {
         private readonly IOfferService _offerService;

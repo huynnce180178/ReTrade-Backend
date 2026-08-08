@@ -246,33 +246,48 @@ public class CategoryService : ICategoryService
 
     public async Task InactiveAsync(string categoryId)
     {
-        var category =
-            await _repository.GetByIdAsync(categoryId);
+        var category = await _repository.GetByIdAsync(categoryId);
 
         if (category == null)
-            throw new Exception(
-                $"Category '{categoryId}' does not exist.");
+            throw new Exception($"Category '{categoryId}' does not exist.");
 
         category.Status = "Inactive";
         category.UpdatedAt = DateTime.UtcNow;
+
+        if (category.Attributes != null && category.Attributes.Any())
+        {
+            foreach (var attr in category.Attributes)
+            {
+                attr.IsDeleted = true;
+                attr.UpdatedAt = DateTime.UtcNow;
+            }
+        }
 
         await _repository.UpdateAsync(category);
     }
 
     public async Task RestoreAsync(string categoryId)
     {
-        var category =
-            await _repository.GetByIdAsync(categoryId);
+        var category = await _repository.GetByIdAsync(categoryId);
 
         if (category == null)
-            throw new Exception(
-                $"Category '{categoryId}' does not exist.");
+            throw new Exception($"Category '{categoryId}' does not exist.");
 
         category.Status = "Active";
         category.UpdatedAt = DateTime.UtcNow;
 
+        if (category.Attributes != null && category.Attributes.Any())
+        {
+            foreach (var attr in category.Attributes)
+            {
+                attr.IsDeleted = false;
+                attr.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
         await _repository.UpdateAsync(category);
     }
+
 
     private Task<string> GenerateCategoryIdAsync(string name)
     {

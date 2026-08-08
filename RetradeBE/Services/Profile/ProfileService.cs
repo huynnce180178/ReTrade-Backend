@@ -100,7 +100,7 @@ namespace RetradeBE.Services
             }
 
             if (dto.FirstName != null) account.User.FirstName = NormalizeRequiredName(dto.FirstName, "First name");
-            if (dto.LastName != null) account.User.LastName = NormalizeRequiredName(dto.LastName, "Last name");
+            if (dto.LastName != null) account.User.LastName = dto.LastName.Trim();
             if (dto.Phone != null) account.User.Phone = dto.Phone.Trim();
             account.User.UpdatedAt = DateTime.UtcNow;
             await _repository.UpdateUserAsync(account.User);
@@ -394,11 +394,11 @@ namespace RetradeBE.Services
             var userId = account.User.UserId;
             var now = DateTime.UtcNow;
 
-            var hasActiveSubscription = await _context.MyService
+            var hasVoucherSubscription = await _context.MyService
                 .AsNoTracking()
-                .AnyAsync(s => s.UserId == userId && s.Status == "Active" && s.EndDate >= now);
+                .AnyAsync(s => s.UserId == userId && s.Status == "Active" && (s.ServiceId == "sub_20260701_100002" || s.ServiceId == "SERVICE_DISCOUNT_VOUCHER") && s.EndDate >= now);
 
-            if (hasActiveSubscription)
+            if (hasVoucherSubscription)
             {
                 var currentVoucherCount = await _context.MyVoucher
                     .AsNoTracking()

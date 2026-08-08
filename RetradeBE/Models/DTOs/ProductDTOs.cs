@@ -59,6 +59,7 @@ namespace RetradeBE.Models.DTOs
         public string ProductId { get; set; } = null!;
         public string? SellerId { get; set; }
         public string? SellerName { get; set; }
+        public string? SellerAvatarUrl { get; set; }
         public string? CategoryId { get; set; }
         public string? CategoryName { get; set; }
         public string? Name { get; set; }
@@ -89,6 +90,7 @@ namespace RetradeBE.Models.DTOs
         public string? MainImageUrl { get; set; }
         public string? SellerName { get; set; }
         public string? SellerId { get; set; }
+        public string? SellerAvatarUrl { get; set; }
         public string? Condition { get; set; }
         public DateTime? CreatedAt { get; set; }
         public bool? IsDeleted { get; set; }

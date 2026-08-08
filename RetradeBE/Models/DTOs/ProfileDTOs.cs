@@ -78,11 +78,6 @@ namespace RetradeBE.Models.DTOs
             {
                 yield return new ValidationResult("First name cannot be empty or whitespace.", new[] { nameof(FirstName) });
             }
-
-            if (LastName != null && string.IsNullOrWhiteSpace(LastName))
-            {
-                yield return new ValidationResult("Last name cannot be empty or whitespace.", new[] { nameof(LastName) });
-            }
         }
     }
 

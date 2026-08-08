@@ -30,6 +30,28 @@ namespace RetradeBE.Controllers.Account
             return Ok(new { message = result });
         }
 
+        [HttpGet("check-username")]
+        public async Task<IActionResult> CheckUsername([FromQuery] string username)
+        {
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                return BadRequest(new { isAvailable = false, message = "Username is required." });
+            }
+            var isAvailable = await _service.IsUsernameAvailableAsync(username);
+            return Ok(new { isAvailable });
+        }
+
+        [HttpGet("check-email")]
+        public async Task<IActionResult> CheckEmail([FromQuery] string email)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                return BadRequest(new { isAvailable = false, message = "Email is required." });
+            }
+            var isAvailable = await _service.IsEmailAvailableAsync(email);
+            return Ok(new { isAvailable });
+        }
+
         [HttpGet]
         [EnableQuery]
         public async Task<IActionResult> GetAll()
@@ -50,10 +72,27 @@ namespace RetradeBE.Controllers.Account
             return Ok(new { verified = true, message = "Account verified successfully." });
         }
 
+        [HttpPost("verify-forgot-otp")]
+        public async Task<IActionResult> VerifyForgotOtp([FromBody] VerifyDto dto)
+        {
+            var verified = await _service.VerifyForgotOtpAsync(dto);
+            if (!verified)
+            {
+                return BadRequest(new { message = "Invalid or expired OTP." });
+            }
+
+            return Ok(new { verified = true, message = "OTP verified successfully." });
+        }
+
         [HttpPost("resend-otp")]
         public async Task<IActionResult> ResendOtp([FromBody] ResendOtpDto dto)
         {
-            return Ok(await _service.ResendOtpAsync(dto.Email));
+            var result = await _service.ResendOtpAsync(dto.Email);
+            if (result != "Resend OTP success. Please check your email.")
+            {
+                return BadRequest(new { message = result });
+            }
+            return Ok(new { message = result });
         }
 
         [HttpPost("login")]
@@ -65,6 +104,10 @@ namespace RetradeBE.Controllers.Account
                 if (response == null) return Unauthorized(new { code = "INVALID_CREDENTIALS", message = "Tên đăng nhập/email hoặc mật khẩu không chính xác." });
 
                 return Ok(response);
+            }
+            catch (InvalidOperationException ex) when (ex.Message == "ACCOUNT_LOCKED_15M")
+            {
+                return BadRequest(new { code = "ACCOUNT_LOCKED_15M", message = "Account is temporarily locked for 15 minutes due to 3 consecutive failed login attempts." });
             }
             catch (InvalidOperationException ex) when (ex.Message == "ACCOUNT_BANNED")
             {

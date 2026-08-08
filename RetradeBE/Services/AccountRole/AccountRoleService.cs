@@ -86,6 +86,10 @@ namespace RetradeBE.Services.AccountRole
                 // Non-blocking notification error handling
             }
 
+            await _accountHub.Clients
+                .Group(AccountHub.GetAccountGroupName(accountId))
+                .SendAsync("ForceLogout", $"Role '{targetRole.Name}' has been assigned to your account. Please log in again.");
+
             return true;
         }
 
@@ -116,8 +120,8 @@ namespace RetradeBE.Services.AccountRole
                     await _notificationService.CreateAndSendAsync(new CreateNotificationDto
                     {
                         UserId = account.UserId,
-                        Title = "Thay đổi phân quyền tài khoản",
-                        Message = $"Vai trò '{targetRole.Name}' của bạn đã được quản trị viên gỡ bỏ.",
+                        Title = "Account Role Update",
+                        Message = $"Role '{targetRole.Name}' has been removed from your account by an administrator.",
                         Type = "System",
                         ReferenceId = accountId
                     });
@@ -128,14 +132,9 @@ namespace RetradeBE.Services.AccountRole
                 // Non-blocking notification error handling
             }
 
-            // Realtime force logout if Seller/Admin role is revoked
-            if (string.Equals(targetRole.Name, "Seller", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(targetRole.Name, "Admin", StringComparison.OrdinalIgnoreCase))
-            {
-                await _accountHub.Clients
-                    .Group(AccountHub.GetAccountGroupName(accountId))
-                    .SendAsync("ForceLogout", $"Vai trò '{targetRole.Name}' của bạn đã bị Quản trị viên gỡ bỏ. Hệ thống tự động đăng xuất.");
-            }
+            await _accountHub.Clients
+                .Group(AccountHub.GetAccountGroupName(accountId))
+                .SendAsync("ForceLogout", $"Role '{targetRole.Name}' has been removed from your account. Please log in again.");
 
             return true;
         }

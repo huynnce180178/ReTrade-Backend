@@ -17,6 +17,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Net.Http.Headers;
+using RetradeBE.Data;
 
 namespace RetradeBE.Services
 {
@@ -33,8 +34,9 @@ namespace RetradeBE.Services
         private readonly IWebHostEnvironment _env;
         private readonly IHubContext<AccountHub> _accountHub;
         private readonly ILogger<AccountService> _logger;
+        private readonly AppDbContext _context;
 
-        public AccountService(IAccountRepository repository, IUserRepository userRepository, IEmailService emailService, IMemoryCache cache, IOptions<JwtSettings> jwtSettings, IOptions<GoogleSettings> googleSettings, IHttpClientFactory httpClientFactory, IMapper mapper, IWebHostEnvironment env, IHubContext<AccountHub> accountHub, ILogger<AccountService> logger)
+        public AccountService(IAccountRepository repository, IUserRepository userRepository, IEmailService emailService, IMemoryCache cache, IOptions<JwtSettings> jwtSettings, IOptions<GoogleSettings> googleSettings, IHttpClientFactory httpClientFactory, IMapper mapper, IWebHostEnvironment env, IHubContext<AccountHub> accountHub, ILogger<AccountService> logger, AppDbContext context)
         {
             _repository = repository;
             _userRepository = userRepository;
@@ -47,6 +49,7 @@ namespace RetradeBE.Services
             _env = env;
             _accountHub = accountHub;
             _logger = logger;
+            _context = context;
         }
 
         private async Task<string> GetEmailTemplateAsync(string templateName)
@@ -67,7 +70,33 @@ namespace RetradeBE.Services
             var account = await _repository.GetByIdAsync(accountId);
             if (account == null) return false;
 
+            var roles = await _repository.GetRolesAsync(accountId);
+            if (roles != null && roles.Any(r => r.Equals("Admin", StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidOperationException("CANNOT_BAN_ADMIN");
+            }
+
             var isCurrentlyInactive = account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Ban.ToString();
+
+            if (!isCurrentlyInactive && !string.IsNullOrWhiteSpace(account.UserId))
+            {
+                var activeOrderStatuses = new[] { "Pending", "Processing", "Shipping", "Paid", "InTransit" };
+                bool hasActiveOrders = await _context.Order
+                    .AsNoTracking()
+                    .AnyAsync(o => (o.BuyerId == account.UserId || o.SellerId == account.UserId) &&
+                                   o.Status != null && activeOrderStatuses.Contains(o.Status));
+
+                bool hasActiveAuctions = await _context.Auction
+                    .AsNoTracking()
+                    .AnyAsync(a => a.Status == "Ongoing" &&
+                                   (a.SellerId == account.UserId || a.Bid.Any(b => b.UserId == account.UserId)));
+
+                if (hasActiveOrders || hasActiveAuctions)
+                {
+                    throw new InvalidOperationException("CANNOT_BAN_USER_WITH_ACTIVE_TRANSACTIONS");
+                }
+            }
+
             account.Status = isCurrentlyInactive
                 ? RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString()
                 : RetradeBE.Models.Enums.AccountStatusEnum.Ban.ToString();
@@ -88,8 +117,8 @@ namespace RetradeBE.Services
             if (!isCurrentlyInactive)
             {
                 var banMessage = !string.IsNullOrWhiteSpace(reason)
-                    ? $"Your account has been banned. Reason: {reason}"
-                    : "Your account has been banned by an administrator.";
+                    ? $"BAN_REASON:{reason}"
+                    : "BAN_REASON:Violation of ReTrade Terms of Service";
 
                 await _accountHub.Clients
                     .Group(AccountHub.GetAccountGroupName(accountId))
@@ -137,7 +166,7 @@ namespace RetradeBE.Services
 
                         await _emailService.SendEmailAsync(
                             user.Email,
-                            "[ReTrade] Thông báo khóa tài khoản (Account Ban Notification)",
+                            "[ReTrade] Account Suspension Notice",
                             emailBody);
 
                         _logger.LogInformation("Successfully sent ban notification email to {Email} for AccountId {AccountId}", user.Email, accountId);
@@ -162,7 +191,7 @@ namespace RetradeBE.Services
                         if (user != null && !string.IsNullOrWhiteSpace(user.Email))
                         {
                             var displayName = !string.IsNullOrWhiteSpace(user.FirstName)
-                                ? user.FirstName
+                                ? $"{user.FirstName} {user.LastName}".Trim()
                                 : (account.Username ?? "User");
 
                             string template = await GetEmailTemplateAsync("AccountReactivatedNotice.html");
@@ -173,20 +202,20 @@ namespace RetradeBE.Services
                                 emailBody = template
                                     .Replace("{{DISPLAY_NAME}}", displayName)
                                     .Replace("{{ACCOUNT_ID}}", account.AccountId)
-                                    .Replace("{{REACTIVATED_AT}}", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss 'UTC'"));
+                                    .Replace("{{REACTIVATED_AT}}", DateTime.UtcNow.AddHours(7).ToString("yyyy-MM-dd HH:mm:ss 'ICT'"));
                             }
                             else
                             {
                                 emailBody = $@"<p>Hello {displayName},</p>
-<p>Your ReTrade account has been <strong>reactivated</strong> and is now active again.</p>
-<p>If you did not expect this change or have any concerns, please reply directly to this email.</p>
-<p>Account ID: {account.AccountId}<br/>Time: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC</p>
+<p>Your ReTrade account has been <strong>Reactivated (Active)</strong> by an administrator.</p>
+<p>You may now log in to access all ReTrade services and features.</p>
+<p>Account ID: {account.AccountId}<br/>Time: {DateTime.UtcNow.AddHours(7):yyyy-MM-dd HH:mm:ss} ICT</p>
 <p>Regards,<br/>ReTrade Support Team</p>";
                             }
 
                             await _emailService.SendEmailAsync(
                                 user.Email,
-                                "[ReTrade] Account Reactivated",
+                                "[ReTrade] Account Reactivation Notice",
                                 emailBody);
                         }
                     }
@@ -283,8 +312,25 @@ namespace RetradeBE.Services
             await _repository.RestoreAsync(id);
         }
 
+        public async Task<bool> IsUsernameAvailableAsync(string username)
+        {
+            if (string.IsNullOrWhiteSpace(username)) return false;
+            var existing = await _repository.GetByUsernameAsync(username.Trim());
+            return existing == null;
+        }
+
+        public async Task<bool> IsEmailAvailableAsync(string email)
+        {
+            if (string.IsNullOrWhiteSpace(email)) return false;
+            var existing = await _userRepository.GetByEmailAsync(email.Trim());
+            return existing == null;
+        }
+
         public async Task<string> RegisterAsync(RegisterDto dto)
         {
+            dto.Username = dto.Username?.Trim() ?? string.Empty;
+            dto.Email = dto.Email?.Trim() ?? string.Empty;
+
             var pwdValidation = ValidatePasswordStrength(dto.Password);
             if (pwdValidation != null) return pwdValidation;
 
@@ -349,11 +395,45 @@ namespace RetradeBE.Services
             return true;
         }
 
+        public Task<bool> VerifyForgotOtpAsync(VerifyDto dto)
+        {
+            var email = dto.Email?.Trim() ?? string.Empty;
+            var otp = dto.Otp?.Trim() ?? string.Empty;
+
+            if (_cache.TryGetValue($"forgot_pwd_{email}", out string? savedOtp) && savedOtp == otp)
+            {
+                return Task.FromResult(true);
+            }
+            return Task.FromResult(false);
+        }
+
+        private string? CheckAndIncrementResendLimit(string email)
+        {
+            if (string.IsNullOrWhiteSpace(email)) return null;
+            string cacheKey = $"resend_count_{email.Trim().ToLower()}";
+            if (_cache.TryGetValue(cacheKey, out int count))
+            {
+                if (count >= 3)
+                {
+                    return "You have reached the maximum of 3 resends within 15 minutes. Please try again later.";
+                }
+                _cache.Set(cacheKey, count + 1, TimeSpan.FromMinutes(15));
+            }
+            else
+            {
+                _cache.Set(cacheKey, 1, TimeSpan.FromMinutes(15));
+            }
+            return null;
+        }
+
         public async Task<string> ResendOtpAsync(string email)
         {
             var user = await _userRepository.GetByEmailAsync(email);
             if (user == null) return "User not found.";
             
+            var limitError = CheckAndIncrementResendLimit(email);
+            if (limitError != null) return limitError;
+
             string otp = new Random().Next(100000, 999999).ToString();
 
             _cache.Set(email, otp, TimeSpan.FromMinutes(3));
@@ -394,15 +474,19 @@ namespace RetradeBE.Services
             {
                 throw new InvalidOperationException("ACCOUNT_BANNED");
             }
-            if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString() ||
-                account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Pending.ToString())
-            {
-                throw new InvalidOperationException("ACCOUNT_INACTIVE");
-            }
-            if (account.Status != RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString()) return null;
 
             bool isPasswordValid = BCrypt.Net.BCrypt.Verify(cleanPassword, account.PasswordHash);
             if (!isPasswordValid) return null;
+
+            if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString() ||
+                account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Pending.ToString() ||
+                string.IsNullOrEmpty(account.Status))
+            {
+                var user = await _userRepository.GetByIdAsync(account.UserId);
+                var email = user?.Email ?? (cleanUsername.Contains("@") ? cleanUsername : string.Empty);
+                throw new InvalidOperationException($"ACCOUNT_UNVERIFIED:{email}");
+            }
+            if (account.Status != RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString()) return null;
 
             var roles = await _repository.GetRolesAsync(account.AccountId);
             if (roles == null || !roles.Any())
@@ -572,6 +656,7 @@ namespace RetradeBE.Services
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()),
                     Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString(),
                     IsPasswordSet = false,
+                    LastLoginAt = DateTime.UtcNow,
                     CreatedAt = DateTime.UtcNow
                 };
                 await _repository.AddAsync(account);
@@ -605,6 +690,7 @@ namespace RetradeBE.Services
 
                 account.Provider = googleProvider;
                 account.ProviderUserId = providerUserId ?? email;
+                account.LastLoginAt = DateTime.UtcNow;
                 account.UpdatedAt = DateTime.UtcNow;
                 await _repository.UpdateAsync(account);
 
@@ -708,6 +794,9 @@ namespace RetradeBE.Services
             var account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
             if (account == null) return "No account associated with this email.";
 
+            var limitError = CheckAndIncrementResendLimit(email);
+            if (limitError != null) return limitError;
+
             string otp = new Random().Next(100000, 999999).ToString();
 
             _cache.Set($"forgot_pwd_{email}", otp, TimeSpan.FromMinutes(3));
@@ -788,6 +877,11 @@ namespace RetradeBE.Services
             await _repository.UpdateAsync(account);
 
             _cache.Remove($"forgot_pwd_{dto.Email}");
+            _cache.Remove($"resend_count_{dto.Email.Trim().ToLower()}");
+
+            await _accountHub.Clients
+                .Group(AccountHub.GetAccountGroupName(account.AccountId))
+                .SendAsync("ForceLogout", "Your password has been reset. Please log in again.");
 
             string template = await GetEmailTemplateAsync("ResetPasswordSuccess.html");
             string emailBody = template;
@@ -806,6 +900,11 @@ namespace RetradeBE.Services
                 return "Old password is incorrect.";
             }
 
+            if (dto.OldPassword == dto.NewPassword || BCrypt.Net.BCrypt.Verify(dto.NewPassword, account.PasswordHash))
+            {
+                return "New password must be different from the old password.";
+            }
+
             var pwdValidation = ValidatePasswordStrength(dto.NewPassword);
             if (pwdValidation != null) return pwdValidation;
 
@@ -814,6 +913,10 @@ namespace RetradeBE.Services
             account.MustChangePassword = false;
             account.UpdatedAt = DateTime.UtcNow;
             await _repository.UpdateAsync(account);
+
+            await _accountHub.Clients
+                .Group(AccountHub.GetAccountGroupName(accountId))
+                .SendAsync("ForceLogout", "Your password has been changed. Please log in again.");
 
             return "Password changed successfully.";
         }
@@ -826,11 +929,20 @@ namespace RetradeBE.Services
             var pwdValidation = ValidatePasswordStrength(dto.NewPassword);
             if (pwdValidation != null) return pwdValidation;
 
+            if (!string.IsNullOrEmpty(account.PasswordHash) && BCrypt.Net.BCrypt.Verify(dto.NewPassword, account.PasswordHash))
+            {
+                return "New password must be different from your current password.";
+            }
+
             account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
             account.IsPasswordSet = true;
             account.MustChangePassword = false;
             account.UpdatedAt = DateTime.UtcNow;
             await _repository.UpdateAsync(account);
+
+            await _accountHub.Clients
+                .Group(AccountHub.GetAccountGroupName(accountId))
+                .SendAsync("ForceLogout", "Your password has been set. Please log in again.");
 
             return "Password set successfully.";
         }

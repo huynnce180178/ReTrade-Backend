@@ -5,6 +5,7 @@ namespace RetradeBE.Models.DTOs.AssistantChat
         public string? SessionId { get; set; }
         public string Message { get; set; } = null!;
         public string? Language { get; set; }
+        public string? ImageBase64 { get; set; }
     }
 
     public class AssistantChatResponseDto
@@ -30,6 +31,7 @@ namespace RetradeBE.Models.DTOs.AssistantChat
     {
         public string ProductId { get; set; } = null!;
         public string? Name { get; set; }
+        public string? Description { get; set; }
         public string? CategoryName { get; set; }
         public decimal? Price { get; set; }
         public int? StockQuantity { get; set; }

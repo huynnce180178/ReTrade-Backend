@@ -91,17 +91,28 @@ namespace RetradeBE.Controllers.Admin
             }
 
             var wasInactive = account.Status == AccountStatusEnum.Inactive.ToString() || account.Status == AccountStatusEnum.Ban.ToString();
-            var banned = await _accountService.BanUserAsync(id, dto?.Reason);
-            if (!banned)
+            try
             {
-                return NotFound("Account not found.");
+                var banned = await _accountService.BanUserAsync(id, dto?.Reason);
+                if (!banned)
+                {
+                    return NotFound("Account not found.");
+                }
+
+                var message = wasInactive
+                    ? "User activated successfully."
+                    : "User banned successfully.";
+
+                return Ok(new { message });
             }
-
-            var message = wasInactive
-                ? "User activated successfully."
-                : "User banned successfully.";
-
-            return Ok(new { message });
+            catch (InvalidOperationException ex) when (ex.Message == "CANNOT_BAN_ADMIN")
+            {
+                return BadRequest(new { message = "Cannot ban an account with Administrator role." });
+            }
+            catch (InvalidOperationException ex) when (ex.Message == "CANNOT_BAN_USER_WITH_ACTIVE_TRANSACTIONS")
+            {
+                return BadRequest(new { message = "Cannot ban user while they have active ongoing auctions or unresolved orders." });
+            }
         }
 
         [HttpPost("users/{id}/grant-seller-unlimited")]
