@@ -33,7 +33,7 @@ namespace RetradeBE.Repositories
         public IQueryable<Product> QueryEligibleProducts()
         {
             var openStatuses = new[] { "Upcoming", "Ongoing" };
-            var now = DateTime.UtcNow;
+            var now = GetAuctionNow();
 
             return _context.Product
                 .Include(p => p.Category)
@@ -66,10 +66,15 @@ namespace RetradeBE.Repositories
         public async Task<bool> HasOpenAuctionForProductAsync(string productId)
         {
             var openStatuses = new[] { "Upcoming", "Ongoing" };
-            var now = DateTime.UtcNow;
+            var now = GetAuctionNow();
             return await _context.Auction.AnyAsync(a => a.ProductId == productId
                 && openStatuses.Contains(a.Status!)
                 && (a.EndTime == null || a.EndTime > now));
+        }
+
+        private static DateTime GetAuctionNow()
+        {
+            return DateTime.SpecifyKind(DateTime.UtcNow.AddHours(7), DateTimeKind.Unspecified);
         }
     }
 }

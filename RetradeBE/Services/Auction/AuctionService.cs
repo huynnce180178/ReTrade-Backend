@@ -639,12 +639,6 @@ namespace RetradeBE.Services
 
         private decimal GetMinimumNextBid(RetradeBE.Models.Auction auction)
         {
-            var hasBid = auction.Bid.Any(b => b.BidAmount.HasValue);
-            if (!hasBid)
-            {
-                return auction.StartingPrice ?? 0;
-            }
-
             return GetCurrentPrice(auction) + (auction.MinIncrement ?? 0);
         }
 
