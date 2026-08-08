@@ -25,6 +25,7 @@ namespace RetradeBE.Models.DTOs.AssistantChat
         public string? Role { get; set; }
         public string? Content { get; set; }
         public DateTime? CreatedAt { get; set; }
+        public List<AssistantProductSuggestionDto> Products { get; set; } = new();
     }
 
     public class AssistantProductSuggestionDto
