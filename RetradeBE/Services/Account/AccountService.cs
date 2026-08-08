@@ -117,8 +117,8 @@ namespace RetradeBE.Services
             if (!isCurrentlyInactive)
             {
                 var banMessage = !string.IsNullOrWhiteSpace(reason)
-                    ? $"Your account has been banned. Reason: {reason}"
-                    : "Your account has been banned by an administrator.";
+                    ? $"BAN_REASON:{reason}"
+                    : "BAN_REASON:Violation of ReTrade Terms of Service";
 
                 await _accountHub.Clients
                     .Group(AccountHub.GetAccountGroupName(accountId))
@@ -166,7 +166,7 @@ namespace RetradeBE.Services
 
                         await _emailService.SendEmailAsync(
                             user.Email,
-                            "[ReTrade] Thông báo khóa tài khoản (Account Ban Notification)",
+                            "[ReTrade] Account Suspension Notice",
                             emailBody);
 
                         _logger.LogInformation("Successfully sent ban notification email to {Email} for AccountId {AccountId}", user.Email, accountId);
@@ -191,7 +191,7 @@ namespace RetradeBE.Services
                         if (user != null && !string.IsNullOrWhiteSpace(user.Email))
                         {
                             var displayName = !string.IsNullOrWhiteSpace(user.FirstName)
-                                ? user.FirstName
+                                ? $"{user.FirstName} {user.LastName}".Trim()
                                 : (account.Username ?? "User");
 
                             string template = await GetEmailTemplateAsync("AccountReactivatedNotice.html");
@@ -202,20 +202,20 @@ namespace RetradeBE.Services
                                 emailBody = template
                                     .Replace("{{DISPLAY_NAME}}", displayName)
                                     .Replace("{{ACCOUNT_ID}}", account.AccountId)
-                                    .Replace("{{REACTIVATED_AT}}", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss 'UTC'"));
+                                    .Replace("{{REACTIVATED_AT}}", DateTime.UtcNow.AddHours(7).ToString("yyyy-MM-dd HH:mm:ss 'ICT'"));
                             }
                             else
                             {
                                 emailBody = $@"<p>Hello {displayName},</p>
-<p>Your ReTrade account has been <strong>reactivated</strong> and is now active again.</p>
-<p>If you did not expect this change or have any concerns, please reply directly to this email.</p>
-<p>Account ID: {account.AccountId}<br/>Time: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC</p>
+<p>Your ReTrade account has been <strong>Reactivated (Active)</strong> by an administrator.</p>
+<p>You may now log in to access all ReTrade services and features.</p>
+<p>Account ID: {account.AccountId}<br/>Time: {DateTime.UtcNow.AddHours(7):yyyy-MM-dd HH:mm:ss} ICT</p>
 <p>Regards,<br/>ReTrade Support Team</p>";
                             }
 
                             await _emailService.SendEmailAsync(
                                 user.Email,
-                                "[ReTrade] Account Reactivated",
+                                "[ReTrade] Account Reactivation Notice",
                                 emailBody);
                         }
                     }
@@ -656,6 +656,7 @@ namespace RetradeBE.Services
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()),
                     Status = RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString(),
                     IsPasswordSet = false,
+                    LastLoginAt = DateTime.UtcNow,
                     CreatedAt = DateTime.UtcNow
                 };
                 await _repository.AddAsync(account);
@@ -689,6 +690,7 @@ namespace RetradeBE.Services
 
                 account.Provider = googleProvider;
                 account.ProviderUserId = providerUserId ?? email;
+                account.LastLoginAt = DateTime.UtcNow;
                 account.UpdatedAt = DateTime.UtcNow;
                 await _repository.UpdateAsync(account);
 

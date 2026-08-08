@@ -518,6 +518,7 @@ namespace RetradeBE.Services
                         CreatedAt = p.CreatedAt,
                         SellerId = p.SellerId,
                         SellerName = p.Seller != null ? $"{p.Seller.FirstName} {p.Seller.LastName}".Trim() : null,
+                        SellerAvatarUrl = p.Seller != null ? p.Seller.AvatarUrl : null,
                         MainImageUrl = p.ProductImage.Where(pi => pi.IsMain == true).Select(pi => pi.Image.ImageUrl).FirstOrDefault()
                                        ?? p.ProductImage.OrderBy(pi => pi.SortOrder).Select(pi => pi.Image.ImageUrl).FirstOrDefault(),
                         IsDeleted = p.IsDeleted
@@ -554,6 +555,7 @@ namespace RetradeBE.Services
                     CreatedAt = p.CreatedAt,
                     SellerId = p.SellerId,
                     SellerName = p.Seller != null ? $"{p.Seller.FirstName} {p.Seller.LastName}".Trim() : null,
+                    SellerAvatarUrl = p.Seller != null ? p.Seller.AvatarUrl : null,
                     MainImageUrl = p.ProductImage.Where(pi => pi.IsMain == true).Select(pi => pi.Image.ImageUrl).FirstOrDefault()
                                    ?? p.ProductImage.OrderBy(pi => pi.SortOrder).Select(pi => pi.Image.ImageUrl).FirstOrDefault(),
                     IsDeleted = p.IsDeleted
@@ -650,6 +652,7 @@ namespace RetradeBE.Services
                 ProductId = product.ProductId,
                 SellerId = product.SellerId,
                 SellerName = sellerName,
+                SellerAvatarUrl = product.Seller != null ? product.Seller.AvatarUrl : null,
                 CategoryId = product.CategoryId,
                 CategoryName = product.Category != null ? product.Category.Name : null,
                 Name = product.Name,

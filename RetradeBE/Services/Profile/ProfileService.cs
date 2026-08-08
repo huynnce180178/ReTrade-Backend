@@ -100,7 +100,7 @@ namespace RetradeBE.Services
             }
 
             if (dto.FirstName != null) account.User.FirstName = NormalizeRequiredName(dto.FirstName, "First name");
-            if (dto.LastName != null) account.User.LastName = NormalizeRequiredName(dto.LastName, "Last name");
+            if (dto.LastName != null) account.User.LastName = dto.LastName.Trim();
             if (dto.Phone != null) account.User.Phone = dto.Phone.Trim();
             account.User.UpdatedAt = DateTime.UtcNow;
             await _repository.UpdateUserAsync(account.User);
