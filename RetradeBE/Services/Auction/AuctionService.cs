@@ -195,6 +195,13 @@ namespace RetradeBE.Services
             var isAdmin = HasRole(roles, "Admin");
             var userId = account.UserId ?? throw new Exception("Account is not linked to a user.");
 
+            if (dto.DurationMinutes.HasValue && dto.DurationMinutes.Value > 0)
+            {
+                dto.EndTime = dto.StartTime.AddMinutes(dto.DurationMinutes.Value);
+            }
+
+            ValidateAuctionValues(dto.StartingPrice, dto.MinIncrement, dto.BuyNowPrice, dto.StartTime, dto.EndTime);
+
             var auction = await _auctionRepository.GetByIdAsync(auctionId);
             if (auction == null)
                 throw new Exception("Auction not found.");
@@ -202,29 +209,9 @@ namespace RetradeBE.Services
             if (!isAdmin && auction.SellerId != userId)
                 throw new Exception("You can only update your own auctions.");
 
-            var currentStatus = ResolveStatus(auction);
-            if (currentStatus != "Upcoming")
-                throw new Exception("Only upcoming auctions can be updated. Ongoing auctions can only be stopped.");
-
             var hasCompletedWinner = !string.IsNullOrEmpty(auction.WinnerId);
             if (hasCompletedWinner)
                 throw new Exception("Auctions with a winner cannot be updated.");
-
-            if (auction.Bid.Any())
-                throw new Exception("Auctions with bids cannot be updated.");
-
-            var hasActiveDeposits = await _context.AuctionDeposit.AnyAsync(d =>
-                d.AuctionId == auction.AuctionId &&
-                (d.Status == "Pending" || d.Status == "Paid"));
-            if (hasActiveDeposits)
-                throw new Exception("Auctions with pending or paid deposits cannot be updated.");
-
-            if (dto.DurationMinutes.HasValue && dto.DurationMinutes.Value > 0)
-            {
-                dto.EndTime = dto.StartTime.AddMinutes(dto.DurationMinutes.Value);
-            }
-
-            ValidateAuctionValues(dto.StartingPrice, dto.MinIncrement, dto.BuyNowPrice, dto.StartTime, dto.EndTime);
 
             var now = GetAuctionNow();
             if (dto.StartTime.Date < now.Date)
