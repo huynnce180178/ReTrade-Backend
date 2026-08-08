@@ -30,6 +30,28 @@ namespace RetradeBE.Controllers.Account
             return Ok(new { message = result });
         }
 
+        [HttpGet("check-username")]
+        public async Task<IActionResult> CheckUsername([FromQuery] string username)
+        {
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                return BadRequest(new { isAvailable = false, message = "Username is required." });
+            }
+            var isAvailable = await _service.IsUsernameAvailableAsync(username);
+            return Ok(new { isAvailable });
+        }
+
+        [HttpGet("check-email")]
+        public async Task<IActionResult> CheckEmail([FromQuery] string email)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                return BadRequest(new { isAvailable = false, message = "Email is required." });
+            }
+            var isAvailable = await _service.IsEmailAvailableAsync(email);
+            return Ok(new { isAvailable });
+        }
+
         [HttpGet]
         [EnableQuery]
         public async Task<IActionResult> GetAll()
@@ -48,6 +70,18 @@ namespace RetradeBE.Controllers.Account
             }
 
             return Ok(new { verified = true, message = "Account verified successfully." });
+        }
+
+        [HttpPost("verify-forgot-otp")]
+        public async Task<IActionResult> VerifyForgotOtp([FromBody] VerifyDto dto)
+        {
+            var verified = await _service.VerifyForgotOtpAsync(dto);
+            if (!verified)
+            {
+                return BadRequest(new { message = "Invalid or expired OTP." });
+            }
+
+            return Ok(new { verified = true, message = "OTP verified successfully." });
         }
 
         [HttpPost("resend-otp")]

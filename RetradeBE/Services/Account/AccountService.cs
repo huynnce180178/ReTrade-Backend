@@ -312,8 +312,25 @@ namespace RetradeBE.Services
             await _repository.RestoreAsync(id);
         }
 
+        public async Task<bool> IsUsernameAvailableAsync(string username)
+        {
+            if (string.IsNullOrWhiteSpace(username)) return false;
+            var existing = await _repository.GetByUsernameAsync(username.Trim());
+            return existing == null;
+        }
+
+        public async Task<bool> IsEmailAvailableAsync(string email)
+        {
+            if (string.IsNullOrWhiteSpace(email)) return false;
+            var existing = await _userRepository.GetByEmailAsync(email.Trim());
+            return existing == null;
+        }
+
         public async Task<string> RegisterAsync(RegisterDto dto)
         {
+            dto.Username = dto.Username?.Trim() ?? string.Empty;
+            dto.Email = dto.Email?.Trim() ?? string.Empty;
+
             var pwdValidation = ValidatePasswordStrength(dto.Password);
             if (pwdValidation != null) return pwdValidation;
 
@@ -376,6 +393,18 @@ namespace RetradeBE.Services
             _cache.Remove(email);
 
             return true;
+        }
+
+        public Task<bool> VerifyForgotOtpAsync(VerifyDto dto)
+        {
+            var email = dto.Email?.Trim() ?? string.Empty;
+            var otp = dto.Otp?.Trim() ?? string.Empty;
+
+            if (_cache.TryGetValue($"forgot_pwd_{email}", out string? savedOtp) && savedOtp == otp)
+            {
+                return Task.FromResult(true);
+            }
+            return Task.FromResult(false);
         }
 
         private string? CheckAndIncrementResendLimit(string email)
@@ -445,15 +474,19 @@ namespace RetradeBE.Services
             {
                 throw new InvalidOperationException("ACCOUNT_BANNED");
             }
-            if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString() ||
-                account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Pending.ToString())
-            {
-                throw new InvalidOperationException("ACCOUNT_INACTIVE");
-            }
-            if (account.Status != RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString()) return null;
 
             bool isPasswordValid = BCrypt.Net.BCrypt.Verify(cleanPassword, account.PasswordHash);
             if (!isPasswordValid) return null;
+
+            if (account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Inactive.ToString() ||
+                account.Status == RetradeBE.Models.Enums.AccountStatusEnum.Pending.ToString() ||
+                string.IsNullOrEmpty(account.Status))
+            {
+                var user = await _userRepository.GetByIdAsync(account.UserId);
+                var email = user?.Email ?? (cleanUsername.Contains("@") ? cleanUsername : string.Empty);
+                throw new InvalidOperationException($"ACCOUNT_UNVERIFIED:{email}");
+            }
+            if (account.Status != RetradeBE.Models.Enums.AccountStatusEnum.Active.ToString()) return null;
 
             var roles = await _repository.GetRolesAsync(account.AccountId);
             if (roles == null || !roles.Any())
@@ -837,11 +870,6 @@ namespace RetradeBE.Services
             var allAccounts = await _repository.GetAllAsync();
             var account = allAccounts.FirstOrDefault(a => a.UserId == user.UserId);
             if (account == null) return "Account not found.";
-
-            if (BCrypt.Net.BCrypt.Verify(dto.NewPassword, account.PasswordHash))
-            {
-                return "New password must be different from your current password.";
-            }
 
             account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
             await _repository.UpdateAsync(account);
