@@ -1124,15 +1124,24 @@ namespace RetradeBE.Services.AssistantChat
 
             if (scoredProductsList.Count == 0)
             {
-                return allActive.Take(limit).Select(p => MapToAssistantProductDto(p)).ToList();
+                return new List<AssistantProductSuggestionDto>();
             }
 
-            int maxMatchedTokens = scoredProductsList.Max(x => x.MatchedTokenCount);
-            var candidateList = scoredProductsList;
+            var relevantProductsList = scoredProductsList
+                .Where(x => EnforceMaterialAndTypeRelevance(normMessage, MapToAssistantProductDto(x.Product)))
+                .ToList();
+
+            if (relevantProductsList.Count == 0)
+            {
+                return new List<AssistantProductSuggestionDto>();
+            }
+
+            int maxMatchedTokens = relevantProductsList.Max(x => x.MatchedTokenCount);
+            var candidateList = relevantProductsList;
 
             if (maxMatchedTokens > 1)
             {
-                var topTokenMatches = scoredProductsList.Where(x => x.MatchedTokenCount >= maxMatchedTokens - 1).ToList();
+                var topTokenMatches = relevantProductsList.Where(x => x.MatchedTokenCount >= maxMatchedTokens - 1).ToList();
                 if (topTokenMatches.Count > 0)
                 {
                     candidateList = topTokenMatches;
@@ -1167,6 +1176,72 @@ namespace RetradeBE.Services.AssistantChat
             return topScored.Select(p => MapToAssistantProductDto(p)).ToList();
         }
 
+        private static bool EnforceMaterialAndTypeRelevance(string normMessage, AssistantProductSuggestionDto product)
+        {
+            var fullText = NormalizeForMatch($"{product.Name} {product.CategoryName} {product.Description}");
+            var tokens = Regex.Split(fullText, @"[^\w\d]+")
+                .Where(w => !string.IsNullOrWhiteSpace(w))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // Leather / Da
+            bool userWantsLeather = normMessage.Contains("da") || normMessage.Contains("leather");
+            if (userWantsLeather)
+            {
+                bool hasLeather = tokens.Contains("da") || tokens.Contains("leather") || fullText.Contains("leather") || fullText.Contains(" chat lieu da ") || fullText.Contains("ao da");
+                if (!hasLeather) return false;
+            }
+
+            // Jacket / Áo khoác
+            bool userWantsJacket = normMessage.Contains("khoac") || normMessage.Contains("jacket") || normMessage.Contains("coat");
+            if (userWantsJacket)
+            {
+                bool hasJacket = tokens.Contains("khoac") || tokens.Contains("jacket") || tokens.Contains("coat") || tokens.Contains("blazer") || tokens.Contains("parka") || tokens.Contains("cardigan") || tokens.Contains("bomber") || tokens.Contains("blouson");
+                if (!hasJacket) return false;
+            }
+
+            // Denim / Jean / Bò
+            bool userWantsDenim = normMessage.Contains("jean") || normMessage.Contains("jeans") || normMessage.Contains("denim") || normMessage.Contains(" bo ");
+            if (userWantsDenim)
+            {
+                bool hasDenim = tokens.Contains("jean") || tokens.Contains("jeans") || tokens.Contains("denim") || tokens.Contains("bo");
+                if (!hasDenim) return false;
+            }
+
+            // T-shirt / Áo thun
+            bool userWantsTShirt = normMessage.Contains("thun") || normMessage.Contains("t-shirt") || normMessage.Contains("tee");
+            if (userWantsTShirt)
+            {
+                bool hasTShirt = tokens.Contains("thun") || tokens.Contains("phong") || tokens.Contains("tee") || tokens.Contains("t-shirt") || tokens.Contains("tshirt");
+                if (!hasTShirt) return false;
+            }
+
+            // Book / Sách
+            bool userWantsBook = normMessage.Contains("sach") || normMessage.Contains("book");
+            if (userWantsBook)
+            {
+                bool hasBook = tokens.Contains("sach") || tokens.Contains("truyen") || tokens.Contains("book") || tokens.Contains("bookstore") || tokens.Contains("novel");
+                if (!hasBook) return false;
+            }
+
+            // Keyboard / Bàn phím
+            bool userWantsKeyboard = normMessage.Contains("ban phim") || normMessage.Contains("keyboard");
+            if (userWantsKeyboard)
+            {
+                bool hasKeyboard = tokens.Contains("phim") || tokens.Contains("keyboard");
+                if (!hasKeyboard) return false;
+            }
+
+            // Headphones / Tai nghe
+            bool userWantsHeadphones = normMessage.Contains("tai nghe") || normMessage.Contains("headphone");
+            if (userWantsHeadphones)
+            {
+                bool hasHeadphones = tokens.Contains("tai") || tokens.Contains("headphone") || tokens.Contains("headphones") || tokens.Contains("earbuds") || tokens.Contains("earphone") || tokens.Contains("iem");
+                if (!hasHeadphones) return false;
+            }
+
+            return true;
+        }
+
         private static bool IsBilingualSynonymMatch(string normToken, string normFullText, HashSet<string> fullTextWordTokens)
         {
             // Leather / Da
@@ -1184,9 +1259,9 @@ namespace RetradeBE.Services.AssistantChat
             if (normToken == "denim" && (normFullText.Contains("jean") || normFullText.Contains("jeans") || normFullText.Contains("bo"))) return true;
 
             // Shirts / Áo thun / Áo phông
-            if ((normToken == "thun" || normToken == "phong" || normToken == "ao") &&
+            if ((normToken == "thun" || normToken == "phong") &&
                 (normFullText.Contains("tee") || normFullText.Contains("t-shirt") || normFullText.Contains("shirt") || normFullText.Contains("top"))) return true;
-            if ((normToken == "tee" || normToken == "shirt" || normToken == "top") && (normFullText.Contains("thun") || normFullText.Contains("phong") || normFullText.Contains("ao"))) return true;
+            if ((normToken == "tee" || normToken == "t-shirt" || normToken == "tshirt") && (normFullText.Contains("thun") || normFullText.Contains("phong"))) return true;
 
             // Shoes / Giày
             if ((normToken == "giay" || normToken == "sneaker") &&
