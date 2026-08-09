@@ -11,7 +11,7 @@ namespace RetradeBE.Services.Offer
     public class OfferService : IOfferService
     {
         private readonly ICheckoutService _checkoutService;
-        private readonly IHubContext<OrderHub> _orderHub;
+        private readonly IHubContext<OfferHub> _offerHub;
         private readonly IOfferRepository _repo;
         private readonly IAccountRepository _accountRepo;
         private readonly IProductRepository _productRepo;
@@ -23,7 +23,7 @@ namespace RetradeBE.Services.Offer
 
         public OfferService(
             ICheckoutService checkoutService, 
-            IHubContext<OrderHub> orderHub, 
+            IHubContext<OfferHub> offerHub, 
             IOfferRepository repo,
             IAccountRepository accountRepo,
             IProductRepository productRepo,
@@ -34,7 +34,7 @@ namespace RetradeBE.Services.Offer
             INotificationService notificationService)
         {
             _checkoutService = checkoutService;
-            _orderHub = orderHub;
+            _offerHub = offerHub;
             _repo = repo;
             _accountRepo = accountRepo;
             _productRepo = productRepo;
@@ -100,7 +100,15 @@ namespace RetradeBE.Services.Offer
                 .Select(pi => pi.Image?.ImageUrl)
                 .FirstOrDefault();
 
-            return MapToDto(offer, buyer, product, mainImage);
+            var dto = MapToDto(offer, buyer, product, mainImage);
+
+            var payload = new { offer = dto, action = "Created" };
+            await _offerHub.Clients.Group(OfferHub.GetSellerOfferGroupName(product.SellerId))
+                .SendAsync("SellerOfferStatusChanged", payload);
+            await _offerHub.Clients.Group(OfferHub.GetBuyerOfferGroupName(buyerUserId))
+                .SendAsync("BuyerOfferStatusChanged", payload);
+
+            return dto;
         }
 
         public async Task<List<OfferDto>> GetMyOffersAsync(string accountId, string? productId = null)
@@ -183,7 +191,18 @@ namespace RetradeBE.Services.Offer
                 .Select(pi => pi.Image?.ImageUrl)
                 .FirstOrDefault();
 
-            return MapToDto(offer, offer.Buyer, offer.Product, mainImage);
+            var dto = MapToDto(offer, offer.Buyer, offer.Product, mainImage);
+            var payload = new { offer = dto, action = accept ? "Accepted" : "Rejected" };
+
+            if (!string.IsNullOrEmpty(offer.Product?.SellerId))
+            {
+                await _offerHub.Clients.Group(OfferHub.GetSellerOfferGroupName(offer.Product.SellerId))
+                    .SendAsync("SellerOfferStatusChanged", payload);
+            }
+            await _offerHub.Clients.Group(OfferHub.GetBuyerOfferGroupName(offer.BuyerId))
+                .SendAsync("BuyerOfferStatusChanged", payload);
+
+            return dto;
         }
 
         public async Task<OfferDto> CancelOfferAsync(string buyerUserId, string offerId)
@@ -201,7 +220,41 @@ namespace RetradeBE.Services.Offer
                 .Select(pi => pi.Image?.ImageUrl)
                 .FirstOrDefault();
 
-            return MapToDto(offer, offer.Buyer, offer.Product, mainImage);
+            var dto = MapToDto(offer, offer.Buyer, offer.Product, mainImage);
+            var payload = new { offer = dto, action = "Cancelled" };
+
+            var sellerId = offer.Product?.SellerId;
+            if (string.IsNullOrEmpty(sellerId) && !string.IsNullOrEmpty(offer.ProductId))
+            {
+                var product = await _productRepo.GetByIdAsync(offer.ProductId);
+                sellerId = product?.SellerId;
+            }
+
+            if (!string.IsNullOrEmpty(sellerId))
+            {
+                await _offerHub.Clients.Group(OfferHub.GetSellerOfferGroupName(sellerId))
+                    .SendAsync("SellerOfferStatusChanged", payload);
+
+                await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                {
+                    UserId = sellerId,
+                    Title = "Offer Cancelled",
+                    Message = $"The buyer cancelled their offer for '{offer.Product?.Name ?? "product"}'.",
+                    Type = "Offer",
+                    ReferenceId = offer.OfferId
+                });
+            }
+
+            await _offerHub.Clients.Group(OfferHub.GetBuyerOfferGroupName(buyerUserId))
+                .SendAsync("BuyerOfferStatusChanged", payload);
+
+            if (!string.IsNullOrEmpty(offer.BuyerId) && offer.BuyerId != buyerUserId)
+            {
+                await _offerHub.Clients.Group(OfferHub.GetBuyerOfferGroupName(offer.BuyerId))
+                    .SendAsync("BuyerOfferStatusChanged", payload);
+            }
+
+            return dto;
         }
 
         public async Task<string> CheckoutFromOfferAsync(OfferCheckoutRequestDto request, string accountId)
@@ -286,6 +339,17 @@ namespace RetradeBE.Services.Offer
             offer.Status = "Completed";
             await _repo.UpdateAsync(offer);
 
+            var mainImage = product.ProductImage
+                .OrderBy(pi => pi.SortOrder)
+                .Select(pi => pi.Image?.ImageUrl)
+                .FirstOrDefault();
+            var offerDto = MapToDto(offer, offer.Buyer, product, mainImage);
+            var payload = new { offer = offerDto, action = "Completed" };
+            await _offerHub.Clients.Group(OfferHub.GetSellerOfferGroupName(product.SellerId))
+                .SendAsync("SellerOfferStatusChanged", payload);
+            await _offerHub.Clients.Group(OfferHub.GetBuyerOfferGroupName(buyerUserId))
+                .SendAsync("BuyerOfferStatusChanged", payload);
+
             // Remove from wishlist
             var wishlist = await _wishlistRepo.GetOrCreateActiveWishlistAsync(buyerUserId);
             if (wishlist != null)
@@ -363,11 +427,22 @@ namespace RetradeBE.Services.Offer
                 .Select(pi => pi.Image?.ImageUrl)
                 .FirstOrDefault();
 
-            return MapToDto(
+            var dto = MapToDto(
                 offer,
                 offer.Buyer,
                 offer.Product,
                 mainImage);
+
+            var counterPayload = new { offer = dto, action = "CounterOffer" };
+            if (!string.IsNullOrEmpty(offer.Product?.SellerId))
+            {
+                await _offerHub.Clients.Group(OfferHub.GetSellerOfferGroupName(offer.Product.SellerId))
+                    .SendAsync("SellerOfferStatusChanged", counterPayload);
+            }
+            await _offerHub.Clients.Group(OfferHub.GetBuyerOfferGroupName(offer.BuyerId))
+                .SendAsync("BuyerOfferStatusChanged", counterPayload);
+
+            return dto;
         }
 
         private static OfferDto MapToDto(RetradeBE.Models.Offer offer, User? buyer, Product? product, string? mainImageUrl)
