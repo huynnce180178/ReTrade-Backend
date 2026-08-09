@@ -553,6 +553,7 @@ namespace RetradeBE.Services
                     Status = p.IsDeleted == true ? "Deleted" : p.Status,
                     Condition = p.Condition,
                     CreatedAt = p.CreatedAt,
+                    UpdatedAt = p.UpdatedAt ?? p.CreatedAt,
                     SellerId = p.SellerId,
                     SellerName = p.Seller != null ? $"{p.Seller.FirstName} {p.Seller.LastName}".Trim() : null,
                     SellerAvatarUrl = p.Seller != null ? p.Seller.AvatarUrl : null,
@@ -748,7 +749,7 @@ namespace RetradeBE.Services
                 "name_asc" => query.OrderBy(p => p.Name),
                 "name_desc" => query.OrderByDescending(p => p.Name),
                 "sales_desc" or "top_seller" or "popular" => query.OrderByDescending(p => p.Order.Count(o => o.Status == "Completed" || o.Status == "Delivered" || o.Status == "Confirmed" || o.Status == "Shipping")).ThenByDescending(p => p.CreatedAt),
-                _ => query.OrderByDescending(p => p.CreatedAt), // "newest" or default
+                _ => query.OrderByDescending(p => p.UpdatedAt ?? p.CreatedAt).ThenByDescending(p => p.CreatedAt), // "newest" or default (recently updated first)
             };
         }
     }

@@ -24,7 +24,27 @@ namespace RetradeBE.Hubs
                 await Groups.AddToGroupAsync(Context.ConnectionId, GetUserGroupName(userId));
             }
 
+            var accountId = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!string.IsNullOrWhiteSpace(accountId))
+            {
+                var isAdmin = await _context.AccountRole
+                    .AsNoTracking()
+                    .AnyAsync(ar => ar.AccountId == accountId && ar.Role != null && ar.Role.Name == "Admin");
+                if (isAdmin)
+                {
+                    await Groups.AddToGroupAsync(Context.ConnectionId, "admin-notifications");
+                }
+            }
+
             await base.OnConnectedAsync();
+        }
+
+        public async Task JoinUserNotifications(string userId)
+        {
+            if (!string.IsNullOrWhiteSpace(userId))
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, GetUserGroupName(userId));
+            }
         }
 
         public override async Task OnDisconnectedAsync(Exception? exception)
@@ -48,11 +68,13 @@ namespace RetradeBE.Hubs
                 return null;
             }
 
-            return await _context.Account
+            var userId = await _context.Account
                 .AsNoTracking()
                 .Where(a => a.AccountId == accountId)
                 .Select(a => a.UserId)
                 .FirstOrDefaultAsync();
+
+            return userId ?? accountId;
         }
     }
 }

@@ -14,6 +14,7 @@ namespace RetradeBE.Models.Enums
 
         // Additional statuses
         Sold,
-        Inactive
+        Inactive,
+        Removed
     }
 }

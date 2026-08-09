@@ -54,6 +54,19 @@ namespace RetradeBE.Models.DTOs
         public ReportOrderDetailDto? Order { get; set; }
         public ReportUserDetailDto? Buyer { get; set; }
         public ReportUserDetailDto? Seller { get; set; }
+        public ReportProductDetailDto? Product { get; set; }
+    }
+
+    public class ReportProductDetailDto
+    {
+        public string ProductId { get; set; } = null!;
+        public string? Name { get; set; }
+        public decimal? Price { get; set; }
+        public string? Status { get; set; }
+        public string? SellerId { get; set; }
+        public string? SellerName { get; set; }
+        public string? MainImageUrl { get; set; }
+        public DateTime? CreatedAt { get; set; }
     }
 
     public class ReportReviewDetailDto

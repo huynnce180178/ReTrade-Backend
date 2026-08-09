@@ -103,9 +103,23 @@ namespace RetradeBE.Mappings
                 .ForMember(dest => dest.Review, opt => opt.Ignore())
                 .ForMember(dest => dest.Order, opt => opt.Ignore())
                 .ForMember(dest => dest.Buyer, opt => opt.Ignore())
-                .ForMember(dest => dest.Seller, opt => opt.Ignore());
+                .ForMember(dest => dest.Seller, opt => opt.Ignore())
+                .ForMember(dest => dest.Product, opt => opt.Ignore());
             CreateMap<Review, ReportReviewDetailDto>();
             CreateMap<Order, ReportOrderDetailDto>();
+            CreateMap<Product, ReportProductDetailDto>()
+                .ForMember(dest => dest.SellerName, opt => opt.MapFrom(src => src.Seller == null
+                    ? null
+                    : string.IsNullOrWhiteSpace((src.Seller.FirstName + " " + src.Seller.LastName).Trim())
+                        ? src.Seller.Email
+                        : (src.Seller.FirstName + " " + src.Seller.LastName).Trim()))
+                .ForMember(dest => dest.MainImageUrl, opt => opt.MapFrom(src =>
+                    src.ProductImage.Where(pi => pi.IsMain == true).Select(pi => pi.Image.ImageUrl).FirstOrDefault()
+                    ?? src.ProductImage.OrderBy(pi => pi.SortOrder).Select(pi => pi.Image.ImageUrl).FirstOrDefault()));
+            CreateMap<ProductResponseDto, ReportProductDetailDto>()
+                .ForMember(dest => dest.MainImageUrl, opt => opt.MapFrom(src =>
+                    src.Images.Where(i => i.IsMain == true).Select(i => i.ImageUrl).FirstOrDefault()
+                    ?? src.Images.OrderBy(i => i.SortOrder).Select(i => i.ImageUrl).FirstOrDefault()));
             CreateMap<User, ReportUserDetailDto>()
                 .ForMember(dest => dest.UserName, opt => opt.MapFrom(src =>
                     string.IsNullOrWhiteSpace((src.FirstName + " " + src.LastName).Trim())

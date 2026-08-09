@@ -9,5 +9,8 @@ namespace RetradeBE.Services
         Task<PagedResultDto<ProductListDto>> GetProductsForApprovalAsync(ProductSearchQueryDto query);
         Task<ProductResponseDto?> GetProductByIdAsync(string productId);
         Task<bool> ApproveProductAsync(string productId, AdminProductApprovalDto dto);
+        Task<bool> RemoveProductAsync(string productId, string reason);
+        Task<bool> ReactivateProductAsync(string productId);
+        Task<bool> AppealProductAsync(string productId, string accountId, string reason);
     }
 }

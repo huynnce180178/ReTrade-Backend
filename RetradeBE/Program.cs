@@ -324,21 +324,20 @@ namespace RetradeBE
             string contentRootPath,
             bool isDockerEnvironment)
         {
-            var envPath = FindDotEnvPath(contentRootPath);
-            if (envPath == null)
+            var envPaths = FindAllDotEnvPaths(contentRootPath);
+            foreach (var envPath in envPaths)
             {
-                return;
-            }
-
-            var values = ParseDotEnvFile(envPath, isDockerEnvironment);
-            if (values.Count > 0)
-            {
-                configuration.AddInMemoryCollection(values);
+                var values = ParseDotEnvFile(envPath, isDockerEnvironment);
+                if (values.Count > 0)
+                {
+                    configuration.AddInMemoryCollection(values);
+                }
             }
         }
 
-        private static string? FindDotEnvPath(string contentRootPath)
+        private static List<string> FindAllDotEnvPaths(string contentRootPath)
         {
+            var paths = new List<string>();
             var directory = new DirectoryInfo(contentRootPath);
 
             for (var depth = 0; directory != null && depth < 8; depth++, directory = directory.Parent)
@@ -346,11 +345,12 @@ namespace RetradeBE
                 var candidate = Path.Combine(directory.FullName, ".env");
                 if (File.Exists(candidate))
                 {
-                    return candidate;
+                    paths.Add(candidate);
                 }
             }
 
-            return null;
+            paths.Reverse();
+            return paths;
         }
 
         private static Dictionary<string, string?> ParseDotEnvFile(string envPath, bool isDockerEnvironment)

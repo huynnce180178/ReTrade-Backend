@@ -119,6 +119,39 @@ namespace RetradeBE.Controllers.Report
             }
         }
 
+        [HttpPost("product/{productId}")]
+        public async Task<IActionResult> ReportProduct(string productId, [FromBody] ReportCreateDto request)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var accountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(accountId))
+            {
+                return Unauthorized();
+            }
+
+            try
+            {
+                var report = await _reportService.ReportProductAsync(accountId, productId, request);
+                return CreatedAtAction(nameof(GetById), new { reportId = report.ReportId }, report);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Forbid(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
         [HttpGet]
         [Authorize(Roles = nameof(RoleEnum.Admin))]
         [EnableQuery]

@@ -140,10 +140,27 @@ namespace RetradeBE.Services
 
         public async Task<NotificationDto> CreateAndSendAsync(CreateNotificationDto dto)
         {
+            string targetUserId = dto.UserId;
+
+            // Resolve valid UserId matching the user table foreign key constraint (fk_notify_user)
+            var userExists = await _context.User.AnyAsync(u => u.UserId == targetUserId);
+            if (!userExists)
+            {
+                var account = await _context.Account.FirstOrDefaultAsync(a => a.AccountId == targetUserId || a.UserId == targetUserId);
+                if (account != null && !string.IsNullOrEmpty(account.UserId))
+                {
+                    if (await _context.User.AnyAsync(u => u.UserId == account.UserId))
+                    {
+                        targetUserId = account.UserId;
+                        userExists = true;
+                    }
+                }
+            }
+
             var notification = new Notification
             {
                 NotificationId = $"notif_{DateTime.UtcNow:yyyyMMdd}_{Guid.NewGuid():N}",
-                UserId = dto.UserId,
+                UserId = targetUserId,
                 Title = dto.Title,
                 Message = dto.Message,
                 Type = dto.Type,
@@ -153,18 +170,28 @@ namespace RetradeBE.Services
                 CreatedAt = DateTime.UtcNow
             };
 
-            await _notificationRepository.AddAsync(notification);
+            if (userExists)
+            {
+                await _notificationRepository.AddAsync(notification);
+            }
 
             var notificationDto = ToDto(notification);
 
-            await _notificationHub.Clients
-                .Group(NotificationHub.GetUserGroupName(dto.UserId))
-                .SendAsync("ReceiveNotification", notificationDto);
+            // Send SignalR real-time notification to all possible user group names
+            var hubGroups = new List<string> { NotificationHub.GetUserGroupName(dto.UserId), NotificationHub.GetUserGroupName(targetUserId) };
+            foreach (var group in hubGroups.Distinct())
+            {
+                await _notificationHub.Clients.Group(group).SendAsync("ReceiveNotification", notificationDto);
+            }
 
-            var unreadCount = await _notificationRepository.GetUnreadCountAsync(dto.UserId);
-            await _notificationHub.Clients
-                .Group(NotificationHub.GetUserGroupName(dto.UserId))
-                .SendAsync("UnreadCountUpdated", new { count = unreadCount });
+            if (userExists)
+            {
+                var unreadCount = await _notificationRepository.GetUnreadCountAsync(targetUserId);
+                foreach (var group in hubGroups.Distinct())
+                {
+                    await _notificationHub.Clients.Group(group).SendAsync("UnreadCountUpdated", new { count = unreadCount });
+                }
+            }
 
             return notificationDto;
         }
@@ -188,12 +215,15 @@ namespace RetradeBE.Services
         {
             try
             {
-                var adminUserIds = await _context.Account
+                var adminAccounts = await _context.Account
                     .Where(a => a.AccountRole.Any(ar => ar.Role != null && ar.Role.Name == "Admin"))
-                    .Where(a => !string.IsNullOrEmpty(a.UserId))
-                    .Select(a => a.UserId!)
-                    .Distinct()
+                    .Select(a => new { a.UserId, a.AccountId })
                     .ToListAsync();
+
+                var adminUserIds = adminAccounts
+                    .Select(a => !string.IsNullOrEmpty(a.UserId) ? a.UserId : a.AccountId)
+                    .Distinct()
+                    .ToList();
 
                 foreach (var adminId in adminUserIds)
                 {
@@ -206,11 +236,40 @@ namespace RetradeBE.Services
                         ReferenceId = referenceId
                     });
                 }
+
+                await _notificationHub.Clients.Group("admin-notifications").SendAsync("ReceiveNotification", new NotificationDto
+                {
+                    NotificationId = "NOTIF" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff"),
+                    Title = title,
+                    Message = message,
+                    Type = type,
+                    ReferenceId = referenceId,
+                    CreatedAt = DateTime.UtcNow,
+                    IsRead = false
+                });
             }
             catch
             {
                 // Ignore errors so notification failure doesn't block the main flow
             }
+        }
+
+        public async Task BroadcastProductUnlistedAsync(string productId)
+        {
+            try
+            {
+                await _notificationHub.Clients.All.SendAsync("ProductUnlisted", new { productId, status = "Removed" });
+            }
+            catch { }
+        }
+
+        public async Task BroadcastProductRestoredAsync(string productId, string status)
+        {
+            try
+            {
+                await _notificationHub.Clients.All.SendAsync("ProductRestored", new { productId, status });
+            }
+            catch { }
         }
     }
 }

@@ -15,6 +15,7 @@ namespace RetradeBE.Services
         private const string ReviewTargetType = "Review";
         private const string BuyerTargetType = "Buyer";
         private const string SellerTargetType = "Seller";
+        private const string ProductTargetType = "Product";
         private static readonly HashSet<string> AllowedReportOrderStatuses = new(StringComparer.OrdinalIgnoreCase)
         {
             "Delivered",
@@ -34,6 +35,7 @@ namespace RetradeBE.Services
         private readonly IReviewService _reviewService;
         private readonly IMapper _mapper;
         private readonly INotificationService _notificationService;
+        private readonly RetradeBE.Data.AppDbContext _context;
 
         public ReportService(
             IReportRepository reportRepository,
@@ -43,7 +45,8 @@ namespace RetradeBE.Services
             IProductService productService,
             IReviewService reviewService,
             IMapper mapper,
-            INotificationService notificationService)
+            INotificationService notificationService,
+            RetradeBE.Data.AppDbContext context)
         {
             _reportRepository = reportRepository;
             _orderService = orderService;
@@ -53,6 +56,7 @@ namespace RetradeBE.Services
             _reviewService = reviewService;
             _mapper = mapper;
             _notificationService = notificationService;
+            _context = context;
         }
 
         public async Task<ReportDto> ReportReviewAsync(string accountId, string reviewId, ReportCreateDto request)
@@ -264,6 +268,65 @@ namespace RetradeBE.Services
             return _mapper.Map<ReportDto>(report);
         }
 
+        public async Task<ReportDto> ReportProductAsync(string accountId, string productId, ReportCreateDto request)
+        {
+            var reporterId = await ResolveUserIdAsync(accountId);
+            if (string.IsNullOrWhiteSpace(reporterId))
+            {
+                throw new UnauthorizedAccessException("Account not found.");
+            }
+
+            if (string.IsNullOrWhiteSpace(productId))
+            {
+                throw new InvalidOperationException("ProductId is required.");
+            }
+
+            if (request == null || string.IsNullOrWhiteSpace(request.Reason))
+            {
+                throw new InvalidOperationException("Report reason is required.");
+            }
+
+            var product = await _productService.GetProductByIdAsync(productId);
+            if (product == null)
+            {
+                throw new KeyNotFoundException("Product not found.");
+            }
+
+            if (string.Equals(product.SellerId, reporterId, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("You cannot report your own product.");
+            }
+
+            if (await _reportRepository.ExistsAsync(productId, reporterId, ProductTargetType))
+            {
+                throw new InvalidOperationException("You have already reported this product.");
+            }
+
+            var report = new Report
+            {
+                ReportId = RetradeBE.Utils.IdGenerator.GenerateReportId(ProductTargetType),
+                ReporterId = reporterId,
+                TargetType = ProductTargetType,
+                TargetId = productId,
+                Reason = request.Reason.Trim(),
+                Description = request.Description?.Trim(),
+                Status = PendingStatus,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            await _reportRepository.AddAsync(report);
+
+            await _notificationService.NotifyAdminsAsync(
+                "New Report Submitted",
+                "A new product report is waiting for your review.",
+                "Report",
+                report.ReportId
+            );
+
+            return _mapper.Map<ReportDto>(report);
+        }
+
         public async Task<IQueryable<ReportListDto>> GetAllAsync()
         {
             var reports = _reportRepository.Query();
@@ -284,6 +347,15 @@ namespace RetradeBE.Services
             {
                 var review = await _reviewService.GetByIdForReportAsync(report.TargetId);
                 detail.Review = review == null ? null : _mapper.Map<ReportReviewDetailDto>(review);
+            }
+            else if (string.Equals(report.TargetType, ProductTargetType, StringComparison.OrdinalIgnoreCase)
+                  || string.Equals(report.TargetType, "ProductAppeal", StringComparison.OrdinalIgnoreCase))
+            {
+                var product = await _productService.GetProductByIdAsync(report.TargetId);
+                if (product != null)
+                {
+                    detail.Product = _mapper.Map<ReportProductDetailDto>(product);
+                }
             }
             else if (string.Equals(report.TargetType, BuyerTargetType, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(report.TargetType, SellerTargetType, StringComparison.OrdinalIgnoreCase))
@@ -333,11 +405,21 @@ namespace RetradeBE.Services
 
                 try
                 {
+                    string targetName = report.TargetType;
+                    if (string.Equals(report.TargetType, ProductTargetType, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var product = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(_context.Product, p => p.ProductId == report.TargetId);
+                        if (product != null)
+                        {
+                            targetName = $"product '{product.Name}'";
+                        }
+                    }
+
                     await _notificationService.CreateAndSendAsync(new CreateNotificationDto
                     {
                         UserId = report.ReporterId,
                         Title = "Report Reviewed",
-                        Message = $"Your report regarding a {report.TargetType} has been reviewed and rejected.",
+                        Message = $"Your report regarding {targetName} has been reviewed and rejected.",
                         Type = nameof(NotificationTypeEnum.Report),
                         ReferenceId = report.ReportId
                     });
@@ -362,13 +444,13 @@ namespace RetradeBE.Services
                     await _notificationService.CreateAndSendAsync(new CreateNotificationDto
                     {
                         UserId = report.ReporterId,
-                        Title = "Report Accepted",
-                        Message = $"Thank you! Your report regarding a {report.TargetType} has been reviewed and accepted. Appropriate actions have been taken.",
+                        Title = "Report Approved",
+                        Message = "Thank you! Your report regarding the review has been reviewed and approved. The violating review has been removed.",
                         Type = nameof(NotificationTypeEnum.Report),
                         ReferenceId = report.ReportId
                     });
 
-                    // TargetId here is the ReviewId. We could notify the review author if we fetch it, but it requires an extra query.
+                    // TargetId here is the ReviewId.
                     var review = await _reviewService.GetByIdForReportAsync(report.TargetId);
                     if (review != null)
                     {
@@ -430,8 +512,8 @@ namespace RetradeBE.Services
                     await _notificationService.CreateAndSendAsync(new CreateNotificationDto
                     {
                         UserId = report.ReporterId,
-                        Title = "Report Accepted",
-                        Message = $"Thank you! Your report regarding a {report.TargetType} has been reviewed and accepted. Appropriate actions have been taken.",
+                        Title = "Report Approved",
+                        Message = "Thank you! Your report regarding the buyer has been approved and action has been taken.",
                         Type = nameof(NotificationTypeEnum.Report),
                         ReferenceId = report.ReportId
                     });
@@ -441,8 +523,8 @@ namespace RetradeBE.Services
                         await _notificationService.CreateAndSendAsync(new CreateNotificationDto
                         {
                             UserId = order.BuyerId,
-                            Title = "Account Penalty",
-                            Message = "Your account has received a penalty due to violations of community guidelines.",
+                            Title = "Account Violation Warning",
+                            Message = "Your account has received a violation penalty due to a policy report.",
                             Type = nameof(NotificationTypeEnum.System),
                             ReferenceId = report.ReportId
                         });
@@ -465,23 +547,20 @@ namespace RetradeBE.Services
                     var seller = await _userService.GetByIdAsync(order.SellerId);
                     if (seller != null)
                     {
-                      
+                        var account = await _accountService.GetByUserIdAsync(seller.UserId);
+                        if (account != null)
+                        {
+                            if (account.Status != RetradeBE.Models.Enums.AccountStatusEnum.Ban.ToString())
+                            {
+                                await _accountService.BanUserAsync(account.AccountId);
+                            }
+                        }
+
+                        seller.IsDeleted = true;
+                        seller.UpdatedAt = now;
                         
-
-            var account = await _accountService.GetByUserIdAsync(seller.UserId);
-            if (account != null)
-            {
-                if (account.Status != RetradeBE.Models.Enums.AccountStatusEnum.Ban.ToString())
-                {
-                    await _accountService.BanUserAsync(account.AccountId);
-                }
-            }
-
-            seller.IsDeleted = true;
-            seller.UpdatedAt = now;
-            
-            await _userService.UpdateAsync(seller);
-            await _productService.HideProductsBySellerAsync(seller.UserId, now);
+                        await _userService.UpdateAsync(seller);
+                        await _productService.HideProductsBySellerAsync(seller.UserId, now);
                     }
                 }
 
@@ -492,8 +571,8 @@ namespace RetradeBE.Services
                     await _notificationService.CreateAndSendAsync(new CreateNotificationDto
                     {
                         UserId = report.ReporterId,
-                        Title = "Report Accepted",
-                        Message = $"Thank you! Your report regarding a {report.TargetType} has been reviewed and accepted. Appropriate actions have been taken.",
+                        Title = "Report Approved",
+                        Message = "Thank you! Your report regarding the seller has been approved and action has been taken.",
                         Type = nameof(NotificationTypeEnum.Report),
                         ReferenceId = report.ReportId
                     });
@@ -503,8 +582,8 @@ namespace RetradeBE.Services
                         await _notificationService.CreateAndSendAsync(new CreateNotificationDto
                         {
                             UserId = order.SellerId,
-                            Title = "Account Penalty",
-                            Message = "Your account has received a penalty due to violations of community guidelines.",
+                            Title = "Account Violation Warning",
+                            Message = "Your account has received a violation penalty due to a policy report.",
                             Type = nameof(NotificationTypeEnum.System),
                             ReferenceId = report.ReportId
                         });
@@ -512,6 +591,94 @@ namespace RetradeBE.Services
                 }
                 catch { }
 
+                return _mapper.Map<ReportDto>(report);
+            }
+
+            if (string.Equals(request.Status, "Accept Product", StringComparison.OrdinalIgnoreCase))
+            {
+                report.Status = AcceptedStatus;
+                report.ReviewedAt = now;
+                report.UpdatedAt = now;
+
+                var dbProduct = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(_context.Product, p => p.ProductId == report.TargetId);
+                if (dbProduct != null)
+                {
+                    dbProduct.Status = ProductStatusEnum.Removed.ToString();
+                    dbProduct.UpdatedAt = now;
+                    _context.Product.Update(dbProduct);
+                    await _context.SaveChangesAsync();
+
+                    try
+                    {
+                        await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                        {
+                            UserId = dbProduct.SellerId,
+                            Title = "Product Unlisted",
+                            Message = $"Your product '{dbProduct.Name}' has been unlisted from the platform due to a violation of community guidelines.",
+                            Type = nameof(NotificationTypeEnum.System),
+                            ReferenceId = dbProduct.ProductId
+                        });
+                        await _notificationService.BroadcastProductUnlistedAsync(dbProduct.ProductId);
+                    }
+                    catch { }
+                }
+
+                await _reportRepository.UpdateAsync(report);
+
+                try
+                {
+                    await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                    {
+                        UserId = report.ReporterId,
+                        Title = "Report Approved",
+                        Message = $"Thank you! Your report regarding product '{dbProduct?.Name ?? report.TargetId}' has been approved. The item has been unlisted from the platform.",
+                        Type = nameof(NotificationTypeEnum.Report),
+                        ReferenceId = report.ReportId
+                    });
+                }
+                catch { }
+
+                return _mapper.Map<ReportDto>(report);
+            }
+
+            if (string.Equals(request.Status, "Accept Appeal", StringComparison.OrdinalIgnoreCase) ||
+               (string.Equals(report.TargetType, "ProductAppeal", StringComparison.OrdinalIgnoreCase) && string.Equals(request.Status, "Accept Product", StringComparison.OrdinalIgnoreCase)))
+            {
+                report.Status = AcceptedStatus;
+                report.ReviewedAt = now;
+                report.UpdatedAt = now;
+
+                var dbProduct = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(_context.Product, p => p.ProductId == report.TargetId);
+                if (dbProduct != null)
+                {
+                    dbProduct.Status = dbProduct.Price == null ? ProductStatusEnum.Ready.ToString() : ProductStatusEnum.Accepted.ToString();
+                    dbProduct.UpdatedAt = now;
+                    _context.Product.Update(dbProduct);
+                    await _context.SaveChangesAsync();
+
+                    try
+                    {
+                        string sellerUserId = dbProduct.SellerId;
+                        var sellerAccount = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(_context.Account, a => a.AccountId == dbProduct.SellerId || a.UserId == dbProduct.SellerId);
+                        if (sellerAccount != null && !string.IsNullOrEmpty(sellerAccount.UserId))
+                        {
+                            sellerUserId = sellerAccount.UserId;
+                        }
+
+                        await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                        {
+                            UserId = sellerUserId,
+                            Title = "Product Appeal Approved",
+                            Message = $"Great news! Your appeal for product '{dbProduct.Name}' has been approved by Administrator and the product has been restored.",
+                            Type = nameof(NotificationTypeEnum.System),
+                            ReferenceId = dbProduct.ProductId
+                        });
+                        await _notificationService.BroadcastProductRestoredAsync(dbProduct.ProductId, dbProduct.Status);
+                    }
+                    catch { }
+                }
+
+                await _reportRepository.UpdateAsync(report);
                 return _mapper.Map<ReportDto>(report);
             }
 

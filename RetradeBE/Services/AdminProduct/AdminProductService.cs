@@ -30,6 +30,8 @@ namespace RetradeBE.Services
         public IQueryable<ProductListDto> Query()
         {
             return _repository.Query()
+                .OrderByDescending(p => p.UpdatedAt ?? p.CreatedAt)
+                .ThenByDescending(p => p.CreatedAt)
                 .Select(p => new ProductListDto
                 {
                     ProductId = p.ProductId,
@@ -40,6 +42,7 @@ namespace RetradeBE.Services
                     Status = p.Status,
                     Condition = p.Condition,
                     CreatedAt = p.CreatedAt,
+                    UpdatedAt = p.UpdatedAt ?? p.CreatedAt,
                     SellerId = p.SellerId,
                     SellerName = p.Seller != null ? (p.Seller.FirstName + " " + p.Seller.LastName).Trim() : null,
                     SellerAvatarUrl = p.Seller != null ? p.Seller.AvatarUrl : null,
@@ -228,6 +231,161 @@ namespace RetradeBE.Services
             {
                 Console.WriteLine($"[AdminProductService] Error sending notification: {ex}");
             }
+
+            return true;
+        }
+
+        public async Task<bool> RemoveProductAsync(string productId, string reason)
+        {
+            var product = await _repository.GetByIdAsync(productId);
+            if (product == null)
+                throw new Exception("Product does not exist.");
+
+            if (string.IsNullOrWhiteSpace(reason))
+                throw new Exception("Please provide a reason for removing the product.");
+
+            product.Status = ProductStatusEnum.Removed.ToString();
+            product.UpdatedAt = DateTime.UtcNow;
+            await _repository.UpdateAsync(product);
+
+            try
+            {
+                await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                {
+                    UserId = product.SellerId,
+                    Title = "Product Removed by Admin",
+                    Message = $"Your product '{product.Name}' has been removed from the platform by an Administrator. Reason: {reason}",
+                    Type = nameof(NotificationTypeEnum.System),
+                    ReferenceId = product.ProductId
+                });
+
+                // Auto-accept any pending reports for this product and notify reporters
+                var pendingReports = await _context.Report
+                    .Where(r => r.TargetType == "Product" && r.TargetId == productId && r.Status == "Pending Review")
+                    .ToListAsync();
+
+                foreach (var r in pendingReports)
+                {
+                    r.Status = "Accepted";
+                    r.ReviewedAt = DateTime.UtcNow;
+                    r.UpdatedAt = DateTime.UtcNow;
+                    _context.Report.Update(r);
+
+                    try
+                    {
+                        await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                        {
+                            UserId = r.ReporterId,
+                            Title = "Product Report Resolved",
+                            Message = $"Thank you! Your report for product '{product.Name}' has been accepted by Administrator and the product has been removed.",
+                            Type = nameof(NotificationTypeEnum.Report),
+                            ReferenceId = r.ReportId
+                        });
+                    }
+                    catch { }
+                }
+
+                if (pendingReports.Any())
+                {
+                    await _context.SaveChangesAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[AdminProductService] Error sending notification: {ex}");
+            }
+
+            try
+            {
+                await _notificationService.BroadcastProductUnlistedAsync(productId);
+            }
+            catch { }
+
+            return true;
+        }
+
+        public async Task<bool> ReactivateProductAsync(string productId)
+        {
+            var product = await _repository.GetByIdAsync(productId);
+            if (product == null)
+                throw new Exception("Product does not exist.");
+
+            var isAuction = product.Status == ProductStatusEnum.AuctionRejected.ToString();
+            product.Status = isAuction ? ProductStatusEnum.Ready.ToString() : ProductStatusEnum.Accepted.ToString();
+            product.UpdatedAt = DateTime.UtcNow;
+            await _repository.UpdateAsync(product);
+
+            try
+            {
+                await _notificationService.CreateAndSendAsync(new CreateNotificationDto
+                {
+                    UserId = product.SellerId,
+                    Title = "Product Restored",
+                    Message = $"Your product '{product.Name}' has been restored and approved by Administrator successfully.",
+                    Type = nameof(NotificationTypeEnum.System),
+                    ReferenceId = product.ProductId
+                });
+                await _notificationService.BroadcastProductRestoredAsync(product.ProductId, product.Status);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[AdminProductService] Error sending reactivate notification: {ex}");
+            }
+
+            return true;
+        }
+
+        public async Task<bool> AppealProductAsync(string productId, string accountId, string reason)
+        {
+            var product = await _repository.GetByIdAsync(productId);
+            if (product == null)
+                throw new Exception("Product does not exist.");
+
+            var account = await _context.Account.FirstOrDefaultAsync(a => a.AccountId == accountId || a.UserId == accountId);
+            var userId = account?.UserId ?? accountId;
+
+            bool isSeller = product.SellerId == accountId ||
+                            product.SellerId == userId ||
+                            (account != null && (product.SellerId == account.AccountId || product.SellerId == account.UserId));
+
+            if (!isSeller)
+                throw new Exception("You do not have permission to appeal for this product.");
+
+            if (string.IsNullOrWhiteSpace(reason))
+                throw new Exception("Please provide a reason for the appeal.");
+
+            var now = DateTime.UtcNow;
+            product.UpdatedAt = now;
+            await _repository.UpdateAsync(product);
+
+            var reportId = "REP" + now.ToString("yyyyMMddHHmmssfff");
+
+            var appealReport = new Models.Report
+            {
+                ReportId = reportId,
+                ReporterId = userId,
+                TargetType = "ProductAppeal",
+                TargetId = productId,
+                Reason = reason.Trim(),
+                Description = $"Product appeal: {reason.Trim()}",
+                Status = "Pending Review",
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            await _context.Report.AddAsync(appealReport);
+            await _context.SaveChangesAsync();
+
+            try
+            {
+                await _notificationService.NotifyAdminsAsync(
+                    "New Product Appeal",
+                    $"Seller submitted an appeal for product '{product.Name}'. Reason: {reason.Trim()}",
+                    nameof(NotificationTypeEnum.System),
+                    productId
+                );
+            }
+            catch { }
 
             return true;
         }

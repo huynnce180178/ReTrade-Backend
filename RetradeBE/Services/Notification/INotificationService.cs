@@ -11,5 +11,7 @@ namespace RetradeBE.Services
         Task<bool> DeleteNotificationAsync(string userId, string notificationId);
         Task<NotificationDto> CreateAndSendAsync(CreateNotificationDto dto);
         Task NotifyAdminsAsync(string title, string message, string type, string? referenceId = null);
+        Task BroadcastProductUnlistedAsync(string productId);
+        Task BroadcastProductRestoredAsync(string productId, string status);
     }
 }
