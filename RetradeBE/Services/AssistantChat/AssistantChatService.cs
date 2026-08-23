@@ -628,7 +628,14 @@ namespace RetradeBE.Services.AssistantChat
 
             var (minPrice, maxPrice) = ExtractPriceRange(raw);
 
-            var stopWords = new[] { "mau", "cần", "can", "tim", "tìm", "mua", "cho", "toi", "tôi", "ban", "bạn", "giup", "giúp", "loai", "loại", "co", "có", "khong", "không", "nao", "nào", "goi y", "tu van", "nhu cau", "san pham", "sản phẩm", "duoi", "dưới", "under", "tren", "trên", "over", "khoang", "khoảng", "tam", "tầm", "gia", "giá", "den", "đến", "hay", "đẹp", "dap", "tốt", "tot", "rẻ", "re", "mới", "moi", "ạ", "a", "nhé", "nhe", "nha", "ơi", "oi", "với", "voi" };
+            var stopWords = new[]
+            {
+                "mau", "màu", "cần", "can", "tim", "tìm", "muon", "muốn", "thich", "thích", "mua", "ban", "bán", "cho",
+                "toi", "tôi", "t", "minh", "mình", "bạn", "giup", "giúp", "loai", "loại", "co", "có", "khong", "không",
+                "nao", "nào", "goi y", "tu van", "nhu cau", "san pham", "sản phẩm", "duoi", "dưới", "under", "tren", "trên",
+                "over", "khoang", "khoảng", "tam", "tầm", "gia", "giá", "den", "đến", "hay", "đẹp", "dap", "tốt", "tot",
+                "rẻ", "re", "mới", "moi", "ạ", "a", "nhé", "nhe", "nha", "ơi", "oi", "với", "voi", "xem", "hoi", "hỏi", "kiem", "kiếm", "shop", "ad"
+            };
             var cleanedMessage = raw;
 
             // Strip price expressions like "dưới 100k", "< 100k", "100k"
@@ -1389,8 +1396,10 @@ namespace RetradeBE.Services.AssistantChat
         {
             var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                "mau", "màu", "can", "cần", "tim", "tìm", "mua", "cho", "toi", "tôi", "ban", "bạn", "giup", "giúp",
-                "loai", "loại", "co", "có", "khong", "không", "nao", "nào", "goi y", "tu van", "nhu cau", "san pham", "sản phẩm"
+                "mau", "màu", "can", "cần", "tim", "tìm", "muon", "muốn", "thich", "thích", "mua", "ban", "bán", "cho",
+                "toi", "tôi", "t", "minh", "mình", "ban", "bạn", "giup", "giúp", "loai", "loại", "co", "có", "khong", "không",
+                "nao", "nào", "goi y", "gợi ý", "tu van", "tư vấn", "nhu cau", "nhu cầu", "san pham", "sản phẩm", "xem", "hoi", "hỏi",
+                "kiem", "kiếm", "shop", "ad", "admin", "em", "anh", "chi", "chị", "nhe", "nhé", "nha", "a", "ạ", "oi", "ơi", "voi", "với", "dum", "dùm", "ho", "hộ"
             };
 
             var words = Regex.Split(input, @"[^\w\d\+]+")
