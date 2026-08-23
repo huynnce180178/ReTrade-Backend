@@ -123,9 +123,9 @@ namespace RetradeBE.Services.AssistantChat
             try
             {
                 finalText = await GenerateGeminiResponseAsync(geminiContents, suggestedProducts, session.SessionId, cancellationToken);
-                if (IsDomainBoundaryDecline(finalText) && suggestedProducts.Count > 0)
+                if (IsDomainBoundaryDecline(finalText))
                 {
-                    finalText = BuildProductSuggestionResponse(message, suggestedProducts);
+                    suggestedProducts.Clear();
                 }
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
@@ -138,7 +138,7 @@ namespace RetradeBE.Services.AssistantChat
                 finalText = "i18n:chat.assistant_offline_general";
             }
 
-            if (suggestedProducts.Count == 0)
+            if (suggestedProducts.Count == 0 && !IsDomainBoundaryDecline(finalText) && !IsOffTopicQuery(message))
             {
                 var fallbackArgs = BuildHeuristicProductSearchArgs(message);
                 if (fallbackArgs != null)
@@ -509,6 +509,14 @@ namespace RetradeBE.Services.AssistantChat
                     : "You can save items of interest to your Wishlist by clicking the heart icon on any product.";
             }
 
+            if (IsOffTopicQuery(message))
+            {
+                suggestedProducts.Clear();
+                return lang == "vi"
+                    ? "Tôi là Trợ lý AI ReTrade, chuyên hỗ trợ các thông tin và sản phẩm trên sàn ReTrade. Bạn vui lòng đặt câu hỏi liên quan đến mua sắm, sản phẩm, đơn hàng hoặc đấu giá trên ReTrade nhé!"
+                    : "I am ReTrade Assistant, specialized strictly in helping you with ReTrade products, orders, auctions, and marketplace features. Please ask me questions related to ReTrade e-commerce!";
+            }
+
             // Default & product search intent fallback
             var searchArgs = BuildHeuristicProductSearchArgs(message) ?? new ProductSearchToolArgs { RawMessage = message, Limit = 5 };
             var products = await SearchProductsAsync(searchArgs, cancellationToken);
@@ -523,21 +531,20 @@ namespace RetradeBE.Services.AssistantChat
                 return colorTerms.Any(c => tokens.Contains(NormalizeForMatch(c)));
             });
 
+            if (isColorSearch && !hasExactColorMatch)
+            {
+                suggestedProducts.Clear();
+                return lang == "vi"
+                    ? "Hiện tại ReTrade chưa có sản phẩm khớp màu sắc bạn tìm. Bạn có thể thử tìm kiếm từ khóa khác hoặc tham khảo các danh mục sản phẩm khác nhé!"
+                    : "Currently ReTrade does not have items in this exact color. Feel free to search with other keywords or browse categories!";
+            }
+
             if (products.Count > 0)
             {
                 var sb = new StringBuilder();
-                if (isColorSearch && !hasExactColorMatch)
-                {
-                    sb.AppendLine(lang == "vi"
-                        ? "Hiện tại ReTrade chưa có sản phẩm khớp màu sắc bạn tìm. Bạn tham khảo các sản phẩm nổi bật dưới đây nhé:\n"
-                        : "Currently ReTrade does not have items in this exact color. Here are featured items you may like:\n");
-                }
-                else
-                {
-                    sb.AppendLine(lang == "vi"
-                        ? "Dưới đây là các sản phẩm phù hợp trên ReTrade cho bạn:\n"
-                        : "Here are the products matching your request on ReTrade:\n");
-                }
+                sb.AppendLine(lang == "vi"
+                    ? "Dưới đây là các sản phẩm phù hợp trên ReTrade cho bạn:\n"
+                    : "Here are the products matching your request on ReTrade:\n");
 
                 foreach (var p in products)
                 {
@@ -548,10 +555,7 @@ namespace RetradeBE.Services.AssistantChat
                     sb.AppendLine($"### {p.Name}");
                     sb.AppendLine(lang == "vi"
                         ? $"- Giá: {p.Price ?? 0:N0} VND"
-                        : $"- Price: {p.Price ?? 0:N0} VND");
-                    sb.AppendLine(lang == "vi"
-                        ? $"- Tình trạng: {p.Condition ?? "Good"}"
-                        : $"- Condition: {p.Condition ?? "Good"}");
+                        : $"- Tình trạng: {p.Condition ?? "Good"}");
                     sb.AppendLine(lang == "vi"
                         ? $"- Người bán: {p.SellerName ?? "ReTrade Seller"}"
                         : $"- Seller: {p.SellerName ?? "ReTrade Seller"}");
@@ -563,16 +567,10 @@ namespace RetradeBE.Services.AssistantChat
                 return sb.ToString();
             }
 
-            if (isColorSearch)
-            {
-                return lang == "vi"
-                    ? "Hiện tại ReTrade chưa có sản phẩm khớp màu sắc bạn tìm. Bạn có thể thử tìm kiếm từ khóa khác hoặc tham khảo các danh mục sản phẩm khác nhé!"
-                    : "Currently ReTrade does not have items in this color. Feel free to search with other keywords or browse categories!";
-            }
-
+            suggestedProducts.Clear();
             return lang == "vi"
-                ? "Chào bạn! Tôi là Trợ lý ReTrade. Hiện chưa tìm thấy sản phẩm khớp chính xác, bạn có thể thử từ khóa khác hoặc hỏi về đấu giá, đơn hàng nhé!"
-                : "Hello! I am ReTrade Assistant. Currently no exact products matched, feel free to search with other keywords or ask about orders and auctions!";
+                ? "Hiện tại ReTrade chưa có sản phẩm phù hợp với yêu cầu của bạn. Bạn vui lòng thử lại với từ khóa khác nhé!"
+                : "Currently ReTrade does not have matching items for your request. Please try searching with different keywords!";
         }
 
         private async Task InjectProductSearchContextAsync(
@@ -623,15 +621,14 @@ namespace RetradeBE.Services.AssistantChat
 
             // Filter out purely non-product conversational questions (e.g. system help, greetings, orders)
             var isPureOrderQuery = ContainsAny(normalized, "don hang", "đơn hàng", "don cua toi", "đơn của tôi", "order history", "my orders");
-            var isPureOffTopicQuery = ContainsAny(normalized, "thoi tiet", "hien tai", "1 + 1", "lap trinh", "code");
-            if (isPureOrderQuery || isPureOffTopicQuery)
+            if (isPureOrderQuery || IsOffTopicQuery(raw))
             {
                 return null;
             }
 
             var (minPrice, maxPrice) = ExtractPriceRange(raw);
 
-            var stopWords = new[] { "mau", "cần", "can", "tim", "tìm", "mua", "cho", "toi", "tôi", "ban", "bạn", "giup", "giúp", "loai", "loại", "co", "có", "khong", "không", "nao", "nào", "goi y", "tu van", "nhu cau", "san pham", "sản phẩm", "duoi", "dưới", "under", "tren", "trên", "over", "khoang", "khoảng", "tam", "tầm", "gia", "giá", "den", "đến", "tu", "từ", "hay", "đẹp", "dap", "tốt", "tot", "rẻ", "re", "mới", "moi", "ạ", "a", "nhé", "nhe", "nha", "ơi", "oi", "với", "voi" };
+            var stopWords = new[] { "mau", "cần", "can", "tim", "tìm", "mua", "cho", "toi", "tôi", "ban", "bạn", "giup", "giúp", "loai", "loại", "co", "có", "khong", "không", "nao", "nào", "goi y", "tu van", "nhu cau", "san pham", "sản phẩm", "duoi", "dưới", "under", "tren", "trên", "over", "khoang", "khoảng", "tam", "tầm", "gia", "giá", "den", "đến", "hay", "đẹp", "dap", "tốt", "tot", "rẻ", "re", "mới", "moi", "ạ", "a", "nhé", "nhe", "nha", "ơi", "oi", "với", "voi" };
             var cleanedMessage = raw;
 
             // Strip price expressions like "dưới 100k", "< 100k", "100k"
@@ -722,6 +719,43 @@ namespace RetradeBE.Services.AssistantChat
             return value;
         }
 
+        private static bool IsOffTopicQuery(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message)) return false;
+            var normalized = NormalizeForMatch(message);
+
+            // Math expressions or math questions (e.g. 1 + 1, 2+2, 5*5, 10 / 2, bằng mấy)
+            if (Regex.IsMatch(normalized, @"^\d+\s*[\+\-\*\/\%]\s*\d+") ||
+                Regex.IsMatch(normalized, @"\b\d+\s*[\+\-\*\/\%]\s*\d+\b") ||
+                ContainsAny(normalized, "1 + 1", "1+1", "bang may", "bằng mấy", "tinh nham"))
+            {
+                // Ensure it's not a product specification query like "RAM 16GB + SSD 512GB"
+                if (!ContainsAny(normalized, "gb", "ram", "ssd", "tb", "vnd", "k", "trieu", "tr", "gia", "giá"))
+                {
+                    return true;
+                }
+            }
+
+            // Common off-topic categories: weather, programming/coding, poetry, general knowledge, politics
+            if (ContainsAny(normalized,
+                "thoi tiet", "thời tiết",
+                "thu do", "thủ đô",
+                "giai giup", "giải giúp",
+                "lap trinh", "lập trình", "code", "coding",
+                "bai tho", "bài thơ", "hat cho", "hát cho",
+                "nha hang", "khach san",
+                "chinh tri", "tong thong", "chu tich"))
+            {
+                // Ensure no product search intent like "laptop cho lap trinh" (laptop for programming)
+                if (!ContainsAny(normalized, "laptop", "dien thoai", "may tinh", "san pham", "mua", "ban", "tim", "gia"))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private static bool IsDomainBoundaryDecline(string text)
         {
             if (string.IsNullOrWhiteSpace(text))
@@ -730,7 +764,12 @@ namespace RetradeBE.Services.AssistantChat
             }
 
             return text.Contains("specialized strictly", StringComparison.OrdinalIgnoreCase) ||
-                   text.Contains("Please ask me questions related to ReTrade", StringComparison.OrdinalIgnoreCase);
+                   text.Contains("Please ask me questions related to ReTrade", StringComparison.OrdinalIgnoreCase) ||
+                   text.Contains("chỉ hỗ trợ các câu hỏi liên quan đến ReTrade", StringComparison.OrdinalIgnoreCase) ||
+                   text.Contains("chuyên hỗ trợ các thông tin và sản phẩm", StringComparison.OrdinalIgnoreCase) ||
+                   text.Contains("chuyên hỗ trợ các vấn đề về sản phẩm", StringComparison.OrdinalIgnoreCase) ||
+                   text.Contains("liên quan đến ReTrade", StringComparison.OrdinalIgnoreCase) ||
+                   text.Contains("Tôi là Trợ lý AI ReTrade", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string BuildProductSuggestionResponse(string message, List<AssistantProductSuggestionDto> products)
@@ -1022,18 +1061,6 @@ namespace RetradeBE.Services.AssistantChat
 
             if (allActive.Count == 0)
             {
-                allActive = await _productRepository.Query()
-                    .AsNoTracking()
-                    .Include(p => p.Category)
-                    .Include(p => p.Seller)
-                    .Include(p => p.ProductImage).ThenInclude(pi => pi.Image)
-                    .Include(p => p.ProductAttribute).ThenInclude(pa => pa.Attribute)
-                    .Where(p => (p.Status == accepted || p.Status == ready) && p.StockQuantity > 0 && p.IsDeleted != true)
-                    .ToListAsync(cancellationToken);
-            }
-
-            if (allActive.Count == 0)
-            {
                 return new List<AssistantProductSuggestionDto>();
             }
 
@@ -1094,9 +1121,14 @@ namespace RetradeBE.Services.AssistantChat
                         score += 150;
                         tokenMatched = true;
                     }
-                    else if (fullTextWordTokens.Contains(normToken) || normFullText.Contains(normToken))
+                    else if (fullTextWordTokens.Contains(normToken))
                     {
                         score += 50;
+                        tokenMatched = true;
+                    }
+                    else if (normToken.Length >= 4 && normFullText.Contains(normToken))
+                    {
+                        score += 30;
                         tokenMatched = true;
                     }
                     else if (IsBilingualSynonymMatch(normToken, normFullText, fullTextWordTokens))
@@ -1136,16 +1168,17 @@ namespace RetradeBE.Services.AssistantChat
                 return new List<AssistantProductSuggestionDto>();
             }
 
-            int maxMatchedTokens = relevantProductsList.Max(x => x.MatchedTokenCount);
             var candidateList = relevantProductsList;
-
-            if (maxMatchedTokens > 1)
+            int requiredTokenCount = searchTokens.Count;
+            if (requiredTokenCount > 0)
             {
-                var topTokenMatches = relevantProductsList.Where(x => x.MatchedTokenCount >= maxMatchedTokens - 1).ToList();
-                if (topTokenMatches.Count > 0)
+                var allTokenMatches = relevantProductsList.Where(x => x.MatchedTokenCount >= requiredTokenCount).ToList();
+                if (allTokenMatches.Count == 0)
                 {
-                    candidateList = topTokenMatches;
+                    // Strict all-keyword match: Do not recommend if any search token is missing
+                    return new List<AssistantProductSuggestionDto>();
                 }
+                candidateList = allTokenMatches;
             }
 
             var categoryMatches = candidateList.Where(x => x.MatchedCategory).ToList();
@@ -1183,16 +1216,20 @@ namespace RetradeBE.Services.AssistantChat
                 .Where(w => !string.IsNullOrWhiteSpace(w))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+            var normMsgTokens = Regex.Split(normMessage, @"[^\w\d]+")
+                .Where(w => !string.IsNullOrWhiteSpace(w))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
             // Leather / Da
-            bool userWantsLeather = normMessage.Contains("da") || normMessage.Contains("leather");
+            bool userWantsLeather = normMsgTokens.Contains("da") || normMsgTokens.Contains("leather");
             if (userWantsLeather)
             {
-                bool hasLeather = tokens.Contains("da") || tokens.Contains("leather") || fullText.Contains("leather") || fullText.Contains(" chat lieu da ") || fullText.Contains("ao da");
+                bool hasLeather = tokens.Contains("da") || tokens.Contains("leather") || (product.CategoryName != null && NormalizeForMatch(product.CategoryName).Contains("da"));
                 if (!hasLeather) return false;
             }
 
             // Jacket / Áo khoác
-            bool userWantsJacket = normMessage.Contains("khoac") || normMessage.Contains("jacket") || normMessage.Contains("coat");
+            bool userWantsJacket = normMsgTokens.Contains("khoac") || normMsgTokens.Contains("jacket") || normMsgTokens.Contains("coat");
             if (userWantsJacket)
             {
                 bool hasJacket = tokens.Contains("khoac") || tokens.Contains("jacket") || tokens.Contains("coat") || tokens.Contains("blazer") || tokens.Contains("parka") || tokens.Contains("cardigan") || tokens.Contains("bomber") || tokens.Contains("blouson");
@@ -1200,7 +1237,7 @@ namespace RetradeBE.Services.AssistantChat
             }
 
             // Denim / Jean / Bò
-            bool userWantsDenim = normMessage.Contains("jean") || normMessage.Contains("jeans") || normMessage.Contains("denim") || normMessage.Contains(" bo ");
+            bool userWantsDenim = normMsgTokens.Contains("jean") || normMsgTokens.Contains("jeans") || normMsgTokens.Contains("denim") || normMsgTokens.Contains("bo");
             if (userWantsDenim)
             {
                 bool hasDenim = tokens.Contains("jean") || tokens.Contains("jeans") || tokens.Contains("denim") || tokens.Contains("bo");
@@ -1208,35 +1245,59 @@ namespace RetradeBE.Services.AssistantChat
             }
 
             // T-shirt / Áo thun
-            bool userWantsTShirt = normMessage.Contains("thun") || normMessage.Contains("t-shirt") || normMessage.Contains("tee");
+            bool userWantsTShirt = normMsgTokens.Contains("thun") || normMsgTokens.Contains("t-shirt") || normMsgTokens.Contains("tee");
             if (userWantsTShirt)
             {
                 bool hasTShirt = tokens.Contains("thun") || tokens.Contains("phong") || tokens.Contains("tee") || tokens.Contains("t-shirt") || tokens.Contains("tshirt");
                 if (!hasTShirt) return false;
             }
 
-            // Book / Sách
-            bool userWantsBook = normMessage.Contains("sach") || normMessage.Contains("book");
+            // Book / Sách / Từ điển / Truyện / Tài liệu / Publication
+            bool userWantsBook = normMsgTokens.Contains("sach") || normMsgTokens.Contains("book") || normMessage.Contains("tu dien") || normMsgTokens.Contains("tieu thuyet") || normMsgTokens.Contains("truyen") || normMsgTokens.Contains("dictionary");
             if (userWantsBook)
             {
-                bool hasBook = tokens.Contains("sach") || tokens.Contains("truyen") || tokens.Contains("book") || tokens.Contains("bookstore") || tokens.Contains("novel");
+                bool hasBook = tokens.Contains("sach") || tokens.Contains("truyen") || tokens.Contains("book") || tokens.Contains("bookstore") || tokens.Contains("novel") || tokens.Contains("tu dien") || tokens.Contains("dictionary") || (product.CategoryName != null && (NormalizeForMatch(product.CategoryName).Contains("sach") || NormalizeForMatch(product.CategoryName).Contains("van phong pham")));
                 if (!hasBook) return false;
             }
 
             // Keyboard / Bàn phím
-            bool userWantsKeyboard = normMessage.Contains("ban phim") || normMessage.Contains("keyboard");
+            bool userWantsKeyboard = normMessage.Contains("ban phim") || normMsgTokens.Contains("keyboard");
             if (userWantsKeyboard)
             {
-                bool hasKeyboard = tokens.Contains("phim") || tokens.Contains("keyboard");
+                bool hasKeyboard = tokens.Contains("phim") || tokens.Contains("keyboard") || (product.CategoryName != null && NormalizeForMatch(product.CategoryName).Contains("ban phim"));
                 if (!hasKeyboard) return false;
             }
 
             // Headphones / Tai nghe
-            bool userWantsHeadphones = normMessage.Contains("tai nghe") || normMessage.Contains("headphone");
+            bool userWantsHeadphones = normMessage.Contains("tai nghe") || normMsgTokens.Contains("headphone") || normMsgTokens.Contains("headphones");
             if (userWantsHeadphones)
             {
-                bool hasHeadphones = tokens.Contains("tai") || tokens.Contains("headphone") || tokens.Contains("headphones") || tokens.Contains("earbuds") || tokens.Contains("earphone") || tokens.Contains("iem");
+                bool hasHeadphones = tokens.Contains("tai") || tokens.Contains("headphone") || tokens.Contains("headphones") || tokens.Contains("earbuds") || tokens.Contains("earphone") || tokens.Contains("iem") || (product.CategoryName != null && NormalizeForMatch(product.CategoryName).Contains("tai nghe"));
                 if (!hasHeadphones) return false;
+            }
+
+            // Apparel / Áo / Quần / Đầm / Váy / Clothing / Fashion
+            bool userWantsClothing = normMsgTokens.Contains("ao") || normMsgTokens.Contains("quan") || normMsgTokens.Contains("dam") || normMsgTokens.Contains("vay") || normMsgTokens.Contains("shirt") || normMsgTokens.Contains("pants") || normMsgTokens.Contains("dress") || normMsgTokens.Contains("skirt") || normMsgTokens.Contains("apparel") || normMsgTokens.Contains("clothing");
+            if (userWantsClothing)
+            {
+                bool isClothingProduct = tokens.Contains("ao") || tokens.Contains("quan") || tokens.Contains("dam") || tokens.Contains("vay") || tokens.Contains("shirt") || tokens.Contains("pant") || tokens.Contains("pants") || tokens.Contains("dress") || tokens.Contains("skirt") || tokens.Contains("jacket") || tokens.Contains("khoac") || tokens.Contains("thun") || tokens.Contains("phong") || tokens.Contains("so mi") || tokens.Contains("somie") || tokens.Contains("fashion") || tokens.Contains("apparel") || tokens.Contains("trang phuc") || (product.CategoryName != null && (NormalizeForMatch(product.CategoryName).Contains("thoi trang") || NormalizeForMatch(product.CategoryName).Contains("quan ao")));
+                if (!isClothingProduct) return false;
+            }
+
+            // Phone / Điện thoại
+            bool userWantsPhone = normMessage.Contains("dien thoai") || normMsgTokens.Contains("phone") || normMsgTokens.Contains("iphone") || normMsgTokens.Contains("samsung");
+            if (userWantsPhone)
+            {
+                bool isPhoneProduct = tokens.Contains("dien thoai") || tokens.Contains("phone") || tokens.Contains("iphone") || tokens.Contains("samsung") || tokens.Contains("smartphone") || (product.CategoryName != null && NormalizeForMatch(product.CategoryName).Contains("dien thoai"));
+                if (!isPhoneProduct) return false;
+            }
+
+            // Laptops / Computers
+            bool userWantsComputer = normMsgTokens.Contains("laptop") || normMessage.Contains("may tinh") || normMsgTokens.Contains("pc") || normMsgTokens.Contains("computer");
+            if (userWantsComputer)
+            {
+                bool isComputerProduct = tokens.Contains("laptop") || tokens.Contains("macbook") || tokens.Contains("pc") || tokens.Contains("computer") || (tokens.Contains("may") && tokens.Contains("tinh")) || (product.CategoryName != null && (NormalizeForMatch(product.CategoryName).Contains("laptop") || NormalizeForMatch(product.CategoryName).Contains("may tinh")));
+                if (!isComputerProduct) return false;
             }
 
             return true;
