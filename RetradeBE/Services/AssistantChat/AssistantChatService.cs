@@ -630,18 +630,18 @@ namespace RetradeBE.Services.AssistantChat
 
             var stopWords = new[]
             {
-                "mau", "màu", "cần", "can", "tim", "tìm", "muon", "muốn", "thich", "thích", "mua", "ban", "bán", "cho",
-                "toi", "tôi", "t", "minh", "mình", "bạn", "giup", "giúp", "loai", "loại", "co", "có", "khong", "không",
-                "nao", "nào", "goi", "gợi", "y", "ý", "tu", "tư", "van", "vấn", "nhu", "cau", "cầu", "pham", "phẩm",
-                "duoi", "dưới", "under", "tren", "trên", "over", "khoang", "khoảng", "tam", "tầm", "gia", "giá", "den", "đến",
-                "hay", "đẹp", "dap", "tốt", "tot", "rẻ", "re", "mới", "moi", "ạ", "a", "nhé", "nhe", "nha", "ơi", "oi", "với", "voi",
-                "xem", "hoi", "hỏi", "kiem", "kiếm", "shop", "ad"
+                "mau", "can", "tim", "muon", "thich", "mua", "ban", "cho",
+                "toi", "t", "minh", "ban", "giup", "loai", "co", "khong",
+                "nao", "goi", "y", "tu", "van", "nhu", "cau", "pham",
+                "duoi", "under", "tren", "over", "khoang", "tam", "gia", "den",
+                "hay", "dap", "tot", "re", "moi", "a", "nhe", "nha", "oi", "voi",
+                "xem", "hoi", "kiem", "shop", "ad"
             };
-            var cleanedMessage = raw;
+            var cleanedMessage = normalized;
 
-            // Strip price expressions like "dưới 100k", "< 100k", "100k"
-            cleanedMessage = Regex.Replace(cleanedMessage, @"(duoi|dưới|under|<|>|tren|trên|over|khoang|khoảng|tam|tầm)\s*\d+[\d\.,]*\s*(k|k|tr|trieu|triệu|m|vnd|vnđ)?", "", RegexOptions.IgnoreCase);
-            cleanedMessage = Regex.Replace(cleanedMessage, @"\b\d+\s*(k|k|tr|trieu|triệu|m)\b", "", RegexOptions.IgnoreCase);
+            // Strip price expressions like "dưới 100k", "< 100k", "100k", "trên 2 triệu"
+            cleanedMessage = Regex.Replace(cleanedMessage, @"(duoi|under|<|>|tren|over|khoang|tam)\s*\d+[\d\.,]*\s*(k|tr|trieu|m|vnd)?", "", RegexOptions.IgnoreCase);
+            cleanedMessage = Regex.Replace(cleanedMessage, @"\b\d+\s*(k|tr|trieu|m)\b", "", RegexOptions.IgnoreCase);
 
             foreach (var sw in stopWords)
             {
@@ -1023,10 +1023,10 @@ namespace RetradeBE.Services.AssistantChat
                 .Include(p => p.ProductImage).ThenInclude(pi => pi.Image)
                 .Include(p => p.ProductAttribute).ThenInclude(pa => pa.Attribute)
                 .Where(p =>
-                    (p.Status == accepted || p.Status == ready) &&
+                    (p.Status.ToLower() == "accepted" || p.Status.ToLower() == "ready" || p.Status.ToLower() == "active") &&
                     p.StockQuantity > 0 &&
                     p.IsDeleted != true &&
-                    (p.Category == null || p.Category.Status == "Active") &&
+                    (p.Category == null || p.Category.Status == null || p.Category.Status.ToLower() == "active") &&
                     (p.Seller == null || p.Seller.IsDeleted != true));
 
             if (args.MinPrice.HasValue && args.MinPrice.Value > 0)
@@ -1395,16 +1395,17 @@ namespace RetradeBE.Services.AssistantChat
 
         private static List<string> TokenizeAndClean(string input)
         {
+            var normInput = NormalizeForMatch(input);
             var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                "mau", "màu", "can", "cần", "tim", "tìm", "muon", "muốn", "thich", "thích", "mua", "ban", "bán", "cho",
-                "toi", "tôi", "t", "minh", "mình", "ban", "bạn", "giup", "giúp", "loai", "loại", "co", "có", "khong", "không",
-                "nao", "nào", "goi", "gợi", "y", "ý", "tu", "tư", "van", "vấn", "nhu", "cau", "cầu", "pham", "phẩm",
-                "xem", "hoi", "hỏi", "kiem", "kiếm", "shop", "ad", "admin", "em", "anh", "chi", "chị", "nhe", "nhé", "nha",
-                "a", "ạ", "oi", "ơi", "voi", "với", "dum", "dùm", "ho", "hộ"
+                "mau", "can", "tim", "muon", "thich", "mua", "ban", "cho",
+                "toi", "t", "minh", "ban", "giup", "loai", "co", "khong",
+                "nao", "goi", "y", "tu", "van", "nhu", "cau", "pham",
+                "xem", "hoi", "kiem", "shop", "ad", "admin", "em", "anh", "chi", "nhe", "nha",
+                "a", "oi", "voi", "dum", "ho"
             };
 
-            var words = Regex.Split(input, @"[^\w\d\+]+")
+            var words = Regex.Split(normInput, @"[^\w\d\+]+")
                 .Where(w => !string.IsNullOrWhiteSpace(w) && w.Length > 1 && !stopWords.Contains(w))
                 .ToList();
 
